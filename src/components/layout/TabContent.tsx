@@ -16,7 +16,7 @@ function TableTabContent({ schema, table }: { schema: string; table: string }) {
   const readOnly = activeProject?.settings.readOnly ?? false;
   const instantCommit = activeProject?.settings.instantCommit ?? false;
 
-  const { data, isLoading, error } = useTableData(schema, table, page);
+  const { data, isLoading, error, refetch } = useTableData(schema, table, page);
   const addChange = useChangesStore((state) => state.addChange);
   const allChanges = useChangesStore((state) => state.changes);
 
@@ -136,14 +136,21 @@ function TableTabContent({ schema, table }: { schema: string; table: string }) {
     return edited;
   }, [localEdits, changes, data]);
 
+  const handleRefresh = () => {
+    setLocalEdits(new Map());
+    refetch();
+  };
+
   return (
     <TableView
+      tableKey={`${schema}.${table}`}
       tableName={table}
       data={mergedData}
       isLoading={isLoading}
       error={error ? (error instanceof Error ? error.message : String(error)) : null}
       onPageChange={handlePageChange}
       onCellEdit={handleCellEdit}
+      onRefresh={handleRefresh}
       editedCells={editedCells}
       readOnly={readOnly}
     />

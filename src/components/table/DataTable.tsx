@@ -1,9 +1,11 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { cn } from "../../lib/utils";
+import { useUIStore } from "../../stores/uiStore";
 import type { Column, Row, CellValue } from "../../types";
 import { Key, Hash, Type, Calendar, ToggleLeft } from "lucide-react";
 
 interface DataTableProps {
+  tableKey: string;
   columns: Column[];
   rows: Row[];
   selectedRowIndex?: number | null;
@@ -165,6 +167,7 @@ function EditableCell({
  * Clean, modern data table with inline editing
  */
 export function DataTable({
+  tableKey,
   columns,
   rows,
   selectedRowIndex = null,
@@ -173,10 +176,12 @@ export function DataTable({
   editedCells = new Set(),
   readOnly = false,
 }: DataTableProps) {
-  const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
+  const allColumnWidths = useUIStore((state) => state.columnWidths);
+  const setColumnWidth = useUIStore((state) => state.setColumnWidth);
   const [resizing, setResizing] = useState<string | null>(null);
   const [editingCell, setEditingCell] = useState<{ row: number; col: string } | null>(null);
 
+  const columnWidths = allColumnWidths[tableKey] || {};
   const getColumnWidth = (colName: string) => columnWidths[colName] || 180;
 
   const handleResizeStart = useCallback((colName: string, e: React.MouseEvent) => {
@@ -188,7 +193,7 @@ export function DataTable({
     const handleMouseMove = (moveEvent: MouseEvent) => {
       const delta = moveEvent.clientX - startX;
       const newWidth = Math.max(80, Math.min(500, startWidth + delta));
-      setColumnWidths(prev => ({ ...prev, [colName]: newWidth }));
+      setColumnWidth(tableKey, colName, newWidth);
     };
 
     const handleMouseUp = () => {
@@ -199,7 +204,7 @@ export function DataTable({
 
     document.addEventListener("mousemove", handleMouseMove);
     document.addEventListener("mouseup", handleMouseUp);
-  }, [columnWidths]);
+  }, [tableKey, columnWidths, setColumnWidth]);
 
   const handleStartEdit = (rowIndex: number, colName: string) => {
     setEditingCell({ row: rowIndex, col: colName });

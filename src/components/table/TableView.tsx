@@ -1,17 +1,19 @@
 import { useState, useCallback } from "react";
-import { Loader2, AlertCircle } from "lucide-react";
+import { Loader2, AlertCircle, RefreshCw } from "lucide-react";
 import type { CellValue, TableData } from "../../types";
 import { DataTable } from "./DataTable";
 import { Pagination } from "./Pagination";
 import { cn } from "../../lib/utils";
 
 interface TableViewProps {
+  tableKey: string;
   tableName: string;
   data: TableData | null;
   isLoading: boolean;
   error: string | null;
   onPageChange: (page: number) => void;
   onCellEdit?: (rowIndex: number, columnName: string, value: CellValue) => void;
+  onRefresh?: () => void;
   editedCells?: Set<string>;
   readOnly?: boolean;
 }
@@ -64,12 +66,14 @@ function SkeletonTable() {
 }
 
 export function TableView({
+  tableKey,
   tableName,
   data,
   isLoading,
   error,
   onPageChange,
   onCellEdit,
+  onRefresh,
   editedCells,
   readOnly = false,
 }: TableViewProps) {
@@ -129,9 +133,38 @@ export function TableView({
 
   return (
     <div className="flex flex-col h-full">
+      {/* Table toolbar */}
+      <div className="flex items-center justify-between px-3 h-10 bg-[var(--bg-secondary)] border-b border-[var(--border-color)] shrink-0">
+        <div className="flex items-center gap-1">
+          {/* Refresh button */}
+          {onRefresh && (
+            <button
+              onClick={onRefresh}
+              disabled={isLoading}
+              className={cn(
+                "flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs",
+                "text-[var(--text-secondary)] hover:text-[var(--text-primary)]",
+                "hover:bg-[var(--bg-tertiary)] transition-colors",
+                "disabled:opacity-50"
+              )}
+              title="Refresh table data (reload from database)"
+            >
+              <RefreshCw className={cn("w-3.5 h-3.5", isLoading && "animate-spin")} />
+              <span>Refresh</span>
+            </button>
+          )}
+        </div>
+
+        {/* Table info */}
+        <div className="text-xs text-[var(--text-muted)]">
+          {data.totalRows.toLocaleString()} rows
+        </div>
+      </div>
+
       {/* Data table */}
       <div className="flex-1 min-h-0 relative">
         <DataTable
+          tableKey={tableKey}
           columns={data.columns}
           rows={data.rows}
           selectedRowIndex={selectedRowIndex}
@@ -153,13 +186,15 @@ export function TableView({
       </div>
 
       {/* Pagination */}
-      <Pagination
-        currentPage={data.page}
-        totalPages={totalPages}
-        pageSize={data.pageSize}
-        totalRows={data.totalRows}
-        onPageChange={onPageChange}
-      />
+      <div className="border-t border-[var(--border-color)] bg-[var(--bg-secondary)]">
+        <Pagination
+          currentPage={data.page}
+          totalPages={totalPages}
+          pageSize={data.pageSize}
+          totalRows={data.totalRows}
+          onPageChange={onPageChange}
+        />
+      </div>
     </div>
   );
 }

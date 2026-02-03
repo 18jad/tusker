@@ -10,6 +10,9 @@ interface UIState {
   tabs: Tab[];
   activeTabId: string | null;
 
+  // Column widths per table (key: "schema.table")
+  columnWidths: Record<string, Record<string, number>>;
+
   // Command palette
   commandPaletteOpen: boolean;
 
@@ -34,13 +37,16 @@ interface UIState {
   closeProjectModal: () => void;
   toggleStagedChanges: () => void;
   setTheme: (theme: "dark" | "light") => void;
+  getColumnWidths: (tableKey: string) => Record<string, number>;
+  setColumnWidth: (tableKey: string, columnName: string, width: number) => void;
 }
 
-export const useUIStore = create<UIState>((set) => ({
+export const useUIStore = create<UIState>((set, get) => ({
   sidebarCollapsed: false,
   sidebarWidth: 260,
   tabs: [],
   activeTabId: null,
+  columnWidths: {},
   commandPaletteOpen: false,
   projectModalOpen: false,
   editingProjectId: null,
@@ -106,4 +112,17 @@ export const useUIStore = create<UIState>((set) => ({
     set((state) => ({ stagedChangesOpen: !state.stagedChangesOpen })),
 
   setTheme: (theme) => set({ theme }),
+
+  getColumnWidths: (tableKey) => get().columnWidths[tableKey] || {},
+
+  setColumnWidth: (tableKey, columnName, width) =>
+    set((state) => ({
+      columnWidths: {
+        ...state.columnWidths,
+        [tableKey]: {
+          ...state.columnWidths[tableKey],
+          [columnName]: width,
+        },
+      },
+    })),
 }));

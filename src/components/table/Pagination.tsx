@@ -63,7 +63,6 @@ export function Pagination({
     <div
       className={cn(
         "flex items-center justify-between px-4 h-11",
-        "bg-[var(--bg-secondary)] border-t border-[var(--border-color)]",
         "select-none"
       )}
     >
