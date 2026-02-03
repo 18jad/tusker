@@ -1,0 +1,165 @@
+import { useState, useCallback } from "react";
+import { Loader2, AlertCircle } from "lucide-react";
+import type { CellValue, TableData } from "../../types";
+import { DataTable } from "./DataTable";
+import { Pagination } from "./Pagination";
+import { cn } from "../../lib/utils";
+
+interface TableViewProps {
+  tableName: string;
+  data: TableData | null;
+  isLoading: boolean;
+  error: string | null;
+  onPageChange: (page: number) => void;
+  onCellEdit?: (rowIndex: number, columnName: string, value: CellValue) => void;
+  editedCells?: Set<string>;
+  readOnly?: boolean;
+}
+
+function SkeletonRow({ columns }: { columns: number }) {
+  return (
+    <tr className="border-b border-[var(--border-color)]">
+      {Array.from({ length: columns }).map((_, i) => (
+        <td key={i} className="px-3 py-3">
+          <div
+            className={cn(
+              "h-4 rounded bg-[var(--bg-tertiary)] animate-pulse",
+              i === 0 ? "w-16" : "w-full max-w-[120px]"
+            )}
+          />
+        </td>
+      ))}
+    </tr>
+  );
+}
+
+function SkeletonTable() {
+  const columnCount = 5;
+  const rowCount = 12;
+
+  return (
+    <div className="h-full overflow-hidden">
+      <table className="w-full border-collapse">
+        <thead className="sticky top-0 z-10">
+          <tr className="bg-[var(--bg-secondary)]">
+            {Array.from({ length: columnCount }).map((_, i) => (
+              <th
+                key={i}
+                className="text-left border-b border-r border-[var(--border-color)] last:border-r-0 px-3 py-2"
+                style={{ width: 180 }}
+              >
+                <div className="h-3 w-20 rounded bg-[var(--bg-tertiary)] animate-pulse" />
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {Array.from({ length: rowCount }).map((_, i) => (
+            <SkeletonRow key={i} columns={columnCount} />
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+export function TableView({
+  tableName,
+  data,
+  isLoading,
+  error,
+  onPageChange,
+  onCellEdit,
+  editedCells,
+  readOnly = false,
+}: TableViewProps) {
+  const [selectedRowIndex, setSelectedRowIndex] = useState<number | null>(null);
+
+  const handleRowSelect = useCallback((index: number) => {
+    setSelectedRowIndex(index);
+  }, []);
+
+  const handleCellEdit = useCallback(
+    (rowIndex: number, columnName: string, value: CellValue) => {
+      onCellEdit?.(rowIndex, columnName, value);
+    },
+    [onCellEdit]
+  );
+
+  // Loading state - show skeleton
+  if (isLoading && !data) {
+    return (
+      <div className="flex flex-col h-full">
+        <div className="flex-1 min-h-0">
+          <SkeletonTable />
+        </div>
+        <div className="h-10 border-t border-[var(--border-color)] bg-[var(--bg-secondary)] flex items-center justify-center">
+          <div className="flex items-center gap-2 text-xs text-[var(--text-muted)]">
+            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            <span>Loading {tableName}...</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <div className="flex-1 flex items-center justify-center">
+        <div className="text-center max-w-md px-4">
+          <AlertCircle className="w-10 h-10 text-[var(--danger)] mx-auto mb-3" />
+          <div className="text-[var(--danger)] font-medium mb-2">Failed to load data</div>
+          <div className="text-sm text-[var(--text-muted)]">{error}</div>
+        </div>
+      </div>
+    );
+  }
+
+  // No data
+  if (!data) {
+    return (
+      <div className="flex-1 flex items-center justify-center text-[var(--text-muted)]">
+        No data available
+      </div>
+    );
+  }
+
+  const totalPages = Math.max(1, Math.ceil(data.totalRows / data.pageSize));
+
+  return (
+    <div className="flex flex-col h-full">
+      {/* Data table */}
+      <div className="flex-1 min-h-0 relative">
+        <DataTable
+          columns={data.columns}
+          rows={data.rows}
+          selectedRowIndex={selectedRowIndex}
+          onRowSelect={handleRowSelect}
+          onCellEdit={handleCellEdit}
+          editedCells={editedCells}
+          readOnly={readOnly}
+        />
+
+        {/* Loading overlay for page changes */}
+        {isLoading && (
+          <div className="absolute inset-0 bg-[var(--bg-primary)]/70 backdrop-blur-[1px] flex items-center justify-center z-20">
+            <div className="flex items-center gap-3 px-4 py-2 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border-color)] shadow-lg">
+              <Loader2 className="w-4 h-4 animate-spin text-[var(--accent)]" />
+              <span className="text-sm text-[var(--text-secondary)]">Loading...</span>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Pagination */}
+      <Pagination
+        currentPage={data.page}
+        totalPages={totalPages}
+        pageSize={data.pageSize}
+        totalRows={data.totalRows}
+        onPageChange={onPageChange}
+      />
+    </div>
+  );
+}
