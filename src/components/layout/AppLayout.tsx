@@ -2,13 +2,12 @@ import { useState, useRef, useEffect } from "react";
 import {
   ChevronDown,
   Database,
-  Check,
   Settings,
-  Plus,
   Plug,
   Unplug,
   Loader2,
-  Trash2,
+  ArrowLeftRight,
+  Plus
 } from "lucide-react";
 import { Sidebar } from "./Sidebar";
 import { TabBar } from "./TabBar";
@@ -20,22 +19,14 @@ import { useChangesStore } from "../../stores/changesStore";
 import { useConnect, useDisconnect } from "../../hooks/useDatabase";
 import { cn, PROJECT_COLORS } from "../../lib/utils";
 
-interface ProjectSwitcherProps {
-  isOpen: boolean;
-  onToggle: () => void;
-  onClose: () => void;
-}
+function ProjectMenu() {
+  const [isOpen, setIsOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
-function ProjectSwitcher({ isOpen, onToggle, onClose }: ProjectSwitcherProps) {
   const projects = useProjectStore((state) => state.projects);
   const activeProjectId = useProjectStore((state) => state.activeProjectId);
   const connectionStatus = useProjectStore((state) => state.connectionStatus);
-  const setActiveProject = useProjectStore((state) => state.setActiveProject);
-  const deleteProject = useProjectStore((state) => state.deleteProject);
   const openProjectModal = useUIStore((state) => state.openProjectModal);
-  const closeAllTabs = useUIStore((state) => state.closeAllTabs);
-  const clearChanges = useChangesStore((state) => state.clearChanges);
-  const dropdownRef = useRef<HTMLDivElement>(null);
 
   const connect = useConnect();
   const disconnect = useDisconnect();
@@ -48,90 +39,47 @@ function ProjectSwitcher({ isOpen, onToggle, onClose }: ProjectSwitcherProps) {
         dropdownRef.current &&
         !dropdownRef.current.contains(event.target as Node)
       ) {
-        onClose();
+        setIsOpen(false);
       }
     };
 
     if (isOpen) {
       document.addEventListener("mousedown", handleClickOutside);
-      return () => document.removeEventListener("mousedown", handleClickOutside);
+      return () =>
+        document.removeEventListener("mousedown", handleClickOutside);
     }
-  }, [isOpen, onClose]);
-
-  const handleSelectProject = async (projectId: string) => {
-    const project = projects.find((p) => p.id === projectId);
-    if (!project) return;
-
-    // Disconnect from current if connected
-    if (connectionStatus === "connected") {
-      await disconnect.mutateAsync();
-    }
-
-    // Clear tabs and staged changes from previous project
-    closeAllTabs();
-    clearChanges();
-
-    setActiveProject(projectId);
-
-    // Auto-connect to the selected project
-    connect.mutate(project.connection);
-
-    onClose();
-  };
+  }, [isOpen]);
 
   const handleConnect = () => {
     if (!activeProject) return;
     connect.mutate(activeProject.connection);
-    onClose();
+    setIsOpen(false);
   };
 
   const handleDisconnect = () => {
     disconnect.mutate();
-    onClose();
+    setIsOpen(false);
   };
 
-  const handleNewProject = () => {
-    openProjectModal();
-    onClose();
-  };
-
-  const handleDeleteProject = async (e: React.MouseEvent, projectId: string) => {
-    e.stopPropagation();
-    // Disconnect if deleting the active project
-    if (projectId === activeProjectId && connectionStatus === "connected") {
-      await disconnect.mutateAsync();
-    }
-    deleteProject(projectId);
-  };
+  if (!activeProject) return null;
 
   return (
     <div ref={dropdownRef} className="relative">
       <button
-        onClick={onToggle}
+        onClick={() => setIsOpen(!isOpen)}
         className={cn(
           "flex items-center gap-2 px-3 h-8 rounded",
           "hover:bg-[var(--bg-tertiary)] transition-colors duration-150",
           "text-sm"
         )}
       >
-        {activeProject ? (
-          <>
-            <div
-              className={cn(
-                "w-2 h-2 rounded-full",
-                PROJECT_COLORS[activeProject.color].dot
-              )}
-            />
-            <span className="text-[var(--text-primary)]">
-              {activeProject.name}
-            </span>
-          </>
-        ) : (
-          <>
-            <Database className="w-4 h-4 text-[var(--text-muted)]" />
-            <span className="text-[var(--text-muted)]">Select Project</span>
-          </>
-        )}
+        <div
+          className={cn(
+            "w-2 h-2 rounded-full",
+            PROJECT_COLORS[activeProject.color].dot
+          )}
+        />
+        <span className="text-[var(--text-primary)]">{activeProject.name}</span>
         <ChevronDown
           className={cn(
             "w-4 h-4 text-[var(--text-muted)]",
@@ -141,135 +89,68 @@ function ProjectSwitcher({ isOpen, onToggle, onClose }: ProjectSwitcherProps) {
         />
       </button>
 
-      {/* Dropdown */}
       {isOpen && (
         <div
           className={cn(
             "absolute top-full left-0 mt-1 z-50",
-            "min-w-[220px] py-1 rounded-md shadow-lg",
+            "min-w-[180px] py-1 rounded-md shadow-lg",
             "bg-[var(--bg-secondary)] border border-[var(--border-color)]",
             "animate-in fade-in-0 zoom-in-95 duration-150"
           )}
         >
-          {projects.length > 0 ? (
-            <>
-              {projects.map((project) => {
-                const colorConfig = PROJECT_COLORS[project.color];
-                const isActive = project.id === activeProjectId;
-
-                return (
-                  <div
-                    key={project.id}
-                    className={cn(
-                      "group w-full flex items-center gap-3 px-3 py-2",
-                      "hover:bg-[var(--bg-tertiary)] transition-colors duration-150",
-                      "text-left text-sm cursor-pointer"
-                    )}
-                    onClick={() => handleSelectProject(project.id)}
-                  >
-                    <div
-                      className={cn("w-2.5 h-2.5 rounded-full shrink-0", colorConfig.dot)}
-                    />
-                    <div className="flex-1 min-w-0">
-                      <div className="text-[var(--text-primary)] truncate">
-                        {project.name}
-                      </div>
-                      <div className="text-xs text-[var(--text-muted)] truncate">
-                        {project.connection.host}:{project.connection.port}/
-                        {project.connection.database}
-                      </div>
-                    </div>
-                    {isActive && (
-                      <Check className="w-4 h-4 text-[var(--accent)] shrink-0" />
-                    )}
-                    <button
-                      onClick={(e) => handleDeleteProject(e, project.id)}
-                      className={cn(
-                        "p-1 rounded shrink-0",
-                        "opacity-0 group-hover:opacity-100",
-                        "text-[var(--text-muted)] hover:text-[var(--danger)] hover:bg-[var(--danger)]/10",
-                        "transition-all duration-150"
-                      )}
-                      title="Delete project"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                );
-              })}
-              <div className="h-px bg-[var(--border-color)] my-1" />
-            </>
-          ) : (
-            <div className="px-3 py-2 text-sm text-[var(--text-muted)]">
-              No projects yet
-            </div>
-          )}
+          {connectionStatus === "disconnected" ||
+          connectionStatus === "error" ? (
+            <button
+              onClick={handleConnect}
+              disabled={connect.isPending}
+              className={cn(
+                "w-full flex items-center gap-2 px-3 py-2",
+                "hover:bg-[var(--bg-tertiary)] transition-colors duration-150",
+                "text-sm text-[var(--success)]"
+              )}
+            >
+              {connect.isPending ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Plug className="w-4 h-4" />
+              )}
+              <span>{connect.isPending ? "Connecting..." : "Connect"}</span>
+            </button>
+          ) : connectionStatus === "connected" ? (
+            <button
+              onClick={handleDisconnect}
+              disabled={disconnect.isPending}
+              className={cn(
+                "w-full flex items-center gap-2 px-3 py-2",
+                "hover:bg-[var(--bg-tertiary)] transition-colors duration-150",
+                "text-sm text-[var(--danger)]"
+              )}
+            >
+              {disconnect.isPending ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Unplug className="w-4 h-4" />
+              )}
+              <span>
+                {disconnect.isPending ? "Disconnecting..." : "Disconnect"}
+              </span>
+            </button>
+          ) : null}
 
           <button
-            onClick={handleNewProject}
+            onClick={() => {
+              openProjectModal(activeProject.id);
+              setIsOpen(false);
+            }}
             className={cn(
               "w-full flex items-center gap-2 px-3 py-2",
               "hover:bg-[var(--bg-tertiary)] transition-colors duration-150",
               "text-sm text-[var(--text-secondary)]"
             )}
           >
-            <Plus className="w-4 h-4" />
-            <span>New Project</span>
+            <Settings className="w-4 h-4" />
+            <span>Project Settings</span>
           </button>
-
-          {activeProject && (
-            <>
-              {connectionStatus === "disconnected" || connectionStatus === "error" ? (
-                <button
-                  onClick={handleConnect}
-                  disabled={connect.isPending}
-                  className={cn(
-                    "w-full flex items-center gap-2 px-3 py-2",
-                    "hover:bg-[var(--bg-tertiary)] transition-colors duration-150",
-                    "text-sm text-[var(--success)]"
-                  )}
-                >
-                  {connect.isPending ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <Plug className="w-4 h-4" />
-                  )}
-                  <span>{connect.isPending ? "Connecting..." : "Connect"}</span>
-                </button>
-              ) : connectionStatus === "connected" ? (
-                <button
-                  onClick={handleDisconnect}
-                  disabled={disconnect.isPending}
-                  className={cn(
-                    "w-full flex items-center gap-2 px-3 py-2",
-                    "hover:bg-[var(--bg-tertiary)] transition-colors duration-150",
-                    "text-sm text-[var(--danger)]"
-                  )}
-                >
-                  {disconnect.isPending ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <Unplug className="w-4 h-4" />
-                  )}
-                  <span>{disconnect.isPending ? "Disconnecting..." : "Disconnect"}</span>
-                </button>
-              ) : null}
-              <button
-                onClick={() => {
-                  openProjectModal(activeProject.id);
-                  onClose();
-                }}
-                className={cn(
-                  "w-full flex items-center gap-2 px-3 py-2",
-                  "hover:bg-[var(--bg-tertiary)] transition-colors duration-150",
-                  "text-sm text-[var(--text-secondary)]"
-                )}
-              >
-                <Settings className="w-4 h-4" />
-                <span>Project Settings</span>
-              </button>
-            </>
-          )}
         </div>
       )}
     </div>
@@ -277,27 +158,73 @@ function ProjectSwitcher({ isOpen, onToggle, onClose }: ProjectSwitcherProps) {
 }
 
 function TitleBar() {
-  const [isSwitcherOpen, setIsSwitcherOpen] = useState(false);
+  const projects = useProjectStore((state) => state.projects);
+  const activeProjectId = useProjectStore((state) => state.activeProjectId);
+  const toggleProjectSpotlight = useUIStore(
+    (state) => state.toggleProjectSpotlight
+  );
+
+  const activeProject = projects.find((p) => p.id === activeProjectId);
+
+  // Keyboard shortcut for project spotlight (Ctrl/Cmd + P)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "p") {
+        e.preventDefault();
+        toggleProjectSpotlight();
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [toggleProjectSpotlight]);
 
   return (
     <header
       className={cn(
-        "h-10 flex items-center px-3 shrink-0",
+        "h-10 flex items-center shrink-0",
         "bg-[var(--bg-secondary)] border-b border-[var(--border-color)]",
         "select-none"
       )}
       // Enable window dragging for Tauri (macOS style)
       data-tauri-drag-region
     >
-      {/* macOS traffic lights placeholder area */}
-      <div className="w-[68px] shrink-0" data-tauri-drag-region />
+      {/* Space for macOS traffic lights (overlay titlebar) */}
+      <div className="w-[78px] shrink-0" data-tauri-drag-region />
 
-      {/* Project switcher */}
-      <ProjectSwitcher
-        isOpen={isSwitcherOpen}
-        onToggle={() => setIsSwitcherOpen(!isSwitcherOpen)}
-        onClose={() => setIsSwitcherOpen(false)}
-      />
+      {/* Project menu (manage current project) */}
+      {activeProject ? (
+        <ProjectMenu />
+      ) : (
+        <button
+          onClick={toggleProjectSpotlight}
+          className={cn(
+            "flex items-center gap-2 px-2 h-8 rounded",
+            "hover:bg-[var(--bg-tertiary)] transition-colors duration-150",
+            "text-sm"
+          )}
+        >
+          <Database className="w-4 h-4 text-[var(--text-muted)]" />
+          <span className="text-[var(--text-muted)]">Select Project</span>
+        </button>
+      )}
+
+      {/* Switch project button */}
+      <button
+        onClick={toggleProjectSpotlight}
+        className={cn(
+          "flex items-center gap-1.5 px-2 h-8 rounded ml-2",
+          "hover:bg-[var(--bg-tertiary)] transition-colors duration-150",
+          "text-xs text-[var(--text-muted)]"
+        )}
+        title="Switch project (Ctrl+P)"
+      >
+        <ArrowLeftRight className="w-3.5 h-3.5" />
+        <span>Switch</span>
+        <kbd className="ml-1 px-1.5 py-0.5 rounded text-[10px] bg-[var(--bg-tertiary)] border border-[var(--border-color)]">
+          ⌘P
+        </kbd>
+      </button>
 
       {/* Spacer for centering */}
       <div className="flex-1" data-tauri-drag-region />
@@ -451,13 +378,19 @@ function EmptyState() {
                   "disabled:opacity-50 disabled:cursor-not-allowed"
                 )}
               >
-                <div className={cn("w-3 h-3 rounded-full shrink-0", colorConfig.dot)} />
+                <div
+                  className={cn(
+                    "w-3 h-3 rounded-full shrink-0",
+                    colorConfig.dot
+                  )}
+                />
                 <div className="flex-1 min-w-0">
                   <div className="text-sm font-medium text-[var(--text-primary)] truncate">
                     {project.name}
                   </div>
                   <div className="text-xs text-[var(--text-muted)] truncate">
-                    {project.connection.host}:{project.connection.port}/{project.connection.database}
+                    {project.connection.host}:{project.connection.port}/
+                    {project.connection.database}
                   </div>
                 </div>
                 <ChevronDown className="w-4 h-4 text-[var(--text-muted)] -rotate-90" />

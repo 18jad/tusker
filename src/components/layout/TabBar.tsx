@@ -21,7 +21,7 @@ function TabItem({ tab, isActive, onActivate, onClose }: TabItemProps) {
       onClick={onActivate}
       onKeyDown={(e) => e.key === "Enter" && onActivate()}
       className={cn(
-        "group flex items-center gap-2 px-3 h-9 min-w-[120px] max-w-[200px]",
+        "group flex items-center gap-2 px-3 h-10 min-w-[120px] max-w-[200px]",
         "border-r border-[var(--border-color)]",
         "transition-colors duration-150 shrink-0 cursor-pointer",
         isActive
@@ -100,7 +100,7 @@ export function TabBar() {
     return (
       <div
         className={cn(
-          "h-9 flex items-center px-3",
+          "h-10 flex items-center px-3",
           "bg-[var(--bg-tertiary)] border-b border-[var(--border-color)]",
           "text-[var(--text-muted)] text-sm"
         )}
@@ -113,7 +113,7 @@ export function TabBar() {
   return (
     <div
       className={cn(
-        "h-9 flex items-stretch",
+        "h-10 flex items-stretch",
         "bg-[var(--bg-tertiary)] border-b border-[var(--border-color)]",
         "relative"
       )}

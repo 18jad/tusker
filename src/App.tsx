@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AppLayout } from "./components/layout";
 import { ProjectModal, StagedChangesModal } from "./components/modals";
-import { CommandPalette } from "./components/ui";
+import { CommandPalette, ProjectSpotlight } from "./components/ui";
 import "./index.css";
 
 const queryClient = new QueryClient({
@@ -21,6 +21,7 @@ function App() {
       <ProjectModal />
       <StagedChangesModal />
       <CommandPalette />
+      <ProjectSpotlight />
     </QueryClientProvider>
   );
 }

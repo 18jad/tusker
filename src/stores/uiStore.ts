@@ -16,6 +16,9 @@ interface UIState {
   // Command palette
   commandPaletteOpen: boolean;
 
+  // Project spotlight
+  projectSpotlightOpen: boolean;
+
   // Modals
   projectModalOpen: boolean;
   editingProjectId: string | null;
@@ -33,6 +36,8 @@ interface UIState {
   setActiveTab: (id: string) => void;
   updateTab: (id: string, updates: Partial<Tab>) => void;
   toggleCommandPalette: () => void;
+  toggleProjectSpotlight: () => void;
+  closeProjectSpotlight: () => void;
   openProjectModal: (projectId?: string) => void;
   closeProjectModal: () => void;
   toggleStagedChanges: () => void;
@@ -49,6 +54,7 @@ export const useUIStore = create<UIState>((set, get) => ({
   activeTabId: null,
   columnWidths: {},
   commandPaletteOpen: false,
+  projectSpotlightOpen: false,
   projectModalOpen: false,
   editingProjectId: null,
   stagedChangesOpen: false,
@@ -102,6 +108,11 @@ export const useUIStore = create<UIState>((set, get) => ({
 
   toggleCommandPalette: () =>
     set((state) => ({ commandPaletteOpen: !state.commandPaletteOpen })),
+
+  toggleProjectSpotlight: () =>
+    set((state) => ({ projectSpotlightOpen: !state.projectSpotlightOpen })),
+
+  closeProjectSpotlight: () => set({ projectSpotlightOpen: false }),
 
   openProjectModal: (projectId) =>
     set({ projectModalOpen: true, editingProjectId: projectId ?? null }),
