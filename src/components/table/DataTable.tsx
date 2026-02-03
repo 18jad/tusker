@@ -507,14 +507,18 @@ export function DataTable({
                   "hover:bg-[var(--bg-tertiary)]"
                 )}
               >
-                {/* Row number cell - sticky on left */}
+                {/* Row number cell - sticky on left, must have opaque bg */}
                 <td
                   className={cn(
                     "text-center border-b border-[var(--border-color)]",
                     "text-xs text-[var(--text-muted)] select-none",
                     "sticky left-0 z-10 shadow-[inset_-2px_0_0_0_var(--border-color)]",
-                    isEven ? "bg-[var(--bg-primary)]" : "bg-[var(--bg-secondary)]",
-                    isSelected && "!bg-[var(--accent)]/20",
+                    "transition-colors",
+                    isSelected
+                      ? "bg-[var(--bg-tertiary)]"
+                      : isEven
+                        ? "bg-[var(--bg-primary)]"
+                        : "bg-[var(--bg-secondary)]",
                     "group-hover:bg-[var(--bg-tertiary)]"
                   )}
                   style={{ width: 50, minWidth: 50 }}
