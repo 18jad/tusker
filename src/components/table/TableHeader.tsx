@@ -1,6 +1,27 @@
 import { useCallback, useRef, useState, type MouseEvent } from "react";
 import { cn } from "../../lib/utils";
 import type { Column } from "../../types";
+import { Key, Hash, Type, Calendar, ToggleLeft, Braces } from "lucide-react";
+
+/**
+ * Get icon for column data type
+ */
+function getTypeIcon(dataType: string) {
+  const type = dataType.toLowerCase();
+  if (type.includes("int") || type.includes("numeric") || type.includes("decimal") || type.includes("float") || type.includes("double")) {
+    return <Hash className="w-3 h-3" />;
+  }
+  if (type.includes("bool")) {
+    return <ToggleLeft className="w-3 h-3" />;
+  }
+  if (type.includes("date") || type.includes("time")) {
+    return <Calendar className="w-3 h-3" />;
+  }
+  if (type.includes("json")) {
+    return <Braces className="w-3 h-3" />;
+  }
+  return <Type className="w-3 h-3" />;
+}
 
 interface TableHeaderProps {
   column: Column;
@@ -127,7 +148,7 @@ export function TableHeader({
   return (
     <div
       className={cn(
-        "relative flex items-center gap-2 px-3 py-2 h-9",
+        "relative flex items-start gap-2 px-3 py-1.5",
         "bg-[--bg-secondary] border-r border-b border-[--border-color]",
         "select-none",
         onSort && "cursor-pointer hover:bg-[--bg-tertiary]"
@@ -135,62 +156,57 @@ export function TableHeader({
       style={{ width, minWidth: width, maxWidth: width }}
       onClick={onSort}
     >
-      {/* Column name */}
-      <span className="text-sm font-medium text-[--text-primary] truncate flex-1">
-        {column.name}
-      </span>
-
-      {/* Primary key indicator */}
-      {column.isPrimaryKey && (
-        <span className="flex-shrink-0 text-[10px] font-medium text-amber-500">
-          PK
-        </span>
+      {/* Icon */}
+      {column.isPrimaryKey ? (
+        <Key className="w-3 h-3 flex-shrink-0 mt-0.5 text-amber-500" />
+      ) : (
+        <span className="flex-shrink-0 mt-0.5 text-[--text-muted]">{getTypeIcon(column.dataType)}</span>
       )}
 
-      {/* Type badge */}
-      <span
-        className={cn(
-          "flex-shrink-0 px-1.5 py-0.5 rounded text-[10px] font-medium uppercase",
-          typeBadge.color
-        )}
-      >
-        {typeBadge.label}
-      </span>
-
-      {/* Sort indicator */}
-      {sortDirection && (
-        <span className="flex-shrink-0 text-[--text-muted]">
-          {sortDirection === "asc" ? (
-            <svg
-              className="w-3 h-3"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M5 15l7-7 7 7"
-              />
-            </svg>
-          ) : (
-            <svg
-              className="w-3 h-3"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M19 9l-7 7-7-7"
-              />
-            </svg>
+      {/* Column info */}
+      <div className="flex flex-col min-w-0 flex-1">
+        <div className="flex items-center gap-1.5">
+          <span className="text-sm font-medium text-[--text-primary] truncate flex-1">
+            {column.name}
+          </span>
+          {sortDirection && (
+            <span className="flex-shrink-0 text-[--text-muted]">
+              {sortDirection === "asc" ? (
+                <svg
+                  className="w-3 h-3"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M5 15l7-7 7 7"
+                  />
+                </svg>
+              ) : (
+                <svg
+                  className="w-3 h-3"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M19 9l-7 7-7-7"
+                  />
+                </svg>
+              )}
+            </span>
           )}
+        </div>
+        <span className={cn("text-[10px] truncate", typeBadge.color)}>
+          {column.dataType}
         </span>
-      )}
+      </div>
 
       {/* Resize handle */}
       <div

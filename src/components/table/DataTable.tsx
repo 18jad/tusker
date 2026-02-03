@@ -2,7 +2,7 @@ import { useState, useCallback, useRef, useEffect } from "react";
 import { cn } from "../../lib/utils";
 import { useUIStore } from "../../stores/uiStore";
 import type { Column, Row, CellValue } from "../../types";
-import { Key, Hash, Type, Calendar, ToggleLeft } from "lucide-react";
+import { Key, Hash, Type, Calendar, ToggleLeft, Braces } from "lucide-react";
 
 interface DataTableProps {
   tableKey: string;
@@ -30,6 +30,9 @@ function getTypeIcon(dataType: string) {
   }
   if (type.includes("date") || type.includes("time")) {
     return <Calendar className="w-3 h-3" />;
+  }
+  if (type.includes("json")) {
+    return <Braces className="w-3 h-3" />;
   }
   return <Type className="w-3 h-3" />;
 }
@@ -468,18 +471,20 @@ export function DataTable({
                 className="relative text-left border-b border-r border-[var(--border-color)] last:border-r-0"
                 style={{ width: getColumnWidth(column.name), minWidth: getColumnWidth(column.name) }}
               >
-                <div className="flex items-center gap-2 px-3 py-2">
+                <div className="flex items-start gap-2 px-3 py-1.5">
                   {column.isPrimaryKey ? (
-                    <Key className="w-3 h-3 text-[var(--warning)]" />
+                    <Key className="w-3 h-3 flex-shrink-0 mt-0.5 text-[var(--warning)]" />
                   ) : (
-                    <span className="text-[var(--text-muted)]">{getTypeIcon(column.dataType)}</span>
+                    <span className="flex-shrink-0 mt-0.5 text-[var(--text-muted)]">{getTypeIcon(column.dataType)}</span>
                   )}
-                  <span className="text-xs font-medium text-[var(--text-primary)] truncate">
-                    {column.name}
-                  </span>
-                  <span className="text-[10px] text-[var(--text-muted)] opacity-60">
-                    {column.dataType}
-                  </span>
+                  <div className="flex flex-col min-w-0 flex-1">
+                    <span className="text-xs font-medium text-[var(--text-primary)] truncate">
+                      {column.name}
+                    </span>
+                    <span className="text-[10px] text-[var(--text-muted)] truncate">
+                      {column.dataType}
+                    </span>
+                  </div>
                 </div>
                 {/* Resize handle */}
                 <div
