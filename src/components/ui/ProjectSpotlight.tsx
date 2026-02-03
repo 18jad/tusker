@@ -138,8 +138,6 @@ export function ProjectSpotlight() {
     }
   };
 
-  if (!projectSpotlightOpen) return null;
-
   const isConnecting = connectionStatus === "connecting";
 
   return (
@@ -147,8 +145,10 @@ export function ProjectSpotlight() {
       onClick={handleOverlayClick}
       className={cn(
         "fixed inset-0 z-50 flex items-start justify-center pt-[20vh]",
-        "bg-black/60 backdrop-blur-sm",
-        "animate-in fade-in duration-150"
+        "bg-black/60 transition-all duration-150",
+        projectSpotlightOpen
+          ? "opacity-100 pointer-events-auto backdrop-blur-sm"
+          : "opacity-0 pointer-events-none"
       )}
     >
       <div
@@ -159,7 +159,10 @@ export function ProjectSpotlight() {
           "w-full max-w-md",
           "bg-[var(--bg-secondary)] border border-[var(--border-color)]",
           "rounded-xl shadow-2xl shadow-black/40 overflow-hidden",
-          "animate-in zoom-in-95 slide-in-from-top-4 duration-200"
+          "transition-all duration-150",
+          projectSpotlightOpen
+            ? "opacity-100 scale-100 translate-y-0"
+            : "opacity-0 scale-95 -translate-y-2"
         )}
       >
         {/* Search Input */}
@@ -174,7 +177,8 @@ export function ProjectSpotlight() {
             className={cn(
               "flex-1 bg-transparent text-[var(--text-primary)]",
               "placeholder:text-[var(--text-muted)]",
-              "outline-none"
+              "!outline-none focus:!outline-none focus-visible:!outline-none",
+              "!ring-0 focus:!ring-0 !border-none focus:!border-none"
             )}
           />
           <kbd className="px-2 py-0.5 rounded text-xs text-[var(--text-muted)] bg-[var(--bg-tertiary)] border border-[var(--border-color)]">
