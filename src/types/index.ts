@@ -40,11 +40,20 @@ export interface Table {
   rowCount?: number;
 }
 
+export interface ForeignKeyInfo {
+  constraintName: string;
+  referencedSchema: string;
+  referencedTable: string;
+  referencedColumn: string;
+}
+
 export interface Column {
   name: string;
   dataType: string;
   isNullable: boolean;
   isPrimaryKey: boolean;
+  isForeignKey: boolean;
+  foreignKeyInfo?: ForeignKeyInfo;
   defaultValue?: string;
 }
 

@@ -212,11 +212,20 @@ interface PaginatedResult {
   total_pages: number;
 }
 
+interface ForeignKeyInfoRaw {
+  constraint_name: string;
+  referenced_schema: string;
+  referenced_table: string;
+  referenced_column: string;
+}
+
 interface ColumnInfo {
   name: string;
   data_type: string;
   is_nullable: boolean;
   is_primary_key: boolean;
+  is_foreign_key: boolean;
+  foreign_key_info: ForeignKeyInfoRaw | null;
   default_value: string | null;
 }
 
@@ -261,6 +270,15 @@ export function useTableData(schema: string, table: string, page: number = 1) {
           dataType: col.data_type,
           isNullable: col.is_nullable,
           isPrimaryKey: col.is_primary_key,
+          isForeignKey: col.is_foreign_key,
+          foreignKeyInfo: col.foreign_key_info
+            ? {
+                constraintName: col.foreign_key_info.constraint_name,
+                referencedSchema: col.foreign_key_info.referenced_schema,
+                referencedTable: col.foreign_key_info.referenced_table,
+                referencedColumn: col.foreign_key_info.referenced_column,
+              }
+            : undefined,
           defaultValue: col.default_value ?? undefined,
         })),
         totalRows: dataResult.total_count,
@@ -351,6 +369,46 @@ export function useExecuteQuery() {
       });
       return result;
     },
+  });
+}
+
+// Fetch foreign key reference values for a column
+export function useForeignKeyValues(
+  schema: string,
+  table: string,
+  column: string,
+  searchQuery: string = "",
+  limit: number = 100
+) {
+  const { connectionStatus } = useProjectStore();
+
+  return useQuery({
+    queryKey: ["fkValues", schema, table, column, searchQuery, limit],
+    queryFn: async () => {
+      if (!currentConnectionId) throw new Error("Not connected");
+
+      // Build query to fetch distinct values from the referenced column
+      const searchCondition = searchQuery
+        ? `WHERE "${column}"::text ILIKE '%' || $1 || '%'`
+        : "";
+      const sql = `
+        SELECT DISTINCT "${column}"
+        FROM "${schema}"."${table}"
+        ${searchCondition}
+        ORDER BY "${column}"
+        LIMIT ${limit}
+      `;
+
+      const result = await invoke<{ rows: Row[] }>("execute_query", {
+        connectionId: currentConnectionId,
+        sql: searchQuery ? sql.replace("$1", `'${searchQuery.replace(/'/g, "''")}'`) : sql,
+      });
+
+      // Extract the column values
+      return result.rows.map((row) => row[column]);
+    },
+    enabled: connectionStatus === "connected" && !!schema && !!table && !!column,
+    staleTime: 30000, // Cache for 30 seconds
   });
 }
 

@@ -2,6 +2,8 @@ import { useState, useEffect } from "react";
 import DatePicker from "react-datepicker";
 import { ChevronUp, ChevronDown } from "lucide-react";
 import { cn } from "../../lib/utils";
+import { RelationSelect } from "./RelationSelect";
+import type { ForeignKeyInfo } from "../../types";
 import "react-datepicker/dist/react-datepicker.css";
 
 interface TypedInputProps {
@@ -13,6 +15,10 @@ interface TypedInputProps {
   className?: string;
   hasError?: boolean;
   isModified?: boolean;
+  autoFocus?: boolean;
+  onBlur?: () => void;
+  isForeignKey?: boolean;
+  foreignKeyInfo?: ForeignKeyInfo;
 }
 
 /**
@@ -151,6 +157,10 @@ export function TypedInput({
   className,
   hasError = false,
   isModified = false,
+  autoFocus = false,
+  onBlur,
+  isForeignKey = false,
+  foreignKeyInfo,
 }: TypedInputProps) {
   const config = getInputConfig(dataType);
   const [localValue, setLocalValue] = useState(value);
@@ -168,6 +178,22 @@ export function TypedInput({
   const errorClasses = hasError && "border-red-500 focus:border-red-500";
   const modifiedClasses = isModified && !hasError && "border-[var(--warning)]";
 
+  // Foreign key type - render as relation select
+  if (isForeignKey && foreignKeyInfo) {
+    return (
+      <RelationSelect
+        value={localValue}
+        onChange={handleChange}
+        foreignKeyInfo={foreignKeyInfo}
+        disabled={disabled}
+        placeholder={placeholder}
+        hasError={hasError}
+        isModified={isModified}
+        className={className}
+      />
+    );
+  }
+
   // Boolean type - render as select
   if (config.type === "boolean") {
     const boolValue = localValue === "" || localValue === "null" ? "" : localValue === "true" ? "true" : "false";
@@ -176,6 +202,8 @@ export function TypedInput({
         value={boolValue}
         onChange={(e) => handleChange(e.target.value)}
         disabled={disabled}
+        autoFocus={autoFocus}
+        onBlur={onBlur}
         className={cn(inputClasses, errorClasses, modifiedClasses, className)}
       >
         <option value="">NULL</option>
@@ -192,6 +220,8 @@ export function TypedInput({
         value={localValue}
         onChange={(e) => handleChange(e.target.value)}
         disabled={disabled}
+        autoFocus={autoFocus}
+        onBlur={onBlur}
         rows={4}
         className={cn(
           inputClasses,
@@ -213,6 +243,8 @@ export function TypedInput({
         selected={dateValue}
         onChange={(date: Date | null) => handleChange(formatDateOnly(date))}
         disabled={disabled}
+        autoFocus={autoFocus}
+        onBlur={onBlur}
         dateFormat="yyyy-MM-dd"
         placeholderText={placeholder || "Select date"}
         className={cn(inputClasses, errorClasses, modifiedClasses, className)}
@@ -232,6 +264,8 @@ export function TypedInput({
         selected={timeValue}
         onChange={(date: Date | null) => handleChange(formatTimeForStorage(date))}
         disabled={disabled}
+        autoFocus={autoFocus}
+        onBlur={onBlur}
         showTimeSelect
         showTimeSelectOnly
         timeIntervals={1}
@@ -255,6 +289,8 @@ export function TypedInput({
         selected={dateValue}
         onChange={(date: Date | null) => handleChange(formatDateForStorage(date))}
         disabled={disabled}
+        autoFocus={autoFocus}
+        onBlur={onBlur}
         showTimeSelect
         timeIntervals={1}
         timeCaption="Time"
@@ -337,6 +373,8 @@ export function TypedInput({
           }}
           onKeyDown={handleKeyDown}
           disabled={disabled}
+          autoFocus={autoFocus}
+          onBlur={onBlur}
           className={cn(
             "flex-1 px-3 py-2 text-sm bg-transparent text-[var(--text-primary)]",
             "outline-none border-none",
@@ -386,6 +424,8 @@ export function TypedInput({
       value={localValue}
       onChange={(e) => handleChange(e.target.value)}
       disabled={disabled}
+      autoFocus={autoFocus}
+      onBlur={onBlur}
       className={cn(inputClasses, errorClasses, modifiedClasses, className)}
       placeholder={placeholder}
     />

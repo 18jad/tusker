@@ -1,5 +1,5 @@
 import { useState, useCallback } from "react";
-import { Loader2, AlertCircle, RefreshCw, Eye, Trash2, Columns } from "lucide-react";
+import { Loader2, AlertCircle, RefreshCw, Eye, Trash2, Columns, Plus } from "lucide-react";
 import type { CellValue, TableData } from "../../types";
 import { DataTable } from "./DataTable";
 import { Pagination } from "./Pagination";
@@ -17,6 +17,7 @@ interface TableViewProps {
   onRowView?: (rowIndex: number) => void;
   onRowDelete?: (rowIndex: number) => void;
   onRefresh?: () => void;
+  onAddRow?: () => void;
   editedCells?: Set<string>;
   deletedRows?: Set<number>;
   readOnly?: boolean;
@@ -94,6 +95,7 @@ export function TableView({
   onRowView,
   onRowDelete,
   onRefresh,
+  onAddRow,
   editedCells,
   deletedRows,
   readOnly = false,
@@ -219,6 +221,21 @@ export function TableView({
           <span className="text-xs text-[var(--text-muted)]">
             {data.totalRows.toLocaleString()} rows
           </span>
+
+          {onAddRow && !readOnly && (
+            <button
+              onClick={onAddRow}
+              className={cn(
+                "flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs",
+                "text-[var(--accent)] hover:text-[var(--accent)]",
+                "hover:bg-[var(--accent)]/10 transition-colors"
+              )}
+              title="Add new row"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Add Row</span>
+            </button>
+          )}
 
           <button
             onClick={() => useUIStore.getState().resetColumnWidths(tableKey)}

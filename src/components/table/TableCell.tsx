@@ -1,11 +1,6 @@
-import {
-  useState,
-  useEffect,
-  useRef,
-  useCallback,
-  type KeyboardEvent,
-} from "react";
+import { useState, useRef, useCallback } from "react";
 import { cn } from "../../lib/utils";
+import { TypedInput } from "../ui/TypedInput";
 import type { CellValue, Column } from "../../types";
 
 interface TableCellProps {
@@ -197,16 +192,7 @@ export function TableCell({
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState("");
   const [jsonExpanded, setJsonExpanded] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
   const cellRef = useRef<HTMLDivElement>(null);
-
-  // Focus input when entering edit mode
-  useEffect(() => {
-    if (isEditing && inputRef.current) {
-      inputRef.current.focus();
-      inputRef.current.select();
-    }
-  }, [isEditing]);
 
   const handleStartEdit = useCallback(() => {
     if (readOnly) return;
@@ -236,19 +222,6 @@ export function TableCell({
     setEditValue("");
   }, []);
 
-  const handleKeyDown = useCallback(
-    (e: KeyboardEvent<HTMLInputElement>) => {
-      if (e.key === "Enter" || e.key === "Tab") {
-        e.preventDefault();
-        handleConfirm();
-      } else if (e.key === "Escape") {
-        e.preventDefault();
-        handleCancel();
-      }
-    },
-    [handleConfirm, handleCancel]
-  );
-
   const handleCellClick = useCallback(() => {
     onClick();
   }, [onClick]);
@@ -261,16 +234,28 @@ export function TableCell({
   const renderContent = () => {
     if (isEditing) {
       return (
-        <input
-          ref={inputRef}
-          type="text"
-          value={editValue}
-          onChange={(e) => setEditValue(e.target.value)}
-          onKeyDown={handleKeyDown}
-          onBlur={handleConfirm}
-          className="w-full h-full px-2 bg-[--bg-tertiary] text-[--text-primary] border border-[--accent] rounded-sm outline-none text-sm"
+        <div
+          className="w-full h-full"
           onClick={(e) => e.stopPropagation()}
-        />
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              handleConfirm();
+            } else if (e.key === "Escape") {
+              e.preventDefault();
+              handleCancel();
+            }
+          }}
+        >
+          <TypedInput
+            value={editValue}
+            onChange={setEditValue}
+            dataType={column.dataType}
+            autoFocus
+            onBlur={handleConfirm}
+            className="h-full !py-1"
+          />
+        </div>
       );
     }
 
