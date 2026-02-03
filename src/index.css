@@ -85,6 +85,11 @@ body,
   outline-offset: 2px;
 }
 
+/* Buttons should always have pointer cursor */
+button:not(:disabled) {
+  cursor: pointer;
+}
+
 /* Custom utility classes */
 .glass {
   background: rgba(26, 26, 26, 0.8);
