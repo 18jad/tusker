@@ -439,6 +439,7 @@ export function DataTable({
     setEditingCell(null);
   };
 
+
   if (columns.length === 0) {
     return (
       <div className="flex items-center justify-center h-full text-[var(--text-muted)]">
@@ -504,7 +505,6 @@ export function DataTable({
             return (
               <tr
                 key={rowIndex}
-                onClick={() => onRowSelect?.(rowIndex)}
                 className={cn(
                   "transition-colors group",
                   isDeleted
@@ -516,11 +516,12 @@ export function DataTable({
                   !isDeleted && "hover:bg-[var(--bg-tertiary)]"
                 )}
               >
-                {/* Row number cell - sticky on left, must have opaque bg */}
+                {/* Row number cell - sticky on left, handles row selection */}
                 <td
+                  onClick={() => onRowSelect?.(rowIndex)}
                   className={cn(
                     "text-center border-b border-[var(--border-color)]",
-                    "text-xs select-none",
+                    "text-xs select-none cursor-pointer",
                     "sticky left-0 z-10 shadow-[inset_-2px_0_0_0_var(--border-color)]",
                     "transition-colors",
                     isDeleted
@@ -580,7 +581,7 @@ export function DataTable({
       {/* Edit hint - outside scroll container */}
       {!readOnly && (
         <div className="shrink-0 px-3 py-1.5 bg-[var(--bg-secondary)] border-t border-[var(--border-color)] text-[10px] text-[var(--text-muted)]">
-          Double-click to edit • Enter to save • Escape to cancel
+          Click row number to select • Double-click cell to edit • Enter to save • Escape to cancel
         </div>
       )}
     </div>
