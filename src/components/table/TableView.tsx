@@ -120,6 +120,7 @@ export function TableView({
   const handleRowDelete = useCallback(
     (rowIndex: number) => {
       onRowDelete?.(rowIndex);
+      setSelectedRowIndex(null);
     },
     [onRowDelete]
   );
