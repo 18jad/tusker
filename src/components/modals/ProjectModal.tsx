@@ -261,7 +261,7 @@ export function ProjectModal() {
     >
       <div className="space-y-6">
         {/* Project Name with Color Picker */}
-        <div className="space-y-2">
+        <div className="flex flex-col gap-1.5">
           <label className="text-sm font-medium text-[var(--text-secondary)]">
             Project Name
           </label>
@@ -338,7 +338,7 @@ export function ProjectModal() {
         </div>
 
         {/* Connection Method Toggle */}
-        <div className="space-y-3">
+        <div className="flex flex-col gap-1.5">
           <label className="text-sm font-medium text-[var(--text-secondary)]">
             Connection Method
           </label>
