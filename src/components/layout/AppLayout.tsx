@@ -209,22 +209,24 @@ function TitleBar() {
         </button>
       )}
 
-      {/* Switch project button */}
-      <button
-        onClick={toggleProjectSpotlight}
-        className={cn(
-          "flex items-center gap-1.5 px-2 h-8 rounded ml-2",
-          "hover:bg-[var(--bg-tertiary)] transition-colors duration-150",
-          "text-xs text-[var(--text-muted)]"
-        )}
-        title="Switch project (Ctrl+P)"
-      >
-        <ArrowLeftRight className="w-3.5 h-3.5" />
-        <span>Switch</span>
-        <kbd className="ml-1 px-1.5 py-0.5 rounded text-[10px] bg-[var(--bg-tertiary)] border border-[var(--border-color)]">
-          ⌘P
-        </kbd>
-      </button>
+      {/* Switch project button - only show when a project is selected */}
+      {activeProject && (
+        <button
+          onClick={toggleProjectSpotlight}
+          className={cn(
+            "flex items-center gap-1.5 px-2 h-8 rounded ml-2",
+            "hover:bg-[var(--bg-tertiary)] transition-colors duration-150",
+            "text-xs text-[var(--text-muted)]"
+          )}
+          title="Switch project (Ctrl+P)"
+        >
+          <ArrowLeftRight className="w-3.5 h-3.5" />
+          <span>Switch</span>
+          <kbd className="ml-1 px-1.5 py-0.5 rounded text-[10px] bg-[var(--bg-tertiary)] border border-[var(--border-color)]">
+            ⌘P
+          </kbd>
+        </button>
+      )}
 
       {/* Spacer for centering */}
       <div className="flex-1" data-tauri-drag-region />
