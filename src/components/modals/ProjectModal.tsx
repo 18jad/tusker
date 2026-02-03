@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { Plug, Database, ChevronRight } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { Plug, Database, ChevronRight, Check } from "lucide-react";
 import { Modal } from "../ui/Modal";
 import { Button } from "../ui/Button";
 import { Input } from "../ui/Input";
@@ -65,6 +65,22 @@ export function ProjectModal() {
   const [form, setForm] = useState<FormState>(INITIAL_FORM_STATE);
   const [testing, setTesting] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [settingsExpanded, setSettingsExpanded] = useState(false);
+  const [colorPickerOpen, setColorPickerOpen] = useState(false);
+  const colorPickerRef = useRef<HTMLDivElement>(null);
+
+  // Close color picker when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (colorPickerRef.current && !colorPickerRef.current.contains(e.target as Node)) {
+        setColorPickerOpen(false);
+      }
+    };
+    if (colorPickerOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+      return () => document.removeEventListener("mousedown", handleClickOutside);
+    }
+  }, [colorPickerOpen]);
   const [testResult, setTestResult] = useState<{
     success: boolean;
     message: string;
@@ -244,34 +260,80 @@ export function ProjectModal() {
       className="max-w-xl"
     >
       <div className="space-y-6">
-        {/* Project Name */}
-        <Input
-          label="Project Name"
-          placeholder="My Database"
-          value={form.name}
-          onChange={(e) => updateField("name", e.target.value)}
-        />
-
-        {/* Color Picker */}
+        {/* Project Name with Color Picker */}
         <div className="space-y-2">
           <label className="text-sm font-medium text-[var(--text-secondary)]">
-            Project Color
+            Project Name
           </label>
-          <div className="flex gap-2">
-            {PROJECT_COLOR_OPTIONS.map((color) => (
-              <button
-                key={color}
-                type="button"
-                onClick={() => updateField("color", color)}
-                className={cn(
-                  "w-8 h-8 rounded-full transition-all duration-150",
-                  PROJECT_COLORS[color].dot,
-                  form.color === color
-                    ? "ring-2 ring-offset-2 ring-offset-[var(--bg-secondary)] ring-white/50 scale-110"
-                    : "hover:scale-105"
-                )}
-              />
-            ))}
+          <div
+            ref={colorPickerRef}
+            className={cn(
+              "relative flex items-center rounded-lg",
+              "bg-[var(--bg-tertiary)] border border-[var(--border-color)]",
+              "focus-within:border-[var(--accent)] focus-within:ring-1 focus-within:ring-[var(--accent)]",
+              "hover:border-[#3a3a3a]"
+            )}
+          >
+            {/* Color Picker Trigger */}
+            <button
+              type="button"
+              onClick={() => setColorPickerOpen(!colorPickerOpen)}
+              className="pl-3 pr-2 py-2.5 flex items-center justify-center"
+            >
+              <span className={cn(
+                "w-4 h-4 rounded-full transition-transform duration-150 hover:scale-110",
+                PROJECT_COLORS[form.color].dot
+              )} />
+            </button>
+            {/* Color Picker Popover */}
+            {colorPickerOpen && (
+              <div className={cn(
+                "absolute left-0 top-full mt-2 p-3 rounded-lg z-[100]",
+                "bg-[var(--bg-secondary)] border border-[var(--border-color)]",
+                "shadow-xl shadow-black/40",
+                "animate-in fade-in zoom-in-95 duration-150"
+              )}>
+                <div className="flex gap-3">
+                  {PROJECT_COLOR_OPTIONS.map((color) => (
+                    <button
+                      key={color}
+                      type="button"
+                      onClick={() => {
+                        updateField("color", color);
+                        setColorPickerOpen(false);
+                      }}
+                      className={cn(
+                        "w-6 h-6 rounded-full transition-all duration-150 flex items-center justify-center",
+                        "hover:scale-125",
+                        PROJECT_COLORS[color].dot,
+                        form.color === color
+                          ? "ring-2 ring-offset-2 ring-offset-[var(--bg-secondary)] ring-white/50 scale-110"
+                          : "opacity-60 hover:opacity-100"
+                      )}
+                    >
+                      {form.color === color && (
+                        <Check className="w-3 h-3 text-white drop-shadow" />
+                      )}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            {/* Divider */}
+            <div className="w-px h-5 bg-[var(--border-color)]" />
+            {/* Name Input */}
+            <input
+              type="text"
+              placeholder="My Database"
+              value={form.name}
+              onChange={(e) => updateField("name", e.target.value)}
+              className={cn(
+                "flex-1 px-3 py-2.5 bg-transparent text-sm rounded-r-lg",
+                "text-[var(--text-primary)]",
+                "placeholder:text-[var(--text-muted)]",
+                "focus:outline-none"
+              )}
+            />
           </div>
         </div>
 
@@ -400,27 +462,56 @@ export function ProjectModal() {
         </div>
 
         {/* Settings Section */}
-        <div className="space-y-4 pt-4 border-t border-[var(--border-color)]">
-          <div className="flex items-center gap-2 text-sm font-medium text-[var(--text-secondary)]">
-            <ChevronRight className="w-4 h-4" />
-            Settings
-          </div>
-          <div className="space-y-3 pl-6">
-            <Toggle
-              checked={form.instantCommit}
-              onChange={(checked) => updateField("instantCommit", checked)}
-              label="Instant Commit (apply changes immediately)"
+        <div className="pt-4 border-t border-[var(--border-color)]">
+          <button
+            type="button"
+            onClick={() => setSettingsExpanded(!settingsExpanded)}
+            className={cn(
+              "w-full flex items-center gap-2 py-2 -my-2 rounded-md",
+              "text-sm font-medium text-[var(--text-secondary)]",
+              "hover:text-[var(--text-primary)] transition-colors duration-150"
+            )}
+          >
+            <ChevronRight
+              className={cn(
+                "w-4 h-4 transition-transform duration-200",
+                settingsExpanded && "rotate-90"
+              )}
             />
-            <Toggle
-              checked={form.readOnly}
-              onChange={(checked) => updateField("readOnly", checked)}
-              label="Read-only Mode (prevent modifications)"
-            />
+            <span>Advanced Settings</span>
+            {(form.instantCommit || form.readOnly) && (
+              <span className="ml-auto text-xs text-[var(--text-muted)]">
+                {[form.instantCommit && "Instant Commit", form.readOnly && "Read-only"]
+                  .filter(Boolean)
+                  .join(", ")}
+              </span>
+            )}
+          </button>
+          <div
+            className={cn(
+              "grid transition-all duration-200 ease-out",
+              settingsExpanded ? "grid-rows-[1fr] opacity-100 mt-4" : "grid-rows-[0fr] opacity-0"
+            )}
+          >
+            <div className="overflow-hidden">
+              <div className="space-y-3 pl-6">
+                <Toggle
+                  checked={form.instantCommit}
+                  onChange={(checked) => updateField("instantCommit", checked)}
+                  label="Instant Commit (apply changes immediately)"
+                />
+                <Toggle
+                  checked={form.readOnly}
+                  onChange={(checked) => updateField("readOnly", checked)}
+                  label="Read-only Mode (prevent modifications)"
+                />
+              </div>
+            </div>
           </div>
         </div>
 
         {/* Actions */}
-        <div className="flex justify-end gap-3 pt-4 border-t border-[var(--border-color)]">
+        <div className="flex justify-end gap-3 pt-4">
           <Button variant="ghost" onClick={closeProjectModal}>
             Cancel
           </Button>
