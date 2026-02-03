@@ -213,18 +213,21 @@ export function ProjectSpotlight() {
                   disabled={isConnecting}
                   className={cn(
                     "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg",
-                    "text-left transition-colors duration-75",
+                    "text-left transition-all duration-75",
                     "disabled:opacity-50 disabled:cursor-not-allowed",
                     isSelected
-                      ? "bg-[var(--accent)] text-white"
-                      : "text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)]"
+                      ? "bg-[var(--bg-tertiary)]"
+                      : "text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)]/50"
                   )}
                 >
                   {/* Color indicator */}
                   <div
                     className={cn(
-                      "w-2.5 h-2.5 rounded-full flex-shrink-0",
-                      colorClasses.bg
+                      "rounded-full flex-shrink-0 transition-all ring-2",
+                      colorClasses.bg,
+                      isSelected
+                        ? "w-3.5 h-3.5 ring-white/20"
+                        : "w-2.5 h-2.5 ring-transparent"
                     )}
                   />
 
@@ -233,24 +236,12 @@ export function ProjectSpotlight() {
                     <div className="flex items-center gap-2">
                       <span className="font-medium truncate">{project.name}</span>
                       {isActive && (
-                        <span
-                          className={cn(
-                            "text-[10px] px-1.5 py-0.5 rounded",
-                            isSelected
-                              ? "bg-white/20 text-white"
-                              : "bg-[var(--accent)]/20 text-[var(--accent)]"
-                          )}
-                        >
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--accent)]/20 text-[var(--accent)]">
                           Active
                         </span>
                       )}
                     </div>
-                    <div
-                      className={cn(
-                        "text-xs truncate",
-                        isSelected ? "text-white/70" : "text-[var(--text-muted)]"
-                      )}
-                    >
+                    <div className="text-xs truncate text-[var(--text-muted)]">
                       {project.connection.host}:{project.connection.port}/
                       {project.connection.database}
                     </div>
