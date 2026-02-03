@@ -78,7 +78,8 @@ export function Modal({
         aria-modal="true"
         aria-labelledby={title ? "modal-title" : undefined}
         className={cn(
-          "relative w-full max-w-lg",
+          "relative w-full max-w-lg max-h-[calc(100vh-2rem)]",
+          "flex flex-col",
           "bg-[var(--bg-secondary)] border border-[var(--border-color)]",
           "rounded-xl shadow-2xl shadow-black/40",
           "animate-in zoom-in-95 duration-200",
@@ -87,7 +88,7 @@ export function Modal({
         )}
       >
         {(title || showCloseButton) && (
-          <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--border-color)]">
+          <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--border-color)] flex-shrink-0">
             {title && (
               <h2
                 id="modal-title"
@@ -112,7 +113,7 @@ export function Modal({
             )}
           </div>
         )}
-        <div className="p-6">{children}</div>
+        <div className="p-6 overflow-y-auto flex-1 min-h-0">{children}</div>
       </div>
     </div>
   );
