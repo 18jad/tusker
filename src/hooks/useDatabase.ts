@@ -211,23 +211,29 @@ export function useTableData(schema: string, table: string, page: number = 1) {
     queryFn: async () => {
       if (!currentConnectionId) throw new Error("Not connected");
 
-      // Fetch columns and data in parallel
-      const [columnsResult, dataResult] = await Promise.all([
-        invoke<ColumnInfo[]>("get_columns", {
-          connectionId: currentConnectionId,
+      // Fetch columns first to find primary key for consistent ordering
+      const columnsResult = await invoke<ColumnInfo[]>("get_columns", {
+        connectionId: currentConnectionId,
+        schema,
+        table,
+      });
+
+      // Find primary key column(s) for consistent ordering after edits
+      const primaryKeyColumn = columnsResult.find((col) => col.is_primary_key);
+      const orderBy = primaryKeyColumn?.name ?? columnsResult[0]?.name;
+
+      // Fetch data with ORDER BY to ensure consistent row ordering
+      const dataResult = await invoke<PaginatedResult>("fetch_table_data", {
+        request: {
+          connection_id: currentConnectionId,
           schema,
           table,
-        }),
-        invoke<PaginatedResult>("fetch_table_data", {
-          request: {
-            connection_id: currentConnectionId,
-            schema,
-            table,
-            page,
-            page_size: pageSize,
-          },
-        }),
-      ]);
+          page,
+          page_size: pageSize,
+          order_by: orderBy,
+          order_direction: "ASC",
+        },
+      });
 
       return {
         rows: dataResult.rows,
