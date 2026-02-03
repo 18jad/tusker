@@ -39,6 +39,7 @@ interface UIState {
   setTheme: (theme: "dark" | "light") => void;
   getColumnWidths: (tableKey: string) => Record<string, number>;
   setColumnWidth: (tableKey: string, columnName: string, width: number) => void;
+  resetColumnWidths: (tableKey: string) => void;
 }
 
 export const useUIStore = create<UIState>((set, get) => ({
@@ -125,4 +126,10 @@ export const useUIStore = create<UIState>((set, get) => ({
         },
       },
     })),
+
+  resetColumnWidths: (tableKey) =>
+    set((state) => {
+      const { [tableKey]: _, ...rest } = state.columnWidths;
+      return { columnWidths: rest };
+    }),
 }));

@@ -1,9 +1,10 @@
 import { useState, useCallback } from "react";
-import { Loader2, AlertCircle, RefreshCw, Eye, Trash2 } from "lucide-react";
+import { Loader2, AlertCircle, RefreshCw, Eye, Trash2, Columns } from "lucide-react";
 import type { CellValue, TableData } from "../../types";
 import { DataTable } from "./DataTable";
 import { Pagination } from "./Pagination";
 import { cn } from "../../lib/utils";
+import { useUIStore } from "../../stores/uiStore";
 
 interface TableViewProps {
   tableKey: string;
@@ -219,6 +220,19 @@ export function TableView({
             {data.totalRows.toLocaleString()} rows
           </span>
 
+          <button
+            onClick={() => useUIStore.getState().resetColumnWidths(tableKey)}
+            className={cn(
+              "flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs",
+              "text-[var(--text-secondary)] hover:text-[var(--text-primary)]",
+              "hover:bg-[var(--bg-tertiary)] transition-colors"
+            )}
+            title="Reset column widths to default"
+          >
+            <Columns className="w-3.5 h-3.5 mt-px" />
+            <span>Reset Layout</span>
+          </button>
+
           {onRefresh && (
             <button
               onClick={onRefresh}
@@ -231,7 +245,7 @@ export function TableView({
               )}
               title="Refresh table data (reload from database)"
             >
-              <RefreshCw className={cn("w-3.5 h-3.5", isLoading && "animate-spin")} />
+              <RefreshCw className={cn("w-3.5 h-3.5 mt-px", isLoading && "animate-spin")} />
               <span>Refresh</span>
             </button>
           )}
