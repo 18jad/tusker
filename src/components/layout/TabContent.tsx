@@ -2,9 +2,10 @@ import { useState, useMemo, useEffect, useRef } from "react";
 import { useUIStore } from "../../stores/uiStore";
 import { useProjectStore } from "../../stores/projectStore";
 import { useChangesStore } from "../../stores/changesStore";
-import { useTableData } from "../../hooks/useDatabase";
+import { useTableData, useCommitChanges } from "../../hooks/useDatabase";
 import { TableView } from "../table/TableView";
-import { generateUpdateSQL } from "../../lib/sql";
+import { RowDetailModal } from "../table/RowDetailModal";
+import { generateUpdateSQL, generateDeleteSQL } from "../../lib/sql";
 import type { CellValue, Row } from "../../types";
 
 /**
@@ -17,8 +18,12 @@ function TableTabContent({ schema, table }: { schema: string; table: string }) {
   const instantCommit = activeProject?.settings.instantCommit ?? false;
 
   const { data, isLoading, error, refetch } = useTableData(schema, table, page);
+  const commitChanges = useCommitChanges();
   const addChange = useChangesStore((state) => state.addChange);
   const allChanges = useChangesStore((state) => state.changes);
+
+  // Row detail modal state
+  const [viewingRowIndex, setViewingRowIndex] = useState<number | null>(null);
 
   // Filter changes for this table - do this in useMemo to avoid infinite re-renders
   const changes = useMemo(() =>
@@ -123,6 +128,107 @@ function TableTabContent({ schema, table }: { schema: string; table: string }) {
     }
   };
 
+  // Handle row view/edit
+  const handleRowView = (rowIndex: number) => {
+    setViewingRowIndex(rowIndex);
+  };
+
+  // Handle row delete (stage)
+  const handleRowDelete = (rowIndex: number) => {
+    if (!data) return;
+
+    const originalRow = data.rows[rowIndex];
+    const columns = data.columns;
+
+    // Generate DELETE SQL
+    const sql = generateDeleteSQL(schema, table, originalRow, columns);
+
+    // Stage the delete change
+    addChange({
+      type: "delete",
+      schema,
+      table,
+      data: originalRow,
+      originalData: originalRow,
+      sql,
+    });
+  };
+
+  // Handle direct save from row detail modal
+  const handleRowSave = async (updatedRow: Row) => {
+    if (!data || viewingRowIndex === null) return;
+
+    const originalRow = data.rows[viewingRowIndex];
+    const columns = data.columns;
+
+    // Find changed columns
+    const changedData: Row = {};
+    Object.keys(updatedRow).forEach((key) => {
+      if (updatedRow[key] !== originalRow[key]) {
+        changedData[key] = updatedRow[key];
+      }
+    });
+
+    if (Object.keys(changedData).length === 0) return;
+
+    // Generate SQL
+    const sql = generateUpdateSQL(schema, table, changedData, originalRow, columns);
+
+    // Direct save - execute immediately
+    try {
+      await commitChanges.mutateAsync([sql]);
+      refetch();
+    } catch (err) {
+      console.error("Failed to save:", err);
+    }
+  };
+
+  // Handle stage from row detail modal
+  const handleRowStage = (updatedRow: Row) => {
+    if (!data || viewingRowIndex === null) return;
+
+    const originalRow = data.rows[viewingRowIndex];
+    const columns = data.columns;
+
+    // Find changed columns
+    const changedData: Row = {};
+    Object.keys(updatedRow).forEach((key) => {
+      if (updatedRow[key] !== originalRow[key]) {
+        changedData[key] = updatedRow[key];
+      }
+    });
+
+    if (Object.keys(changedData).length === 0) return;
+
+    // Update local edits for visual feedback
+    Object.entries(changedData).forEach(([colName, value]) => {
+      const editKey = `${viewingRowIndex}:${colName}`;
+      setLocalEdits((prev) => {
+        const next = new Map(prev);
+        next.set(editKey, value);
+        return next;
+      });
+    });
+
+    // Generate SQL and stage
+    const sql = generateUpdateSQL(schema, table, changedData, originalRow, columns);
+    addChange({
+      type: "update",
+      schema,
+      table,
+      data: changedData,
+      originalData: originalRow,
+      sql,
+    });
+  };
+
+  // Handle delete from row detail modal
+  const handleRowDeleteFromModal = () => {
+    if (viewingRowIndex !== null) {
+      handleRowDelete(viewingRowIndex);
+    }
+  };
+
   // Build set of edited cells for visual indication
   const editedCells = useMemo(() => {
     const edited = new Set<string>();
@@ -149,24 +255,71 @@ function TableTabContent({ schema, table }: { schema: string; table: string }) {
     return edited;
   }, [localEdits, changes, data]);
 
+  // Build set of deleted row indices
+  const deletedRows = useMemo(() => {
+    const deleted = new Set<number>();
+    changes.forEach((change) => {
+      if (change.type === "delete" && change.originalData) {
+        // Find the row index by matching original data
+        const rowIndex = data?.rows.findIndex((row) => {
+          return Object.entries(change.originalData || {}).every(
+            ([key, val]) => row[key] === val
+          );
+        });
+        if (rowIndex !== undefined && rowIndex >= 0) {
+          deleted.add(rowIndex);
+        }
+      }
+    });
+    return deleted;
+  }, [changes, data]);
+
   const handleRefresh = () => {
     setLocalEdits(new Map());
     refetch();
   };
 
+  // Get the row data for the modal
+  const viewingRow = viewingRowIndex !== null && mergedData?.rows[viewingRowIndex]
+    ? mergedData.rows[viewingRowIndex]
+    : null;
+
+  const isViewingRowDeleted = viewingRowIndex !== null && deletedRows.has(viewingRowIndex);
+
   return (
-    <TableView
-      tableKey={`${schema}.${table}`}
-      tableName={table}
-      data={mergedData}
-      isLoading={isLoading}
-      error={error ? (error instanceof Error ? error.message : String(error)) : null}
-      onPageChange={handlePageChange}
-      onCellEdit={handleCellEdit}
-      onRefresh={handleRefresh}
-      editedCells={editedCells}
-      readOnly={readOnly}
-    />
+    <>
+      <TableView
+        tableKey={`${schema}.${table}`}
+        tableName={table}
+        data={mergedData}
+        isLoading={isLoading}
+        error={error ? (error instanceof Error ? error.message : String(error)) : null}
+        onPageChange={handlePageChange}
+        onCellEdit={handleCellEdit}
+        onRowView={handleRowView}
+        onRowDelete={handleRowDelete}
+        onRefresh={handleRefresh}
+        editedCells={editedCells}
+        deletedRows={deletedRows}
+        readOnly={readOnly}
+      />
+
+      {/* Row detail modal */}
+      {viewingRow && data && (
+        <RowDetailModal
+          row={viewingRow}
+          rowIndex={viewingRowIndex!}
+          columns={data.columns}
+          isOpen={viewingRowIndex !== null}
+          onClose={() => setViewingRowIndex(null)}
+          onSave={handleRowSave}
+          onStage={handleRowStage}
+          onDelete={handleRowDeleteFromModal}
+          readOnly={readOnly}
+          isDeleted={isViewingRowDeleted}
+        />
+      )}
+    </>
   );
 }
 

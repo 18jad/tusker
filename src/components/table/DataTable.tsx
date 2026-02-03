@@ -8,10 +8,12 @@ interface DataTableProps {
   tableKey: string;
   columns: Column[];
   rows: Row[];
+  startRowNumber?: number;
   selectedRowIndex?: number | null;
   onRowSelect?: (index: number) => void;
   onCellEdit?: (rowIndex: number, columnName: string, value: CellValue) => void;
   editedCells?: Set<string>;
+  deletedRows?: Set<number>;
   readOnly?: boolean;
 }
 
@@ -360,10 +362,12 @@ export function DataTable({
   tableKey,
   columns,
   rows,
+  startRowNumber = 1,
   selectedRowIndex = null,
   onRowSelect,
   onCellEdit,
   editedCells = new Set(),
+  deletedRows = new Set(),
   readOnly = false,
 }: DataTableProps) {
   const allColumnWidths = useUIStore((state) => state.columnWidths);
@@ -495,6 +499,7 @@ export function DataTable({
           {rows.map((row, rowIndex) => {
             const isSelected = selectedRowIndex === rowIndex;
             const isEven = rowIndex % 2 === 0;
+            const isDeleted = deletedRows.has(rowIndex);
 
             return (
               <tr
@@ -502,28 +507,34 @@ export function DataTable({
                 onClick={() => onRowSelect?.(rowIndex)}
                 className={cn(
                   "transition-colors group",
-                  isEven ? "bg-[var(--bg-primary)]" : "bg-[var(--bg-secondary)]/30",
-                  isSelected && "!bg-[var(--accent)]/10",
-                  "hover:bg-[var(--bg-tertiary)]"
+                  isDeleted
+                    ? "bg-red-500/10 hover:bg-red-500/20"
+                    : isEven
+                      ? "bg-[var(--bg-primary)]"
+                      : "bg-[var(--bg-secondary)]/30",
+                  isSelected && !isDeleted && "!bg-[var(--accent)]/10",
+                  !isDeleted && "hover:bg-[var(--bg-tertiary)]"
                 )}
               >
                 {/* Row number cell - sticky on left, must have opaque bg */}
                 <td
                   className={cn(
                     "text-center border-b border-[var(--border-color)]",
-                    "text-xs text-[var(--text-muted)] select-none",
+                    "text-xs select-none",
                     "sticky left-0 z-10 shadow-[inset_-2px_0_0_0_var(--border-color)]",
                     "transition-colors",
-                    isSelected
-                      ? "bg-[var(--bg-tertiary)]"
-                      : isEven
-                        ? "bg-[var(--bg-primary)]"
-                        : "bg-[var(--bg-secondary)]",
-                    "group-hover:bg-[var(--bg-tertiary)]"
+                    isDeleted
+                      ? "bg-red-950 text-red-400"
+                      : isSelected
+                        ? "bg-[var(--bg-tertiary)] text-[var(--text-muted)]"
+                        : isEven
+                          ? "bg-[var(--bg-primary)] text-[var(--text-muted)]"
+                          : "bg-[var(--bg-secondary)] text-[var(--text-muted)]",
+                    !isDeleted && "group-hover:bg-[var(--bg-tertiary)]"
                   )}
                   style={{ width: 50, minWidth: 50 }}
                 >
-                  {rowIndex + 1}
+                  <span className={cn(isDeleted && "line-through")}>{startRowNumber + rowIndex}</span>
                 </td>
                 {columns.map((column) => {
                   const value = row[column.name];
@@ -537,7 +548,8 @@ export function DataTable({
                       className={cn(
                         "border-b border-r border-[var(--border-color)] last:border-r-0",
                         isEditing && "p-0",
-                        isEdited && "bg-[var(--warning)]/10"
+                        isEdited && !isDeleted && "bg-[var(--warning)]/10",
+                        isDeleted && "line-through text-red-400/70"
                       )}
                       style={{
                         width: getColumnWidth(column.name),
@@ -548,11 +560,11 @@ export function DataTable({
                       <EditableCell
                         value={value}
                         column={column}
-                        isEditing={isEditing}
-                        onStartEdit={() => handleStartEdit(rowIndex, column.name)}
+                        isEditing={isEditing && !isDeleted}
+                        onStartEdit={() => !isDeleted && handleStartEdit(rowIndex, column.name)}
                         onSave={(newValue) => handleSaveEdit(rowIndex, column.name, newValue)}
                         onCancel={handleCancelEdit}
-                        readOnly={readOnly}
+                        readOnly={readOnly || isDeleted}
                         isEdited={isEdited}
                       />
                     </td>

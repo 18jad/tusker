@@ -1,5 +1,5 @@
 import { useState, useCallback } from "react";
-import { Loader2, AlertCircle, RefreshCw } from "lucide-react";
+import { Loader2, AlertCircle, RefreshCw, Eye, Trash2 } from "lucide-react";
 import type { CellValue, TableData } from "../../types";
 import { DataTable } from "./DataTable";
 import { Pagination } from "./Pagination";
@@ -13,8 +13,11 @@ interface TableViewProps {
   error: string | null;
   onPageChange: (page: number) => void;
   onCellEdit?: (rowIndex: number, columnName: string, value: CellValue) => void;
+  onRowView?: (rowIndex: number) => void;
+  onRowDelete?: (rowIndex: number) => void;
   onRefresh?: () => void;
   editedCells?: Set<string>;
+  deletedRows?: Set<number>;
   readOnly?: boolean;
 }
 
@@ -87,14 +90,17 @@ export function TableView({
   error,
   onPageChange,
   onCellEdit,
+  onRowView,
+  onRowDelete,
   onRefresh,
   editedCells,
+  deletedRows,
   readOnly = false,
 }: TableViewProps) {
   const [selectedRowIndex, setSelectedRowIndex] = useState<number | null>(null);
 
   const handleRowSelect = useCallback((index: number) => {
-    setSelectedRowIndex(index);
+    setSelectedRowIndex((prev) => (prev === index ? null : index));
   }, []);
 
   const handleCellEdit = useCallback(
@@ -102,6 +108,20 @@ export function TableView({
       onCellEdit?.(rowIndex, columnName, value);
     },
     [onCellEdit]
+  );
+
+  const handleRowView = useCallback(
+    (rowIndex: number) => {
+      onRowView?.(rowIndex);
+    },
+    [onRowView]
+  );
+
+  const handleRowDelete = useCallback(
+    (rowIndex: number) => {
+      onRowDelete?.(rowIndex);
+    },
+    [onRowDelete]
   );
 
   // Loading state - show skeleton
@@ -149,8 +169,55 @@ export function TableView({
     <div className="flex flex-col h-full">
       {/* Table toolbar */}
       <div className="flex items-center justify-between px-3 h-10 bg-[var(--bg-secondary)] border-b border-[var(--border-color)] shrink-0">
+        {/* Left side - Row actions when selected */}
         <div className="flex items-center gap-1">
-          {/* Refresh button */}
+          {selectedRowIndex !== null && !readOnly ? (
+            <>
+              <button
+                onClick={() => handleRowView(selectedRowIndex)}
+                className={cn(
+                  "flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs",
+                  "text-[var(--text-secondary)] hover:text-[var(--accent)]",
+                  "hover:bg-[var(--bg-tertiary)] transition-colors"
+                )}
+                title="View/Edit row"
+              >
+                <Eye className="w-3.5 h-3.5" />
+                <span>View</span>
+              </button>
+
+              {!deletedRows?.has(selectedRowIndex) && (
+                <button
+                  onClick={() => handleRowDelete(selectedRowIndex)}
+                  className={cn(
+                    "flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs",
+                    "text-[var(--text-secondary)] hover:text-red-400",
+                    "hover:bg-red-500/10 transition-colors"
+                  )}
+                  title="Delete row"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Delete</span>
+                </button>
+              )}
+
+              <span className="text-xs text-[var(--text-muted)] ml-1">
+                Row #{(data.page - 1) * data.pageSize + selectedRowIndex + 1}
+              </span>
+            </>
+          ) : (
+            <span className="text-xs text-[var(--text-muted)]">
+              Click a row to select
+            </span>
+          )}
+        </div>
+
+        {/* Right side - Refresh & info */}
+        <div className="flex items-center gap-3">
+          <span className="text-xs text-[var(--text-muted)]">
+            {data.totalRows.toLocaleString()} rows
+          </span>
+
           {onRefresh && (
             <button
               onClick={onRefresh}
@@ -168,11 +235,6 @@ export function TableView({
             </button>
           )}
         </div>
-
-        {/* Table info */}
-        <div className="text-xs text-[var(--text-muted)]">
-          {data.totalRows.toLocaleString()} rows
-        </div>
       </div>
 
       {/* Data table */}
@@ -181,10 +243,12 @@ export function TableView({
           tableKey={tableKey}
           columns={data.columns}
           rows={data.rows}
+          startRowNumber={(data.page - 1) * data.pageSize + 1}
           selectedRowIndex={selectedRowIndex}
           onRowSelect={handleRowSelect}
           onCellEdit={handleCellEdit}
           editedCells={editedCells}
+          deletedRows={deletedRows}
           readOnly={readOnly}
         />
 
