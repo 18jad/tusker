@@ -69,6 +69,7 @@ export function RowDetailModal({
 }: RowDetailModalProps) {
   const [editedValues, setEditedValues] = useState<Record<string, string>>({});
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
 
   // Initialize edited values when modal opens
   useEffect(() => {
@@ -79,8 +80,27 @@ export function RowDetailModal({
       });
       setEditedValues(initial);
       setShowDeleteConfirm(false);
+      setValidationErrors({});
     }
   }, [isOpen, row, columns]);
+
+  // Validate required fields - returns errors object
+  const validateFields = (): Record<string, string> => {
+    const errors: Record<string, string> = {};
+    columns.forEach((col) => {
+      // Skip nullable fields - they can be empty
+      if (col.isNullable) return;
+
+      const value = editedValues[col.name] ?? "";
+      const trimmed = value.trim();
+
+      // Empty or "null" string means null value
+      if (trimmed === "" || trimmed.toLowerCase() === "null") {
+        errors[col.name] = "This field is required";
+      }
+    });
+    return errors;
+  };
 
   // Check if any values have changed
   const hasChanges = useMemo(() => {
@@ -102,6 +122,11 @@ export function RowDetailModal({
   };
 
   const handleSave = () => {
+    const errors = validateFields();
+    if (Object.keys(errors).length > 0) {
+      setValidationErrors(errors);
+      return;
+    }
     if (hasChanges) {
       onSave(getUpdatedRow());
     }
@@ -109,6 +134,11 @@ export function RowDetailModal({
   };
 
   const handleStage = () => {
+    const errors = validateFields();
+    if (Object.keys(errors).length > 0) {
+      setValidationErrors(errors);
+      return;
+    }
     if (hasChanges) {
       onStage(getUpdatedRow());
     }
@@ -129,6 +159,14 @@ export function RowDetailModal({
       ...prev,
       [columnName]: value,
     }));
+    // Clear validation error when user modifies the field
+    if (validationErrors[columnName]) {
+      setValidationErrors((prev) => {
+        const next = { ...prev };
+        delete next[columnName];
+        return next;
+      });
+    }
   };
 
   if (!isOpen) return null;
@@ -175,6 +213,8 @@ export function RowDetailModal({
               const isLarge = value.length > 100;
               const originalValue = formatValue(row[column.name]);
               const isModified = value !== originalValue;
+              const hasError = !!validationErrors[column.name];
+              const isRequired = !column.isNullable;
 
               return (
                 <div key={column.name} className="space-y-1.5">
@@ -189,6 +229,9 @@ export function RowDetailModal({
                       <span className="px-1.5 py-0.5 text-[10px] rounded bg-[var(--warning)]/20 text-[var(--warning)]">
                         PK
                       </span>
+                    )}
+                    {isRequired && (
+                      <span className="text-[10px] text-red-400">*</span>
                     )}
                     {isModified && (
                       <span className="w-1.5 h-1.5 rounded-full bg-[var(--warning)]" title="Modified" />
@@ -206,9 +249,10 @@ export function RowDetailModal({
                         "border border-[var(--border-color)] outline-none",
                         "focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)]",
                         "disabled:opacity-50 disabled:cursor-not-allowed",
-                        isModified && "border-[var(--warning)]"
+                        hasError && "border-red-500 focus:border-red-500 focus:ring-red-500",
+                        isModified && !hasError && "border-[var(--warning)]"
                       )}
-                      placeholder={column.isNullable ? "NULL" : ""}
+                      placeholder={column.isNullable ? "NULL" : "Required"}
                     />
                   ) : (
                     <input
@@ -222,10 +266,14 @@ export function RowDetailModal({
                         "border border-[var(--border-color)] outline-none",
                         "focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)]",
                         "disabled:opacity-50 disabled:cursor-not-allowed",
-                        isModified && "border-[var(--warning)]"
+                        hasError && "border-red-500 focus:border-red-500 focus:ring-red-500",
+                        isModified && !hasError && "border-[var(--warning)]"
                       )}
-                      placeholder={column.isNullable ? "NULL" : ""}
+                      placeholder={column.isNullable ? "NULL" : "Required"}
                     />
+                  )}
+                  {hasError && (
+                    <p className="text-xs text-red-400">{validationErrors[column.name]}</p>
                   )}
                 </div>
               );
