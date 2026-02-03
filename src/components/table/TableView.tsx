@@ -18,9 +18,16 @@ interface TableViewProps {
   readOnly?: boolean;
 }
 
-function SkeletonRow({ columns }: { columns: number }) {
+function SkeletonRow({ columns, rowNum }: { columns: number; rowNum: number }) {
   return (
     <tr className="border-b border-[var(--border-color)]">
+      {/* Row number */}
+      <td
+        className="text-center border-r border-[var(--border-color)] text-xs text-[var(--text-muted)] sticky left-0 bg-[var(--bg-primary)]"
+        style={{ width: 50, minWidth: 50 }}
+      >
+        {rowNum}
+      </td>
       {Array.from({ length: columns }).map((_, i) => (
         <td key={i} className="px-3 py-3">
           <div
@@ -42,8 +49,15 @@ function SkeletonTable() {
   return (
     <div className="h-full overflow-hidden">
       <table className="w-full border-collapse">
-        <thead className="sticky top-0 z-10">
+        <thead className="sticky top-0 z-20">
           <tr className="bg-[var(--bg-secondary)]">
+            {/* Row number header */}
+            <th
+              className="text-center border-b border-r border-[var(--border-color)] sticky left-0 z-30 bg-[var(--bg-secondary)]"
+              style={{ width: 50, minWidth: 50 }}
+            >
+              <span className="text-[10px] text-[var(--text-muted)]">#</span>
+            </th>
             {Array.from({ length: columnCount }).map((_, i) => (
               <th
                 key={i}
@@ -57,7 +71,7 @@ function SkeletonTable() {
         </thead>
         <tbody>
           {Array.from({ length: rowCount }).map((_, i) => (
-            <SkeletonRow key={i} columns={columnCount} />
+            <SkeletonRow key={i} columns={columnCount} rowNum={i + 1} />
           ))}
         </tbody>
       </table>

@@ -448,8 +448,15 @@ export function DataTable({
       <div className="flex-1 overflow-auto min-h-0">
         <table className="w-full border-collapse">
         {/* Header */}
-        <thead className="sticky top-0 z-10">
+        <thead className="sticky top-0 z-20">
           <tr className="bg-[var(--bg-secondary)]">
+            {/* Row number header - sticky both top and left, highest z-index for corner */}
+            <th
+              className="text-center border-b border-[var(--border-color)] bg-[var(--bg-secondary)] sticky left-0 z-30 shadow-[inset_-2px_0_0_0_var(--border-color)]"
+              style={{ width: 50, minWidth: 50 }}
+            >
+              <span className="text-[10px] text-[var(--text-muted)]">#</span>
+            </th>
             {columns.map((column) => (
               <th
                 key={column.name}
@@ -494,12 +501,26 @@ export function DataTable({
                 key={rowIndex}
                 onClick={() => onRowSelect?.(rowIndex)}
                 className={cn(
-                  "transition-colors",
+                  "transition-colors group",
                   isEven ? "bg-[var(--bg-primary)]" : "bg-[var(--bg-secondary)]/30",
                   isSelected && "!bg-[var(--accent)]/10",
                   "hover:bg-[var(--bg-tertiary)]"
                 )}
               >
+                {/* Row number cell - sticky on left */}
+                <td
+                  className={cn(
+                    "text-center border-b border-[var(--border-color)]",
+                    "text-xs text-[var(--text-muted)] select-none",
+                    "sticky left-0 z-10 shadow-[inset_-2px_0_0_0_var(--border-color)]",
+                    isEven ? "bg-[var(--bg-primary)]" : "bg-[var(--bg-secondary)]",
+                    isSelected && "!bg-[var(--accent)]/20",
+                    "group-hover:bg-[var(--bg-tertiary)]"
+                  )}
+                  style={{ width: 50, minWidth: 50 }}
+                >
+                  {rowIndex + 1}
+                </td>
                 {columns.map((column) => {
                   const value = row[column.name];
                   const isEditing = editingCell?.row === rowIndex && editingCell?.col === column.name;
