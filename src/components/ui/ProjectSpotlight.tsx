@@ -224,7 +224,7 @@ export function ProjectSpotlight() {
                   <div
                     className={cn(
                       "rounded-full flex-shrink-0 transition-all ring-2",
-                      colorClasses.bg,
+                      colorClasses.dot,
                       isSelected
                         ? "w-3.5 h-3.5 ring-white/20"
                         : "w-2.5 h-2.5 ring-transparent"
