@@ -39,20 +39,35 @@ interface TableInfo {
 
 // Connect to database
 export function useConnect() {
-  const { setConnectionStatus, setSchemas, setError, getActiveProject } = useProjectStore();
+  const { setConnectionStatus, setSchemas, setSchemasLoading, setError, getActiveProject } = useProjectStore();
 
   return useMutation({
     mutationFn: async (config: ConnectionConfig) => {
       setConnectionStatus("connecting");
+      setSchemas([]); // Clear stale schemas from previous connection
+      setSchemasLoading(false);
       setError(null);
 
+      const activeProject = getActiveProject();
+
+      // Fetch password from secure keychain if not provided
+      let password = config.password;
+      if (!password && activeProject) {
+        try {
+          password = await invoke<string>("get_saved_password", { connectionId: activeProject.id });
+        } catch {
+          // No saved password, will try with empty (may fail auth)
+          password = "";
+        }
+      }
+
       const request: ConnectRequest = {
-        name: getActiveProject()?.name || "connection",
+        name: activeProject?.name || "connection",
         host: config.host,
         port: config.port,
         database: config.database,
         username: config.username,
-        password: config.password,
+        password,
         ssl_mode: config.ssl ? "require" : "disable",
         save_connection: false,
       };
@@ -64,6 +79,7 @@ export function useConnect() {
     onSuccess: async (result) => {
       setConnectionStatus("connected");
       setError(null);
+      setSchemasLoading(true);
 
       // Fetch schemas after connecting
       try {
@@ -95,6 +111,8 @@ export function useConnect() {
         setSchemas(schemasWithTables);
       } catch (err) {
         console.error("Failed to fetch schemas:", err);
+      } finally {
+        setSchemasLoading(false);
       }
     },
     onError: (error: Error) => {
@@ -107,7 +125,7 @@ export function useConnect() {
 
 // Disconnect from database
 export function useDisconnect() {
-  const { setConnectionStatus, setSchemas, setError } = useProjectStore();
+  const { setConnectionStatus, setSchemas, setSchemasLoading, setError } = useProjectStore();
 
   return useMutation({
     mutationFn: async () => {
@@ -119,6 +137,7 @@ export function useDisconnect() {
     onSuccess: () => {
       setConnectionStatus("disconnected");
       setSchemas([]);
+      setSchemasLoading(false);
       setError(null);
     },
     onError: (error: Error) => {
@@ -359,4 +378,17 @@ export function useCommitChanges() {
 // Helper to get connection config - used by components that need to connect
 export function getConnectionConfig(config: ConnectionConfig): ConnectionConfig {
   return config;
+}
+
+// Secure password storage via system keychain
+export async function savePassword(projectId: string, password: string): Promise<void> {
+  await invoke("save_password", { projectId, password });
+}
+
+export async function getPassword(projectId: string): Promise<string> {
+  return invoke<string>("get_saved_password", { connectionId: projectId });
+}
+
+export async function deletePassword(projectId: string): Promise<void> {
+  await invoke("delete_password", { projectId });
 }

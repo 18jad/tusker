@@ -25,6 +25,8 @@ pub fn run() {
             commands::save_connection,
             commands::delete_saved_connection,
             commands::get_saved_password,
+            commands::save_password,
+            commands::delete_password,
             // Schema commands
             commands::get_schemas,
             commands::get_tables,

@@ -6,7 +6,7 @@ import { Input } from "../ui/Input";
 import { Toggle } from "../ui/Toggle";
 import { useProjectStore } from "../../stores/projectStore";
 import { useUIStore } from "../../stores/uiStore";
-import { useTestConnection } from "../../hooks/useDatabase";
+import { useTestConnection, savePassword, getPassword } from "../../hooks/useDatabase";
 import {
   cn,
   generateId,
@@ -79,20 +79,41 @@ export function ProjectModal() {
     if (projectModalOpen) {
       if (editingProject) {
         const conn = editingProject.connection;
-        setForm({
-          name: editingProject.name,
-          color: editingProject.color,
-          connectionMethod: "manual",
-          connectionString: buildConnectionString(conn),
-          host: conn.host,
-          port: String(conn.port),
-          database: conn.database,
-          username: conn.username,
-          password: conn.password,
-          ssl: conn.ssl,
-          instantCommit: editingProject.settings.instantCommit,
-          readOnly: editingProject.settings.readOnly,
-        });
+        // Load saved password from secure storage
+        getPassword(editingProject.id)
+          .then((savedPassword) => {
+            setForm({
+              name: editingProject.name,
+              color: editingProject.color,
+              connectionMethod: "manual",
+              connectionString: buildConnectionString({ ...conn, password: savedPassword }),
+              host: conn.host,
+              port: String(conn.port),
+              database: conn.database,
+              username: conn.username,
+              password: savedPassword,
+              ssl: conn.ssl,
+              instantCommit: editingProject.settings.instantCommit,
+              readOnly: editingProject.settings.readOnly,
+            });
+          })
+          .catch(() => {
+            // No saved password, use empty
+            setForm({
+              name: editingProject.name,
+              color: editingProject.color,
+              connectionMethod: "manual",
+              connectionString: buildConnectionString(conn),
+              host: conn.host,
+              port: String(conn.port),
+              database: conn.database,
+              username: conn.username,
+              password: "",
+              ssl: conn.ssl,
+              instantCommit: editingProject.settings.instantCommit,
+              readOnly: editingProject.settings.readOnly,
+            });
+          });
       } else {
         setForm(INITIAL_FORM_STATE);
       }
@@ -168,25 +189,39 @@ export function ProjectModal() {
 
     try {
       const connection = getConnectionConfig();
+      const password = connection.password;
+
+      // Don't store password in the project config (it goes to keychain)
+      const connectionWithoutPassword = { ...connection, password: "" };
+
       const projectData: Omit<Project, "id" | "createdAt"> = {
         name: form.name.trim(),
         color: form.color,
-        connection,
+        connection: connectionWithoutPassword,
         settings: {
           instantCommit: form.instantCommit,
           readOnly: form.readOnly,
         },
       };
 
+      let projectId: string;
+
       if (isEditing && editingProjectId) {
         updateProject(editingProjectId, projectData);
+        projectId = editingProjectId;
       } else {
+        projectId = generateId();
         const newProject: Project = {
           ...projectData,
-          id: generateId(),
+          id: projectId,
           createdAt: new Date().toISOString(),
         };
         addProject(newProject);
+      }
+
+      // Save password to secure keychain
+      if (password) {
+        await savePassword(projectId, password);
       }
 
       closeProjectModal();

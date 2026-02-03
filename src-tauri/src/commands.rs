@@ -175,6 +175,16 @@ pub fn get_saved_password(connection_id: String) -> Result<String> {
     CredentialStorage::get_password(&connection_id)
 }
 
+#[tauri::command]
+pub fn save_password(project_id: String, password: String) -> Result<()> {
+    CredentialStorage::save_password(&project_id, &password)
+}
+
+#[tauri::command]
+pub fn delete_password(project_id: String) -> Result<()> {
+    CredentialStorage::delete_password(&project_id)
+}
+
 // ============================================================================
 // Schema Commands
 // ============================================================================

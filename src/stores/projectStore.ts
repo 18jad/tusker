@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import { invoke } from "@tauri-apps/api/core";
 import type { Project, ConnectionStatus, Schema } from "../types";
 
 interface ProjectState {
@@ -7,6 +8,7 @@ interface ProjectState {
   activeProjectId: string | null;
   connectionStatus: ConnectionStatus;
   schemas: Schema[];
+  schemasLoading: boolean;
   error: string | null;
 
   // Actions
@@ -16,6 +18,7 @@ interface ProjectState {
   setActiveProject: (id: string | null) => void;
   setConnectionStatus: (status: ConnectionStatus) => void;
   setSchemas: (schemas: Schema[]) => void;
+  setSchemasLoading: (loading: boolean) => void;
   setError: (error: string | null) => void;
   getActiveProject: () => Project | undefined;
 }
@@ -27,6 +30,7 @@ export const useProjectStore = create<ProjectState>()(
       activeProjectId: null,
       connectionStatus: "disconnected",
       schemas: [],
+      schemasLoading: false,
       error: null,
 
       addProject: (project) =>
@@ -41,18 +45,25 @@ export const useProjectStore = create<ProjectState>()(
           ),
         })),
 
-      deleteProject: (id) =>
+      deleteProject: (id) => {
+        // Delete password from secure keychain
+        invoke("delete_password", { projectId: id }).catch(() => {
+          // Ignore error if password doesn't exist
+        });
         set((state) => ({
           projects: state.projects.filter((p) => p.id !== id),
           activeProjectId:
             state.activeProjectId === id ? null : state.activeProjectId,
-        })),
+        }));
+      },
 
       setActiveProject: (id) => set({ activeProjectId: id }),
 
       setConnectionStatus: (status) => set({ connectionStatus: status }),
 
       setSchemas: (schemas) => set({ schemas }),
+
+      setSchemasLoading: (loading) => set({ schemasLoading: loading }),
 
       setError: (error) => set({ error }),
 

@@ -144,6 +144,7 @@ function ProjectTree() {
   const activeProject = useProjectStore((state) => state.getActiveProject());
   const schemas = useProjectStore((state) => state.schemas);
   const connectionStatus = useProjectStore((state) => state.connectionStatus);
+  const schemasLoading = useProjectStore((state) => state.schemasLoading);
   const [isExpanded, setIsExpanded] = useState(true);
 
   if (!activeProject) {
@@ -167,8 +168,16 @@ function ProjectTree() {
         isExpanded={isExpanded}
         onToggle={() => setIsExpanded(!isExpanded)}
       >
-        {connectionStatus === "connected" ? (
-          schemas.length > 0 ? (
+        {connectionStatus === "connecting" ? (
+          <div className="text-xs text-[var(--text-muted)] py-1 pl-12">
+            Connecting...
+          </div>
+        ) : connectionStatus === "connected" ? (
+          schemasLoading ? (
+            <div className="text-xs text-[var(--text-muted)] py-1 pl-12">
+              Loading schemas...
+            </div>
+          ) : schemas.length > 0 ? (
             schemas.map((schema) => (
               <SchemaTree key={schema.name} schema={schema} level={1} />
             ))
@@ -177,10 +186,6 @@ function ProjectTree() {
               No schemas found
             </div>
           )
-        ) : connectionStatus === "connecting" ? (
-          <div className="text-xs text-[var(--text-muted)] py-1 pl-12">
-            Loading schemas...
-          </div>
         ) : (
           <div className="text-xs text-[var(--text-muted)] py-1 pl-12">
             Not connected
