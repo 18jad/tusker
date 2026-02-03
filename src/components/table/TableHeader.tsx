@@ -148,7 +148,7 @@ export function TableHeader({
   return (
     <div
       className={cn(
-        "relative flex items-start gap-2 px-3 py-1.5",
+        "relative flex flex-col px-3 py-1.5",
         "bg-[--bg-secondary] border-r border-b border-[--border-color]",
         "select-none",
         onSort && "cursor-pointer hover:bg-[--bg-tertiary]"
@@ -156,57 +156,54 @@ export function TableHeader({
       style={{ width, minWidth: width, maxWidth: width }}
       onClick={onSort}
     >
-      {/* Icon */}
-      {column.isPrimaryKey ? (
-        <Key className="w-3 h-3 flex-shrink-0 mt-0.5 text-amber-500" />
-      ) : (
-        <span className="flex-shrink-0 mt-0.5 text-[--text-muted]">{getTypeIcon(column.dataType)}</span>
-      )}
-
-      {/* Column info */}
-      <div className="flex flex-col min-w-0 flex-1">
-        <div className="flex items-center gap-1.5">
-          <span className="text-sm font-medium text-[--text-primary] truncate flex-1">
-            {column.name}
-          </span>
-          {sortDirection && (
-            <span className="flex-shrink-0 text-[--text-muted]">
-              {sortDirection === "asc" ? (
-                <svg
-                  className="w-3 h-3"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M5 15l7-7 7 7"
-                  />
-                </svg>
-              ) : (
-                <svg
-                  className="w-3 h-3"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M19 9l-7 7-7-7"
-                  />
-                </svg>
-              )}
-            </span>
-          )}
-        </div>
-        <span className={cn("text-[10px] truncate", typeBadge.color)}>
-          {column.dataType}
+      {/* Top row: icon + name + sort */}
+      <div className="flex items-center gap-2">
+        {column.isPrimaryKey ? (
+          <Key className="w-3 h-3 flex-shrink-0 text-amber-500" />
+        ) : (
+          <span className="flex-shrink-0 text-[--text-muted]">{getTypeIcon(column.dataType)}</span>
+        )}
+        <span className="text-sm font-medium text-[--text-primary] truncate flex-1">
+          {column.name}
         </span>
+        {sortDirection && (
+          <span className="flex-shrink-0 text-[--text-muted]">
+            {sortDirection === "asc" ? (
+              <svg
+                className="w-3 h-3"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M5 15l7-7 7 7"
+                />
+              </svg>
+            ) : (
+              <svg
+                className="w-3 h-3"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M19 9l-7 7-7-7"
+                />
+              </svg>
+            )}
+          </span>
+        )}
       </div>
+      {/* Bottom row: type */}
+      <span className={cn("text-[10px] truncate", typeBadge.color)}>
+        {column.dataType}
+      </span>
 
       {/* Resize handle */}
       <div
