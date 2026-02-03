@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { X, Save, Clock, Trash2 } from "lucide-react";
 import { cn } from "../../lib/utils";
+import { TypedInput } from "../ui/TypedInput";
 import type { Column, Row, CellValue } from "../../types";
 
 interface RowDetailModalProps {
@@ -210,7 +211,6 @@ export function RowDetailModal({
           <div className="space-y-4">
             {columns.map((column) => {
               const value = editedValues[column.name] ?? "";
-              const isLarge = value.length > 100;
               const originalValue = formatValue(row[column.name]);
               const isModified = value !== originalValue;
               const hasError = !!validationErrors[column.name];
@@ -237,41 +237,15 @@ export function RowDetailModal({
                       <span className="w-1.5 h-1.5 rounded-full bg-[var(--warning)]" title="Modified" />
                     )}
                   </div>
-                  {isLarge || column.dataType.toLowerCase().includes("json") || column.dataType.toLowerCase().includes("text") ? (
-                    <textarea
-                      value={value}
-                      onChange={(e) => handleFieldChange(column.name, e.target.value)}
-                      disabled={readOnly || isDeleted}
-                      rows={4}
-                      className={cn(
-                        "w-full px-3 py-2 text-sm font-mono rounded-md resize-y",
-                        "bg-[var(--bg-secondary)] text-[var(--text-primary)]",
-                        "border border-[var(--border-color)] outline-none",
-                        "focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)]",
-                        "disabled:opacity-50 disabled:cursor-not-allowed",
-                        hasError && "border-red-500 focus:border-red-500 focus:ring-red-500",
-                        isModified && !hasError && "border-[var(--warning)]"
-                      )}
-                      placeholder={column.isNullable ? "NULL" : "Required"}
-                    />
-                  ) : (
-                    <input
-                      type="text"
-                      value={value}
-                      onChange={(e) => handleFieldChange(column.name, e.target.value)}
-                      disabled={readOnly || isDeleted}
-                      className={cn(
-                        "w-full px-3 py-2 text-sm rounded-md",
-                        "bg-[var(--bg-secondary)] text-[var(--text-primary)]",
-                        "border border-[var(--border-color)] outline-none",
-                        "focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)]",
-                        "disabled:opacity-50 disabled:cursor-not-allowed",
-                        hasError && "border-red-500 focus:border-red-500 focus:ring-red-500",
-                        isModified && !hasError && "border-[var(--warning)]"
-                      )}
-                      placeholder={column.isNullable ? "NULL" : "Required"}
-                    />
-                  )}
+                  <TypedInput
+                    value={value}
+                    onChange={(newValue) => handleFieldChange(column.name, newValue)}
+                    dataType={column.dataType}
+                    disabled={readOnly || isDeleted}
+                    placeholder={column.isNullable ? "NULL" : "Required"}
+                    hasError={hasError}
+                    isModified={isModified}
+                  />
                   {hasError && (
                     <p className="text-xs text-red-400">{validationErrors[column.name]}</p>
                   )}
