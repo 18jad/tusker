@@ -212,8 +212,30 @@ export function DataTable({
 
   const handleSaveEdit = (rowIndex: number, colName: string, value: CellValue) => {
     const originalValue = rows[rowIndex][colName];
+
+    // Compare values properly - handle objects/JSON by comparing string representations
+    const valuesEqual = (a: CellValue, b: CellValue): boolean => {
+      if (a === b) return true;
+      if (a === null || b === null) return a === b;
+
+      // Handle objects (JSONB columns)
+      if (typeof a === "object" && typeof b === "object") {
+        return JSON.stringify(a) === JSON.stringify(b);
+      }
+      // Handle case where one is string representation of the other (JSONB edit)
+      if (typeof a === "object" && typeof b === "string") {
+        return JSON.stringify(a) === b;
+      }
+      if (typeof a === "string" && typeof b === "object") {
+        return a === JSON.stringify(b);
+      }
+
+      // For primitives, compare as strings to handle type coercion
+      return String(a) === String(b);
+    };
+
     // Only trigger edit if value actually changed
-    if (value !== originalValue) {
+    if (!valuesEqual(value, originalValue)) {
       onCellEdit?.(rowIndex, colName, value);
     }
     setEditingCell(null);
