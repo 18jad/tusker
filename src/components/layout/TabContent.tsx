@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useUIStore } from "../../stores/uiStore";
 import { useProjectStore } from "../../stores/projectStore";
 import { useChangesStore } from "../../stores/changesStore";
@@ -25,6 +25,19 @@ function TableTabContent({ schema, table }: { schema: string; table: string }) {
     allChanges.filter((c) => c.schema === schema && c.table === table),
     [allChanges, schema, table]
   );
+
+  // Track previous changes count to detect commits
+  const prevChangesCount = useRef(changes.length);
+
+  // Clear local edits when staged changes are committed (changes go from >0 to 0)
+  useEffect(() => {
+    if (prevChangesCount.current > 0 && changes.length === 0) {
+      // Changes were cleared (commit happened), clear local edits and refetch
+      setLocalEdits(new Map());
+      refetch();
+    }
+    prevChangesCount.current = changes.length;
+  }, [changes.length, refetch]);
 
   // Track local edits (before they're committed)
   const [localEdits, setLocalEdits] = useState<Map<string, CellValue>>(new Map());
