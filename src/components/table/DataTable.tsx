@@ -1,8 +1,11 @@
 import { useState, useCallback, useRef, useEffect } from "react";
+import DatePicker from "react-datepicker";
 import { cn } from "../../lib/utils";
 import { useUIStore } from "../../stores/uiStore";
+import { RelationSelect } from "../ui/RelationSelect";
 import type { Column, Row, CellValue } from "../../types";
 import { Key, Hash, Type, Calendar, ToggleLeft, Braces } from "lucide-react";
+import "react-datepicker/dist/react-datepicker.css";
 
 interface DataTableProps {
   tableKey: string;
@@ -92,6 +95,73 @@ function parseValue(value: string, dataType: string): CellValue {
     return value.toLowerCase() === "true";
   }
   return value;
+}
+
+/**
+ * Get the input type for a PostgreSQL data type
+ */
+function getInputType(dataType: string): "text" | "number" | "boolean" | "date" | "time" | "datetime" {
+  const type = dataType.toLowerCase();
+  if (type === "boolean" || type === "bool") return "boolean";
+  if (type.includes("int") || type.includes("serial") || type === "smallint" || type === "bigint") return "number";
+  if (type.includes("float") || type.includes("double") || type.includes("numeric") || type.includes("decimal") || type === "real" || type === "money") return "number";
+  if (type === "date") return "date";
+  if (type === "time" || type === "time without time zone") return "time";
+  if (type.includes("timestamp") || type === "timestamptz") return "datetime";
+  return "text";
+}
+
+/**
+ * Parse string to Date
+ */
+function parseDate(value: string): Date | null {
+  if (!value || value === "null" || value === "NULL") return null;
+  try {
+    const date = new Date(value);
+    return isNaN(date.getTime()) ? null : date;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Parse time string to Date (today with that time)
+ */
+function parseTime(value: string): Date | null {
+  if (!value || value === "null" || value === "NULL") return null;
+  try {
+    const [hours, minutes, seconds] = value.split(":").map(Number);
+    const date = new Date();
+    date.setHours(hours || 0, minutes || 0, seconds || 0, 0);
+    return date;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Format Date to date-only string (YYYY-MM-DD)
+ */
+function formatDateOnly(date: Date | null): string {
+  if (!date) return "";
+  return date.toISOString().split("T")[0];
+}
+
+/**
+ * Format Date to ISO string for timestamp storage
+ */
+function formatDatetime(date: Date | null): string {
+  if (!date) return "";
+  return date.toISOString();
+}
+
+/**
+ * Format time to HH:mm:ss
+ */
+function formatTime(date: Date | null): string {
+  if (!date) return "";
+  const pad = (n: number) => n.toString().padStart(2, "0");
+  return `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
 }
 
 /**
@@ -248,6 +318,7 @@ function EditableCell({
   isEdited?: boolean;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const isLarge = isLargeValue(value);
   const [editValue, setEditValue] = useState(() =>
     isLarge ? "" : formatCellValue(value)
@@ -266,6 +337,26 @@ function EditableCell({
     }
   }, [value, isLarge]);
 
+  // Click outside handler to close edit mode
+  useEffect(() => {
+    if (!isEditing || isLarge) return;
+
+    const handleClickOutside = (e: MouseEvent) => {
+      // Check if click is outside the container
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        // Also check if click is inside a datepicker popup (they render in a portal)
+        const isDatepickerPopup = (e.target as Element)?.closest?.(".react-datepicker-popper");
+        if (!isDatepickerPopup) {
+          onSave(parseValue(editValue, column.dataType));
+        }
+      }
+    };
+
+    // Use mousedown for immediate response
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [isEditing, isLarge, editValue, column.dataType, onSave]);
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter") {
       e.preventDefault();
@@ -278,7 +369,8 @@ function EditableCell({
   };
 
   const handleBlur = () => {
-    onSave(parseValue(editValue, column.dataType));
+    // Let click-outside handler manage this instead
+    // This prevents double-saves and race conditions
   };
 
   const isNull = value === null;
@@ -305,23 +397,202 @@ function EditableCell({
     );
   }
 
-  // Regular inline editing
+  // Regular inline editing - render type-appropriate input
   if (isEditing) {
+    const inputType = getInputType(column.dataType);
+    const inputClasses = cn(
+      "flex-1 px-2 py-1 text-sm rounded",
+      "bg-[var(--bg-primary)] text-[var(--text-primary)]",
+      "border border-[var(--accent)] outline-none",
+      "focus:ring-1 focus:ring-[var(--accent)]"
+    );
+
+    // Foreign key - use RelationSelect
+    if (column.isForeignKey && column.foreignKeyInfo) {
+      return (
+        <div ref={containerRef} className="px-1 py-1 h-full">
+          <RelationSelect
+            value={editValue}
+            onChange={(val) => {
+              setEditValue(val);
+              onSave(val === "" ? null : val);
+            }}
+            foreignKeyInfo={column.foreignKeyInfo}
+            className="text-sm [&_button]:py-1 [&_button]:px-2"
+          />
+        </div>
+      );
+    }
+
+    // Boolean - use select
+    if (inputType === "boolean") {
+      const boolValue = editValue === "" || editValue === "null" ? "" : editValue === "true" ? "true" : "false";
+      return (
+        <div ref={containerRef} className="flex items-center gap-1 px-1 py-1 h-full">
+          <select
+            autoFocus
+            value={boolValue}
+            onChange={(e) => {
+              const val = e.target.value;
+              setEditValue(val);
+              onSave(val === "" ? null : val === "true");
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") {
+                e.preventDefault();
+                onCancel();
+              }
+            }}
+            className={inputClasses}
+          >
+            <option value="">NULL</option>
+            <option value="true">true</option>
+            <option value="false">false</option>
+          </select>
+        </div>
+      );
+    }
+
+    // Date - use DatePicker
+    if (inputType === "date") {
+      const dateValue = parseDate(editValue);
+      return (
+        <div ref={containerRef} className="flex items-center gap-1 px-1 py-1 h-full inline-datepicker">
+          <DatePicker
+            selected={dateValue}
+            onChange={(date: Date | null) => {
+              const formatted = formatDateOnly(date);
+              setEditValue(formatted);
+              onSave(formatted || null);
+            }}
+            autoFocus
+            dateFormat="yyyy-MM-dd"
+            placeholderText="Select date"
+            className={inputClasses}
+            calendarClassName="dark-datepicker"
+            wrapperClassName="flex-1"
+            showPopperArrow={false}
+            isClearable
+            onKeyDown={(e) => {
+              if (e.key === "Escape") {
+                e.preventDefault();
+                onCancel();
+              }
+            }}
+          />
+        </div>
+      );
+    }
+
+    // Time - use DatePicker in time-only mode
+    if (inputType === "time") {
+      const timeValue = parseTime(editValue);
+      return (
+        <div ref={containerRef} className="flex items-center gap-1 px-1 py-1 h-full inline-datepicker">
+          <DatePicker
+            selected={timeValue}
+            onChange={(date: Date | null) => {
+              const formatted = formatTime(date);
+              setEditValue(formatted);
+              onSave(formatted || null);
+            }}
+            autoFocus
+            showTimeSelect
+            showTimeSelectOnly
+            timeIntervals={1}
+            timeCaption="Time"
+            dateFormat="HH:mm:ss"
+            placeholderText="Select time"
+            className={inputClasses}
+            calendarClassName="dark-datepicker"
+            wrapperClassName="flex-1"
+            showPopperArrow={false}
+            isClearable
+            onKeyDown={(e) => {
+              if (e.key === "Escape") {
+                e.preventDefault();
+                onCancel();
+              }
+            }}
+          />
+        </div>
+      );
+    }
+
+    // Datetime/Timestamp - use DatePicker with time
+    if (inputType === "datetime") {
+      const dateValue = parseDate(editValue);
+      return (
+        <div ref={containerRef} className="flex items-center gap-1 px-1 py-1 h-full inline-datepicker">
+          <DatePicker
+            selected={dateValue}
+            onChange={(date: Date | null) => {
+              const formatted = formatDatetime(date);
+              setEditValue(formatted);
+              onSave(formatted || null);
+            }}
+            autoFocus
+            showTimeSelect
+            timeIntervals={1}
+            timeCaption="Time"
+            dateFormat="yyyy-MM-dd HH:mm:ss"
+            placeholderText="Select date & time"
+            className={inputClasses}
+            calendarClassName="dark-datepicker"
+            wrapperClassName="flex-1"
+            showPopperArrow={false}
+            isClearable
+            onKeyDown={(e) => {
+              if (e.key === "Escape") {
+                e.preventDefault();
+                onCancel();
+              }
+            }}
+          />
+        </div>
+      );
+    }
+
+    // Number - use text input with numeric inputMode
+    if (inputType === "number") {
+      const isInteger = column.dataType.toLowerCase().includes("int") || column.dataType.toLowerCase().includes("serial");
+      return (
+        <div ref={containerRef} className="flex items-center gap-1 px-1 py-1 h-full">
+          <input
+            ref={inputRef}
+            type="text"
+            inputMode={isInteger ? "numeric" : "decimal"}
+            value={editValue}
+            onChange={(e) => {
+              const val = e.target.value;
+              // Allow empty, minus sign, or valid number patterns
+              if (val === "" || val === "-") {
+                setEditValue(val);
+              } else if (isInteger) {
+                if (/^-?\d*$/.test(val)) setEditValue(val);
+              } else {
+                if (/^-?\d*\.?\d*$/.test(val)) setEditValue(val);
+              }
+            }}
+            onKeyDown={handleKeyDown}
+            onBlur={handleBlur}
+            className={inputClasses}
+            placeholder={column.isNullable ? "NULL" : ""}
+          />
+        </div>
+      );
+    }
+
+    // Default: text input
     return (
-      <div className="flex items-center gap-1 px-1 py-1 h-full">
+      <div ref={containerRef} className="flex items-center gap-1 px-1 py-1 h-full">
         <input
           ref={inputRef}
           type="text"
           value={editValue}
           onChange={(e) => setEditValue(e.target.value)}
           onKeyDown={handleKeyDown}
-          onBlur={handleBlur}
-          className={cn(
-            "flex-1 px-2 py-1 text-sm rounded",
-            "bg-[var(--bg-primary)] text-[var(--text-primary)]",
-            "border border-[var(--accent)] outline-none",
-            "focus:ring-1 focus:ring-[var(--accent)]"
-          )}
+          className={inputClasses}
           placeholder={column.isNullable ? "NULL" : ""}
         />
       </div>
