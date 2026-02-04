@@ -333,6 +333,7 @@ export function RowDetailModal({
                     isModified={isModified}
                     isForeignKey={column.isForeignKey}
                     foreignKeyInfo={column.foreignKeyInfo}
+                    enumValues={column.enumValues}
                   />
                   {hasError && (
                     <p className="text-xs text-red-400">{validationErrors[column.name]}</p>

@@ -227,6 +227,7 @@ interface ColumnInfo {
   is_foreign_key: boolean;
   foreign_key_info: ForeignKeyInfoRaw | null;
   default_value: string | null;
+  enum_values: string[] | null;
 }
 
 // Fetch table data with pagination
@@ -280,6 +281,7 @@ export function useTableData(schema: string, table: string, page: number = 1) {
               }
             : undefined,
           defaultValue: col.default_value ?? undefined,
+          enumValues: col.enum_values ?? undefined,
         })),
         totalRows: dataResult.total_count,
         page: dataResult.page,

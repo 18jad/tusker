@@ -53,6 +53,7 @@ pub struct ColumnInfo {
     pub ordinal_position: i32,
     pub description: Option<String>,
     pub foreign_key_info: Option<ForeignKeyInfo>,
+    pub enum_values: Option<Vec<String>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -332,6 +333,42 @@ impl SchemaIntrospector {
         let desc_map: std::collections::HashMap<String, Option<String>> =
             descriptions.into_iter().collect();
 
+        // Find all enum types used in this table (USER-DEFINED data_type indicates enum or composite)
+        let enum_udt_names: Vec<String> = columns
+            .iter()
+            .filter(|(_, data_type, _, _, _, _, _, _, _)| data_type == "USER-DEFINED")
+            .map(|(_, _, udt_name, _, _, _, _, _, _)| udt_name.clone())
+            .collect::<std::collections::HashSet<_>>()
+            .into_iter()
+            .collect();
+
+        // Fetch enum values for each enum type
+        let mut enum_values_map: std::collections::HashMap<String, Vec<String>> =
+            std::collections::HashMap::new();
+
+        for udt_name in enum_udt_names {
+            let enum_values: Vec<(String,)> = sqlx::query_as(
+                r#"
+                SELECT e.enumlabel
+                FROM pg_enum e
+                JOIN pg_type t ON e.enumtypid = t.oid
+                WHERE t.typname = $1
+                ORDER BY e.enumsortorder
+                "#,
+            )
+            .bind(&udt_name)
+            .fetch_all(pool)
+            .await
+            .unwrap_or_default();
+
+            if !enum_values.is_empty() {
+                enum_values_map.insert(
+                    udt_name,
+                    enum_values.into_iter().map(|(v,)| v).collect(),
+                );
+            }
+        }
+
         Ok(columns
             .into_iter()
             .map(
@@ -346,6 +383,7 @@ impl SchemaIntrospector {
                     num_scale,
                     ordinal_position,
                 )| {
+                    let enum_values = enum_values_map.get(&udt_name).cloned();
                     ColumnInfo {
                         is_primary_key: pk_columns.contains(&name),
                         is_unique: unique_columns.contains(&name),
@@ -361,6 +399,7 @@ impl SchemaIntrospector {
                         numeric_precision: num_precision,
                         numeric_scale: num_scale,
                         ordinal_position,
+                        enum_values,
                     }
                 },
             )

@@ -3,6 +3,7 @@ import DatePicker from "react-datepicker";
 import { ChevronUp, ChevronDown } from "lucide-react";
 import { cn } from "../../lib/utils";
 import { RelationSelect } from "./RelationSelect";
+import { EnumSelect } from "./EnumSelect";
 import type { ForeignKeyInfo } from "../../types";
 import "react-datepicker/dist/react-datepicker.css";
 
@@ -19,6 +20,7 @@ interface TypedInputProps {
   onBlur?: () => void;
   isForeignKey?: boolean;
   foreignKeyInfo?: ForeignKeyInfo;
+  enumValues?: string[];
 }
 
 /**
@@ -161,6 +163,7 @@ export function TypedInput({
   onBlur,
   isForeignKey = false,
   foreignKeyInfo,
+  enumValues,
 }: TypedInputProps) {
   const config = getInputConfig(dataType);
   const [localValue, setLocalValue] = useState(value);
@@ -185,6 +188,22 @@ export function TypedInput({
         value={localValue}
         onChange={handleChange}
         foreignKeyInfo={foreignKeyInfo}
+        disabled={disabled}
+        placeholder={placeholder}
+        hasError={hasError}
+        isModified={isModified}
+        className={className}
+      />
+    );
+  }
+
+  // Enum type - render as styled select dropdown
+  if (enumValues && enumValues.length > 0) {
+    return (
+      <EnumSelect
+        value={localValue}
+        onChange={handleChange}
+        enumValues={enumValues}
         disabled={disabled}
         placeholder={placeholder}
         hasError={hasError}

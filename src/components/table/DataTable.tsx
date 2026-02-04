@@ -3,6 +3,7 @@ import DatePicker from "react-datepicker";
 import { cn } from "../../lib/utils";
 import { useUIStore } from "../../stores/uiStore";
 import { RelationSelect } from "../ui/RelationSelect";
+import { EnumSelect } from "../ui/EnumSelect";
 import type { Column, Row, CellValue } from "../../types";
 import { Key, Hash, Type, Calendar, ToggleLeft, Braces } from "lucide-react";
 import "react-datepicker/dist/react-datepicker.css";
@@ -418,6 +419,24 @@ function EditableCell({
               onSave(val === "" ? null : val);
             }}
             foreignKeyInfo={column.foreignKeyInfo}
+            className="text-sm [&_button]:py-1 [&_button]:px-2"
+          />
+        </div>
+      );
+    }
+
+    // Enum - use styled select dropdown
+    if (column.enumValues && column.enumValues.length > 0) {
+      return (
+        <div ref={containerRef} className="px-1 py-1 h-full">
+          <EnumSelect
+            value={editValue}
+            onChange={(val) => {
+              setEditValue(val);
+              onSave(val === "" ? null : val);
+            }}
+            enumValues={column.enumValues}
+            isNullable={column.isNullable}
             className="text-sm [&_button]:py-1 [&_button]:px-2"
           />
         </div>

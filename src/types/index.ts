@@ -55,6 +55,7 @@ export interface Column {
   isForeignKey: boolean;
   foreignKeyInfo?: ForeignKeyInfo;
   defaultValue?: string;
+  enumValues?: string[];
 }
 
 // Data types
