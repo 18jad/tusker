@@ -38,7 +38,7 @@ export function Toggle({
         onClick={handleClick}
         onKeyDown={handleKeyDown}
         className={cn(
-          "relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full",
+          "relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full items-center",
           "transition-colors duration-200 ease-out",
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg-primary)]",
           checked ? "bg-blue-600" : "bg-[var(--bg-tertiary)] border border-[var(--border-color)]",
@@ -47,11 +47,10 @@ export function Toggle({
       >
         <span
           className={cn(
-            "pointer-events-none inline-block h-4 w-4 transform rounded-full",
+            "pointer-events-none absolute h-3.5 w-3.5 rounded-full",
             "bg-white shadow-sm",
-            "transition-transform duration-200 ease-out",
-            checked ? "translate-x-4" : "translate-x-0.5",
-            "mt-[1px]"
+            "transition-all duration-200 ease-out",
+            checked ? "left-[18px]" : "left-[3px]"
           )}
         />
       </button>

@@ -50,6 +50,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
+  Toggle,
 } from "../ui";
 import { generateUpdateSQL, generateDeleteSQL, generateInsertSQL, generateCreateTableSQL, type ColumnDefinition } from "../../lib/sql";
 import { cn } from "../../lib/utils";
@@ -1089,14 +1090,21 @@ function ColumnEditorRow({
                 Unique
               </span>
             </label>
+          </div>
 
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
+          {/* Foreign Key Reference - Separate Section */}
+          <div className="pt-3 border-t border-[var(--border-color)]">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Link className="w-4 h-4 text-blue-400" />
+                <span className="text-xs font-medium text-[var(--text-secondary)]">
+                  Foreign Key Reference
+                </span>
+              </div>
+              <Toggle
                 checked={column.isForeignKey}
-                onChange={(e) => {
-                  if (e.target.checked) {
-                    // Set default schema when enabling FK
+                onChange={(checked) => {
+                  if (checked) {
                     const defaultSchema = schemas[0]?.name || "";
                     onUpdate({
                       isForeignKey: true,
@@ -1117,23 +1125,12 @@ function ColumnEditorRow({
                     });
                   }
                 }}
-                className="w-4 h-4 rounded border-[var(--border-color)] text-[var(--accent)] focus:ring-[var(--accent)]"
               />
-              <span className="text-xs text-[var(--text-secondary)]">Foreign Key</span>
-            </label>
-          </div>
+            </div>
 
-          {/* Foreign Key Configuration */}
-          {column.isForeignKey && (
-            <div className="pt-3 border-t border-[var(--border-color)] space-y-3">
-              {/* Reference Section */}
-              <div>
-                <div className="flex items-center gap-2 mb-2">
-                  <Link className="w-4 h-4 text-blue-400" />
-                  <span className="text-xs font-medium text-[var(--text-secondary)]">
-                    References
-                  </span>
-                </div>
+            {column.isForeignKey && (
+              <div className="space-y-3 mt-3">
+                {/* References Row */}
                 <div className="grid grid-cols-3 gap-2">
                   {/* Schema Select */}
                   <div>
@@ -1248,74 +1245,74 @@ function ColumnEditorRow({
                     )}
                   </div>
                 </div>
-              </div>
 
-              {/* Actions Section */}
-              <div>
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="text-xs font-medium text-[var(--text-secondary)]">
-                    Referential Actions
-                  </span>
-                  <span className="text-xs text-[var(--text-muted)]">
-                    — What happens when referenced row changes
-                  </span>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  {/* ON DELETE */}
-                  <div>
-                    <label className="block text-xs text-[var(--text-muted)] mb-1">
-                      On Delete
-                    </label>
-                    <Select
-                      value={column.foreignKeyOnDelete}
-                      onValueChange={(value) => onUpdate({ foreignKeyOnDelete: value as ForeignKeyAction })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {FK_ACTIONS.map((action) => (
-                          <SelectItem
-                            key={action.value}
-                            value={action.value}
-                            description={action.description}
-                          >
-                            {action.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                {/* Actions Section */}
+                <div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-xs font-medium text-[var(--text-secondary)]">
+                      Referential Actions
+                    </span>
+                    <span className="text-xs text-[var(--text-muted)]">
+                      — What happens when referenced row changes
+                    </span>
                   </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    {/* ON DELETE */}
+                    <div>
+                      <label className="block text-xs text-[var(--text-muted)] mb-1">
+                        On Delete
+                      </label>
+                      <Select
+                        value={column.foreignKeyOnDelete}
+                        onValueChange={(value) => onUpdate({ foreignKeyOnDelete: value as ForeignKeyAction })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {FK_ACTIONS.map((action) => (
+                            <SelectItem
+                              key={action.value}
+                              value={action.value}
+                              description={action.description}
+                            >
+                              {action.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
 
-                  {/* ON UPDATE */}
-                  <div>
-                    <label className="block text-xs text-[var(--text-muted)] mb-1">
-                      On Update
-                    </label>
-                    <Select
-                      value={column.foreignKeyOnUpdate}
-                      onValueChange={(value) => onUpdate({ foreignKeyOnUpdate: value as ForeignKeyAction })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {FK_ACTIONS.map((action) => (
-                          <SelectItem
-                            key={action.value}
-                            value={action.value}
-                            description={action.description}
-                          >
-                            {action.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    {/* ON UPDATE */}
+                    <div>
+                      <label className="block text-xs text-[var(--text-muted)] mb-1">
+                        On Update
+                      </label>
+                      <Select
+                        value={column.foreignKeyOnUpdate}
+                        onValueChange={(value) => onUpdate({ foreignKeyOnUpdate: value as ForeignKeyAction })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {FK_ACTIONS.map((action) => (
+                            <SelectItem
+                              key={action.value}
+                              value={action.value}
+                              description={action.description}
+                            >
+                              {action.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       )}
     </div>
