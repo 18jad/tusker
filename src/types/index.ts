@@ -84,11 +84,12 @@ export interface StagedChange {
 // Tab types
 export interface Tab {
   id: string;
-  type: "table" | "query";
+  type: "table" | "query" | "create-table";
   title: string;
   schema?: string;
   table?: string;
   queryContent?: string;
+  createTableSchema?: string; // Pre-selected schema for create-table tabs
 }
 
 // Command palette

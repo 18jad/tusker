@@ -1,4 +1,5 @@
 export { Button } from "./Button";
+export { CodeBlock } from "./CodeBlock";
 export { Input } from "./Input";
 export { Modal } from "./Modal";
 export { Toggle } from "./Toggle";

@@ -1,12 +1,50 @@
-import { useState, useMemo, useEffect, useRef, useCallback } from "react";
+import { useState, useMemo, useEffect, useRef, useCallback, useLayoutEffect } from "react";
+import { createPortal } from "react-dom";
+import {
+  DndContext,
+  DragOverlay,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+  type DragStartEvent,
+} from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import {
+  Plus,
+  Trash2,
+  ChevronDown,
+  ChevronRight,
+  Key,
+  Table,
+  Code,
+  AlertCircle,
+  Loader2,
+  GripVertical,
+  CheckCircle,
+  Copy,
+  Check,
+  Search,
+} from "lucide-react";
 import { useUIStore } from "../../stores/uiStore";
 import { useProjectStore } from "../../stores/projectStore";
 import { useChangesStore } from "../../stores/changesStore";
-import { useTableData, useCommitChanges } from "../../hooks/useDatabase";
+import { useTableData, useCommitChanges, useExecuteSQL } from "../../hooks/useDatabase";
 import { TableView } from "../table/TableView";
 import { RowDetailModal } from "../table/RowDetailModal";
-import { generateUpdateSQL, generateDeleteSQL, generateInsertSQL } from "../../lib/sql";
-import type { CellValue, Row, Column } from "../../types";
+import { CodeBlock } from "../ui";
+import { generateUpdateSQL, generateDeleteSQL, generateInsertSQL, generateCreateTableSQL, type ColumnDefinition } from "../../lib/sql";
+import { cn } from "../../lib/utils";
+import type { CellValue, Row, Column, Tab } from "../../types";
 
 /**
  * Compare two cell values for equality
@@ -491,6 +529,1063 @@ function TableTabContent({ schema, table }: { schema: string; table: string }) {
   );
 }
 
+// ============================================================================
+// Create Table Tab Content
+// ============================================================================
+
+// Common PostgreSQL data types organized by category
+const POSTGRES_TYPES = {
+  "Numeric": [
+    { value: "INTEGER", label: "INTEGER", description: "Signed 4-byte integer" },
+    { value: "BIGINT", label: "BIGINT", description: "Signed 8-byte integer" },
+    { value: "SMALLINT", label: "SMALLINT", description: "Signed 2-byte integer" },
+    { value: "SERIAL", label: "SERIAL", description: "Auto-incrementing 4-byte integer" },
+    { value: "BIGSERIAL", label: "BIGSERIAL", description: "Auto-incrementing 8-byte integer" },
+    { value: "NUMERIC", label: "NUMERIC", description: "Exact numeric with precision" },
+    { value: "DECIMAL", label: "DECIMAL", description: "Exact numeric (alias for NUMERIC)" },
+    { value: "REAL", label: "REAL", description: "Single precision floating-point (4 bytes)" },
+    { value: "DOUBLE PRECISION", label: "DOUBLE PRECISION", description: "Double precision floating-point (8 bytes)" },
+    { value: "MONEY", label: "MONEY", description: "Currency amount" },
+  ],
+  "Text": [
+    { value: "TEXT", label: "TEXT", description: "Variable unlimited length" },
+    { value: "VARCHAR(255)", label: "VARCHAR(255)", description: "Variable length with limit" },
+    { value: "VARCHAR(50)", label: "VARCHAR(50)", description: "Variable length (short)" },
+    { value: "CHAR(1)", label: "CHAR(1)", description: "Fixed length character" },
+    { value: "CHAR(10)", label: "CHAR(10)", description: "Fixed length (10 chars)" },
+  ],
+  "Date/Time": [
+    { value: "TIMESTAMP", label: "TIMESTAMP", description: "Date and time (no timezone)" },
+    { value: "TIMESTAMPTZ", label: "TIMESTAMPTZ", description: "Date and time with timezone" },
+    { value: "DATE", label: "DATE", description: "Date only (no time)" },
+    { value: "TIME", label: "TIME", description: "Time only (no date)" },
+    { value: "TIMETZ", label: "TIMETZ", description: "Time with timezone" },
+    { value: "INTERVAL", label: "INTERVAL", description: "Time interval" },
+  ],
+  "Boolean": [
+    { value: "BOOLEAN", label: "BOOLEAN", description: "True/false value" },
+  ],
+  "UUID": [
+    { value: "UUID", label: "UUID", description: "Universally unique identifier" },
+  ],
+  "JSON": [
+    { value: "JSON", label: "JSON", description: "JSON data (text storage)" },
+    { value: "JSONB", label: "JSONB", description: "JSON data (binary, indexed)" },
+  ],
+  "Binary": [
+    { value: "BYTEA", label: "BYTEA", description: "Binary data" },
+  ],
+  "Network": [
+    { value: "INET", label: "INET", description: "IPv4 or IPv6 host address" },
+    { value: "CIDR", label: "CIDR", description: "IPv4 or IPv6 network address" },
+    { value: "MACADDR", label: "MACADDR", description: "MAC address" },
+  ],
+  "Arrays": [
+    { value: "TEXT[]", label: "TEXT[]", description: "Array of text" },
+    { value: "INTEGER[]", label: "INTEGER[]", description: "Array of integers" },
+    { value: "VARCHAR[]", label: "VARCHAR[]", description: "Array of varchar" },
+  ],
+};
+
+interface ColumnFormState {
+  id: string;
+  name: string;
+  dataType: string;
+  customType: string;
+  isNullable: boolean;
+  isPrimaryKey: boolean;
+  isUnique: boolean;
+  defaultValue: string;
+  isExpanded: boolean;
+}
+
+const createEmptyColumn = (): ColumnFormState => ({
+  id: Math.random().toString(36).substring(2, 11),
+  name: "",
+  dataType: "TEXT",
+  customType: "",
+  isNullable: true,
+  isPrimaryKey: false,
+  isUnique: false,
+  defaultValue: "",
+  isExpanded: true,
+});
+
+/**
+ * Type Dropdown Component for selecting PostgreSQL types
+ * Uses a portal to render outside of any overflow:hidden containers
+ */
+function TypeDropdown({
+  value,
+  onSelect,
+  onClose,
+  anchorRef,
+}: {
+  value: string;
+  onSelect: (type: string) => void;
+  onClose: () => void;
+  anchorRef: React.RefObject<HTMLButtonElement | null>;
+}) {
+  const [position, setPosition] = useState({ top: 0, left: 0 });
+  const [search, setSearch] = useState("");
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  // Auto-focus search input when dropdown opens
+  useEffect(() => {
+    setTimeout(() => searchInputRef.current?.focus(), 0);
+  }, []);
+
+  // Calculate position based on anchor element
+  useLayoutEffect(() => {
+    if (anchorRef.current) {
+      const rect = anchorRef.current.getBoundingClientRect();
+      setPosition({
+        top: rect.bottom + 4,
+        left: rect.left,
+      });
+    }
+  }, [anchorRef]);
+
+  // Adjust position if dropdown goes off screen
+  useLayoutEffect(() => {
+    if (dropdownRef.current) {
+      const dropdown = dropdownRef.current;
+      const rect = dropdown.getBoundingClientRect();
+      const viewportHeight = window.innerHeight;
+      const viewportWidth = window.innerWidth;
+
+      let newTop = position.top;
+      let newLeft = position.left;
+
+      // Check if dropdown goes below viewport
+      if (rect.bottom > viewportHeight - 10) {
+        // Position above the anchor instead
+        if (anchorRef.current) {
+          const anchorRect = anchorRef.current.getBoundingClientRect();
+          newTop = anchorRect.top - rect.height - 4;
+        }
+      }
+
+      // Check if dropdown goes off right edge
+      if (rect.right > viewportWidth - 10) {
+        newLeft = viewportWidth - rect.width - 10;
+      }
+
+      if (newTop !== position.top || newLeft !== position.left) {
+        setPosition({ top: newTop, left: newLeft });
+      }
+    }
+  }, [position, anchorRef]);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest(".type-dropdown") && !anchorRef.current?.contains(target)) {
+        onClose();
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [onClose, anchorRef]);
+
+  // Filter types based on search
+  const searchLower = search.toLowerCase();
+  const filteredTypes = Object.entries(POSTGRES_TYPES)
+    .map(([category, types]) => ({
+      category,
+      types: types.filter(
+        (t) =>
+          t.label.toLowerCase().includes(searchLower) ||
+          t.description.toLowerCase().includes(searchLower)
+      ),
+    }))
+    .filter((group) => group.types.length > 0);
+
+  // Check if custom type matches search
+  const showCustom =
+    !search ||
+    "custom".includes(searchLower) ||
+    "custom type".includes(searchLower);
+
+  return createPortal(
+    <div
+      ref={dropdownRef}
+      className={cn(
+        "type-dropdown fixed z-[100] w-72 max-h-80 flex flex-col",
+        "bg-[var(--bg-secondary)] border border-[var(--border-color)]",
+        "rounded-lg shadow-xl"
+      )}
+      style={{ top: position.top, left: position.left }}
+    >
+      {/* Search Input */}
+      <div className="p-2 border-b border-[var(--border-color)] shrink-0">
+        <div className="relative">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-muted)]" />
+          <input
+            ref={searchInputRef}
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search types..."
+            autoCorrect="off"
+            autoCapitalize="off"
+            autoComplete="off"
+            spellCheck={false}
+            className={cn(
+              "w-full h-8 pl-8 pr-3 rounded text-sm",
+              "bg-[var(--bg-primary)] text-[var(--text-primary)]",
+              "border border-[var(--border-color)]",
+              "focus:border-[var(--accent)] focus:outline-none",
+              "placeholder:text-[var(--text-muted)]"
+            )}
+          />
+        </div>
+      </div>
+
+      {/* Types List */}
+      <div className="flex-1 overflow-y-auto">
+        {filteredTypes.map(({ category, types }) => (
+          <div key={category}>
+            <div className="px-3 py-1.5 text-xs font-medium text-[var(--text-muted)] bg-[var(--bg-tertiary)] sticky top-0">
+              {category}
+            </div>
+            {types.map((type) => (
+              <button
+                key={type.value}
+                onClick={() => onSelect(type.value)}
+                className={cn(
+                  "w-full px-3 py-1.5 text-left",
+                  "hover:bg-[var(--bg-tertiary)] transition-colors",
+                  value === type.value && "bg-[var(--accent)]/10"
+                )}
+              >
+                <div className="text-sm text-[var(--text-primary)]">{type.label}</div>
+                <div className="text-xs text-[var(--text-muted)]">{type.description}</div>
+              </button>
+            ))}
+          </div>
+        ))}
+        {/* Custom Type Option */}
+        {showCustom && (
+          <div>
+            <div className="px-3 py-1.5 text-xs font-medium text-[var(--text-muted)] bg-[var(--bg-tertiary)] sticky top-0">
+              Other
+            </div>
+            <button
+              onClick={() => onSelect("CUSTOM")}
+              className={cn(
+                "w-full px-3 py-1.5 text-left",
+                "hover:bg-[var(--bg-tertiary)] transition-colors",
+                value === "CUSTOM" && "bg-[var(--accent)]/10"
+              )}
+            >
+              <div className="text-sm text-[var(--text-primary)]">Custom Type</div>
+              <div className="text-xs text-[var(--text-muted)]">Enter any PostgreSQL type</div>
+            </button>
+          </div>
+        )}
+        {/* No results */}
+        {filteredTypes.length === 0 && !showCustom && (
+          <div className="px-3 py-4 text-sm text-[var(--text-muted)] text-center">
+            No types found
+          </div>
+        )}
+      </div>
+    </div>,
+    document.body
+  );
+}
+
+/**
+ * Column Editor Component for defining table columns (Sortable)
+ */
+function ColumnEditorRow({
+  column,
+  index,
+  onUpdate,
+  onRemove,
+  onToggleExpanded,
+  canRemove,
+}: {
+  column: ColumnFormState;
+  index: number;
+  onUpdate: (updates: Partial<ColumnFormState>) => void;
+  onRemove: () => void;
+  onToggleExpanded: () => void;
+  canRemove: boolean;
+}) {
+  const [showTypeDropdown, setShowTypeDropdown] = useState(false);
+  const typeButtonRef = useRef<HTMLButtonElement>(null);
+
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: column.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+
+  const getTypeLabel = () => {
+    if (column.dataType === "CUSTOM") {
+      return column.customType || "Custom...";
+    }
+    return column.dataType;
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={cn(
+        "border border-[var(--border-color)] rounded-lg overflow-hidden",
+        "bg-[var(--bg-secondary)]",
+        isDragging && "opacity-50 shadow-lg"
+      )}
+    >
+      {/* Column Header */}
+      <div
+        className={cn(
+          "flex items-center gap-2 px-3 py-2 cursor-pointer",
+          "hover:bg-[var(--bg-tertiary)] transition-colors"
+        )}
+        onClick={onToggleExpanded}
+      >
+        <button
+          type="button"
+          className="!cursor-grab active:!cursor-grabbing p-0.5 -m-0.5 rounded hover:bg-[var(--bg-tertiary)] touch-none"
+          {...attributes}
+          {...listeners}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <GripVertical className="w-4 h-4 text-[var(--text-muted)]" />
+        </button>
+        {column.isExpanded ? (
+          <ChevronDown className="w-4 h-4 text-[var(--text-muted)]" />
+        ) : (
+          <ChevronRight className="w-4 h-4 text-[var(--text-muted)]" />
+        )}
+
+        <div className="flex-1 flex items-center gap-2 min-w-0">
+          <span className="text-sm font-medium text-[var(--text-primary)] truncate">
+            {column.name || `Column ${index + 1}`}
+          </span>
+          <span className="text-xs text-[var(--text-muted)] truncate">
+            {getTypeLabel()}
+          </span>
+          {column.isPrimaryKey && (
+            <Key className="w-3.5 h-3.5 text-yellow-500 shrink-0" />
+          )}
+        </div>
+
+        {canRemove && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onRemove();
+            }}
+            className="p-1 rounded text-[var(--text-muted)] hover:text-red-400 hover:bg-red-500/10 transition-colors"
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
+        )}
+      </div>
+
+      {/* Column Details (Expanded) */}
+      {column.isExpanded && (
+        <div className="px-3 pb-3 pt-1 space-y-3 border-t border-[var(--border-color)]">
+          {/* Name and Type Row */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs text-[var(--text-muted)] mb-1">
+                Name <span className="text-red-400">*</span>
+              </label>
+              <input
+                type="text"
+                value={column.name}
+                onChange={(e) => onUpdate({ name: e.target.value })}
+                placeholder="column_name"
+                autoCorrect="off"
+                autoCapitalize="off"
+                autoComplete="off"
+                spellCheck={false}
+                className={cn(
+                  "w-full h-8 px-2.5 rounded text-sm",
+                  "bg-[var(--bg-primary)] text-[var(--text-primary)]",
+                  "border border-[var(--border-color)]",
+                  "focus:border-[var(--accent)] focus:outline-none",
+                  "placeholder:text-[var(--text-muted)]"
+                )}
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-[var(--text-muted)] mb-1">
+                Type <span className="text-red-400">*</span>
+              </label>
+              <button
+                ref={typeButtonRef}
+                type="button"
+                onClick={() => setShowTypeDropdown(!showTypeDropdown)}
+                className={cn(
+                  "w-full h-8 px-2.5 rounded text-sm text-left",
+                  "bg-[var(--bg-primary)] text-[var(--text-primary)]",
+                  "border border-[var(--border-color)]",
+                  "hover:border-[var(--accent)] focus:border-[var(--accent)] focus:outline-none",
+                  "flex items-center justify-between"
+                )}
+              >
+                <span className="truncate">{getTypeLabel()}</span>
+                <ChevronDown className="w-4 h-4 text-[var(--text-muted)] shrink-0" />
+              </button>
+
+              {showTypeDropdown && (
+                <TypeDropdown
+                  value={column.dataType}
+                  onSelect={(type) => {
+                    onUpdate({ dataType: type });
+                    setShowTypeDropdown(false);
+                  }}
+                  onClose={() => setShowTypeDropdown(false)}
+                  anchorRef={typeButtonRef}
+                />
+              )}
+            </div>
+          </div>
+
+          {/* Custom Type Input */}
+          {column.dataType === "CUSTOM" && (
+            <div>
+              <label className="block text-xs text-[var(--text-muted)] mb-1">
+                Custom Type <span className="text-red-400">*</span>
+              </label>
+              <input
+                type="text"
+                value={column.customType}
+                onChange={(e) => onUpdate({ customType: e.target.value })}
+                placeholder="e.g., VARCHAR(100), NUMERIC(10,2)"
+                autoCorrect="off"
+                autoCapitalize="off"
+                autoComplete="off"
+                spellCheck={false}
+                className={cn(
+                  "w-full h-8 px-2.5 rounded text-sm font-mono",
+                  "bg-[var(--bg-primary)] text-[var(--text-primary)]",
+                  "border border-[var(--border-color)]",
+                  "focus:border-[var(--accent)] focus:outline-none",
+                  "placeholder:text-[var(--text-muted)]"
+                )}
+              />
+            </div>
+          )}
+
+          {/* Default Value */}
+          <div>
+            <label className="block text-xs text-[var(--text-muted)] mb-1">
+              Default Value
+            </label>
+            <input
+              type="text"
+              value={column.defaultValue}
+              onChange={(e) => onUpdate({ defaultValue: e.target.value })}
+              placeholder="e.g., 0, 'text', NOW(), uuid_generate_v4()"
+              autoCorrect="off"
+              autoCapitalize="off"
+              autoComplete="off"
+              spellCheck={false}
+              className={cn(
+                "w-full h-8 px-2.5 rounded text-sm font-mono",
+                "bg-[var(--bg-primary)] text-[var(--text-primary)]",
+                "border border-[var(--border-color)]",
+                "focus:border-[var(--accent)] focus:outline-none",
+                "placeholder:text-[var(--text-muted)]"
+              )}
+            />
+          </div>
+
+          {/* Constraints Row */}
+          <div className="flex items-center gap-4">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={column.isPrimaryKey}
+                onChange={(e) => {
+                  onUpdate({
+                    isPrimaryKey: e.target.checked,
+                    isNullable: e.target.checked ? false : column.isNullable,
+                  });
+                }}
+                className="w-4 h-4 rounded border-[var(--border-color)] text-[var(--accent)] focus:ring-[var(--accent)]"
+              />
+              <span className="text-xs text-[var(--text-secondary)]">Primary Key</span>
+            </label>
+
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={!column.isNullable}
+                disabled={column.isPrimaryKey}
+                onChange={(e) => onUpdate({ isNullable: !e.target.checked })}
+                className="w-4 h-4 rounded border-[var(--border-color)] text-[var(--accent)] focus:ring-[var(--accent)] disabled:opacity-50"
+              />
+              <span className={cn("text-xs", column.isPrimaryKey ? "text-[var(--text-muted)]" : "text-[var(--text-secondary)]")}>
+                Not Null
+              </span>
+            </label>
+
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={column.isUnique}
+                disabled={column.isPrimaryKey}
+                onChange={(e) => onUpdate({ isUnique: e.target.checked })}
+                className="w-4 h-4 rounded border-[var(--border-color)] text-[var(--accent)] focus:ring-[var(--accent)] disabled:opacity-50"
+              />
+              <span className={cn("text-xs", column.isPrimaryKey ? "text-[var(--text-muted)]" : "text-[var(--text-secondary)]")}>
+                Unique
+              </span>
+            </label>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Static column display for drag overlay - maintains original dimensions
+ */
+function ColumnDragOverlay({
+  column,
+  index,
+}: {
+  column: ColumnFormState;
+  index: number;
+}) {
+  const getTypeLabel = () => {
+    if (column.dataType === "CUSTOM") {
+      return column.customType || "Custom...";
+    }
+    return column.dataType;
+  };
+
+  return (
+    <div
+      className={cn(
+        "border border-[var(--border-color)] rounded-lg overflow-hidden",
+        "bg-[var(--bg-secondary)] shadow-xl",
+        "cursor-grabbing"
+      )}
+    >
+      {/* Column Header */}
+      <div
+        className={cn(
+          "flex items-center gap-2 px-3 py-2",
+          "bg-[var(--bg-tertiary)]"
+        )}
+      >
+        <GripVertical className="w-4 h-4 text-[var(--text-muted)]" />
+        {column.isExpanded ? (
+          <ChevronDown className="w-4 h-4 text-[var(--text-muted)]" />
+        ) : (
+          <ChevronRight className="w-4 h-4 text-[var(--text-muted)]" />
+        )}
+
+        <div className="flex-1 flex items-center gap-2 min-w-0">
+          <span className="text-sm font-medium text-[var(--text-primary)] truncate">
+            {column.name || `Column ${index + 1}`}
+          </span>
+          <span className="text-xs text-[var(--text-muted)] truncate">
+            {getTypeLabel()}
+          </span>
+          {column.isPrimaryKey && (
+            <Key className="w-3.5 h-3.5 text-yellow-500 shrink-0" />
+          )}
+        </div>
+      </div>
+
+      {/* Column Details (Expanded) - show if expanded */}
+      {column.isExpanded && (
+        <div className="px-3 pb-3 pt-1 space-y-3 border-t border-[var(--border-color)]">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs text-[var(--text-muted)] mb-1">Name</label>
+              <div className="w-full h-8 px-2.5 rounded text-sm bg-[var(--bg-primary)] text-[var(--text-primary)] border border-[var(--border-color)] flex items-center">
+                {column.name || <span className="text-[var(--text-muted)]">column_name</span>}
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs text-[var(--text-muted)] mb-1">Type</label>
+              <div className="w-full h-8 px-2.5 rounded text-sm bg-[var(--bg-primary)] text-[var(--text-primary)] border border-[var(--border-color)] flex items-center">
+                {getTypeLabel()}
+              </div>
+            </div>
+          </div>
+          {column.defaultValue && (
+            <div>
+              <label className="block text-xs text-[var(--text-muted)] mb-1">Default Value</label>
+              <div className="w-full h-8 px-2.5 rounded text-sm font-mono bg-[var(--bg-primary)] text-[var(--text-primary)] border border-[var(--border-color)] flex items-center">
+                {column.defaultValue}
+              </div>
+            </div>
+          )}
+          <div className="flex items-center gap-4 text-xs text-[var(--text-secondary)]">
+            {column.isPrimaryKey && <span>Primary Key</span>}
+            {!column.isNullable && <span>Not Null</span>}
+            {column.isUnique && <span>Unique</span>}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Create Table Tab Content - Full tab view for creating new tables
+ */
+function CreateTableTabContent({ tab }: { tab: Tab }) {
+  const { schemas } = useProjectStore();
+  const { closeTab, addTab } = useUIStore();
+  const executeSQL = useExecuteSQL();
+
+  const [tableName, setTableName] = useState("");
+  const [selectedSchema, setSelectedSchema] = useState(tab.createTableSchema || "");
+  const [columns, setColumns] = useState<ColumnFormState[]>([createEmptyColumn()]);
+  const [showPreview, setShowPreview] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  // Initialize schema on mount
+  useEffect(() => {
+    if (!selectedSchema && schemas.length > 0) {
+      setSelectedSchema(tab.createTableSchema || schemas[0].name);
+    }
+  }, [schemas, selectedSchema, tab.createTableSchema]);
+
+  const updateColumn = useCallback((id: string, updates: Partial<ColumnFormState>) => {
+    setColumns((prev) =>
+      prev.map((col) => (col.id === id ? { ...col, ...updates } : col))
+    );
+    setError(null);
+  }, []);
+
+  const addColumn = useCallback(() => {
+    setColumns((prev) => [
+      ...prev.map((col) => ({ ...col, isExpanded: false })),
+      createEmptyColumn(),
+    ]);
+  }, []);
+
+  const removeColumn = useCallback((id: string) => {
+    setColumns((prev) => {
+      if (prev.length <= 1) return prev;
+      return prev.filter((col) => col.id !== id);
+    });
+  }, []);
+
+  const toggleColumnExpanded = useCallback((id: string) => {
+    setColumns((prev) =>
+      prev.map((col) => (col.id === id ? { ...col, isExpanded: !col.isExpanded } : col))
+    );
+  }, []);
+
+  // Drag and drop sensors
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  const handleDragStart = useCallback((event: DragStartEvent) => {
+    setActiveId(event.active.id as string);
+  }, []);
+
+  const handleDragEnd = useCallback((event: DragEndEvent) => {
+    const { active, over } = event;
+
+    if (over && active.id !== over.id) {
+      setColumns((prev) => {
+        const oldIndex = prev.findIndex((col) => col.id === active.id);
+        const newIndex = prev.findIndex((col) => col.id === over.id);
+        return arrayMove(prev, oldIndex, newIndex);
+      });
+    }
+    setActiveId(null);
+  }, []);
+
+  const getColumnDefinitions = (): ColumnDefinition[] => {
+    return columns.map((col) => ({
+      name: col.name.trim(),
+      dataType: col.dataType === "CUSTOM" ? col.customType.trim() : col.dataType,
+      isNullable: col.isNullable,
+      isPrimaryKey: col.isPrimaryKey,
+      isUnique: col.isUnique,
+      defaultValue: col.defaultValue.trim(),
+    }));
+  };
+
+  const generateSQL = (): string => {
+    // Generate preview SQL even with incomplete data
+    const schemaName = selectedSchema || "schema";
+    const tblName = tableName.trim() || "table_name";
+
+    const columnLines = columns.map((col, idx) => {
+      const colName = col.name.trim() || `column_${idx + 1}`;
+      const colType = col.dataType === "CUSTOM"
+        ? (col.customType.trim() || "TYPE")
+        : col.dataType;
+
+      const parts: string[] = [`"${colName}"`, colType];
+
+      if (col.isPrimaryKey) {
+        parts.push("PRIMARY KEY");
+      } else {
+        if (!col.isNullable) parts.push("NOT NULL");
+        if (col.isUnique) parts.push("UNIQUE");
+      }
+
+      if (col.defaultValue.trim()) {
+        parts.push(`DEFAULT ${col.defaultValue.trim()}`);
+      }
+
+      return `  ${parts.join(" ")}`;
+    });
+
+    return `CREATE TABLE "${schemaName}"."${tblName}" (\n${columnLines.join(",\n")}\n)`;
+  };
+
+  const handleCreate = async () => {
+    setError(null);
+    setSuccess(false);
+
+    if (!tableName.trim()) {
+      setError("Table name is required");
+      return;
+    }
+
+    if (!selectedSchema) {
+      setError("Please select a schema");
+      return;
+    }
+
+    for (const col of columns) {
+      if (!col.name.trim()) {
+        setError("All columns must have a name");
+        return;
+      }
+      if (col.dataType === "CUSTOM" && !col.customType.trim()) {
+        setError(`Please specify a custom type for column "${col.name}"`);
+        return;
+      }
+    }
+
+    const names = columns.map((c) => c.name.trim().toLowerCase());
+    const duplicates = names.filter((name, index) => names.indexOf(name) !== index);
+    if (duplicates.length > 0) {
+      setError(`Duplicate column name: "${duplicates[0]}"`);
+      return;
+    }
+
+    try {
+      const sql = generateCreateTableSQL(selectedSchema, tableName.trim(), getColumnDefinitions());
+      await executeSQL.mutateAsync({ sql });
+      setSuccess(true);
+
+      // Open the new table in a tab and close this create tab after a brief delay
+      setTimeout(() => {
+        addTab({
+          id: `table-${selectedSchema}-${tableName.trim()}-${Date.now()}`,
+          type: "table",
+          title: tableName.trim(),
+          schema: selectedSchema,
+          table: tableName.trim(),
+        });
+        closeTab(tab.id);
+      }, 1000);
+    } catch (err) {
+      // Extract detailed error message from various error formats
+      let errorMessage: string;
+      if (err instanceof Error) {
+        errorMessage = err.message;
+      } else if (typeof err === "string") {
+        errorMessage = err;
+      } else if (typeof err === "object" && err !== null) {
+        // Handle Tauri error objects which may have message, error, or other properties
+        const errObj = err as Record<string, unknown>;
+        errorMessage = (
+          errObj.message ||
+          errObj.error ||
+          errObj.description ||
+          JSON.stringify(err)
+        ) as string;
+      } else {
+        errorMessage = "Failed to create table";
+      }
+      setError(errorMessage);
+    }
+  };
+
+  const previewSQL = generateSQL();
+
+  return (
+    <div className="h-full flex flex-col bg-[var(--bg-primary)]">
+      {/* Header */}
+      <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--border-color)] shrink-0">
+        <div className="flex items-center gap-3">
+          <div className="p-2 rounded-lg bg-purple-500/10">
+            <Table className="w-5 h-5 text-purple-400" />
+          </div>
+          <div>
+            <h2 className="text-base font-semibold text-[var(--text-primary)]">
+              Create New Table
+            </h2>
+            <p className="text-xs text-[var(--text-muted)]">
+              Define your table structure with columns and constraints
+            </p>
+          </div>
+        </div>
+
+        <button
+          onClick={handleCreate}
+          disabled={executeSQL.isPending || !tableName.trim() || success}
+          className={cn(
+            "flex items-center gap-2 px-4 py-2 text-sm rounded-lg",
+            success
+              ? "bg-green-500 text-white"
+              : "bg-purple-500 text-white hover:bg-purple-600",
+            "transition-colors",
+            "disabled:opacity-50 disabled:cursor-not-allowed"
+          )}
+        >
+          {executeSQL.isPending ? (
+            <>
+              <Loader2 className="w-4 h-4 animate-spin" />
+              Creating...
+            </>
+          ) : success ? (
+            <>
+              <CheckCircle className="w-4 h-4" />
+              Created!
+            </>
+          ) : (
+            <>
+              <Plus className="w-4 h-4" />
+              Create Table
+            </>
+          )}
+        </button>
+      </div>
+
+      {/* Content */}
+      <div className="flex-1 overflow-y-auto">
+        <div className="max-w-3xl mx-auto p-6 space-y-6">
+          {/* Success Message */}
+          {success && (
+            <div className="flex items-start gap-3 p-4 rounded-lg bg-green-500/10 border border-green-500/20">
+              <CheckCircle className="w-5 h-5 text-green-400 shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-medium text-green-400">
+                  Table "{selectedSchema}.{tableName}" created successfully!
+                </p>
+                <p className="text-xs text-green-400/70 mt-1">
+                  Opening table view...
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Error Display */}
+          {error && (
+            <div className="flex items-start gap-3 p-4 rounded-lg bg-red-500/10 border border-red-500/20">
+              <AlertCircle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
+              <p className="text-sm text-red-400">{error}</p>
+            </div>
+          )}
+
+          {/* Table Name and Schema */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
+                Schema
+              </label>
+              <select
+                value={selectedSchema}
+                onChange={(e) => setSelectedSchema(e.target.value)}
+                disabled={success}
+                className={cn(
+                  "w-full h-10 px-3 rounded-lg text-sm",
+                  "bg-[var(--bg-secondary)] text-[var(--text-primary)]",
+                  "border border-[var(--border-color)]",
+                  "focus:border-[var(--accent)] focus:outline-none",
+                  "disabled:opacity-50"
+                )}
+              >
+                {schemas.map((schema) => (
+                  <option key={schema.name} value={schema.name}>
+                    {schema.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
+                Table Name <span className="text-red-400">*</span>
+              </label>
+              <input
+                type="text"
+                value={tableName}
+                onChange={(e) => {
+                  setTableName(e.target.value);
+                  setError(null);
+                }}
+                disabled={success}
+                placeholder="users"
+                autoCorrect="off"
+                autoCapitalize="off"
+                autoComplete="off"
+                spellCheck={false}
+                className={cn(
+                  "w-full h-10 px-3 rounded-lg text-sm",
+                  "bg-[var(--bg-secondary)] text-[var(--text-primary)]",
+                  "border border-[var(--border-color)]",
+                  "focus:border-[var(--accent)] focus:outline-none",
+                  "placeholder:text-[var(--text-muted)]",
+                  "disabled:opacity-50"
+                )}
+              />
+            </div>
+          </div>
+
+          {/* Columns Section */}
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <label className="text-sm font-medium text-[var(--text-secondary)]">
+                Columns
+              </label>
+              <span className="text-xs text-[var(--text-muted)]">
+                {columns.length} column{columns.length !== 1 ? "s" : ""}
+              </span>
+            </div>
+
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragStart={handleDragStart}
+              onDragEnd={handleDragEnd}
+            >
+              <SortableContext
+                items={columns.map((c) => c.id)}
+                strategy={verticalListSortingStrategy}
+              >
+                <div className="space-y-2">
+                  {columns.map((column, index) => (
+                    <ColumnEditorRow
+                      key={column.id}
+                      column={column}
+                      index={index}
+                      onUpdate={(updates) => updateColumn(column.id, updates)}
+                      onRemove={() => removeColumn(column.id)}
+                      onToggleExpanded={() => toggleColumnExpanded(column.id)}
+                      canRemove={columns.length > 1 && !success}
+                    />
+                  ))}
+                </div>
+              </SortableContext>
+              <DragOverlay>
+                {activeId ? (
+                  <ColumnDragOverlay
+                    column={columns.find((c) => c.id === activeId)!}
+                    index={columns.findIndex((c) => c.id === activeId)}
+                  />
+                ) : null}
+              </DragOverlay>
+            </DndContext>
+
+            {!success && (
+              <button
+                onClick={addColumn}
+                className={cn(
+                  "w-full mt-3 flex items-center justify-center gap-2 px-4 py-3 rounded-lg",
+                  "border border-dashed border-[var(--border-color)]",
+                  "text-sm text-[var(--text-muted)]",
+                  "hover:border-purple-500/50 hover:text-purple-400",
+                  "transition-colors"
+                )}
+              >
+                <Plus className="w-4 h-4" />
+                Add Column
+              </button>
+            )}
+          </div>
+
+          {/* SQL Preview */}
+          <div>
+            <div className="flex items-center justify-between">
+              <button
+                onClick={() => setShowPreview(!showPreview)}
+                className="flex items-center gap-2 text-sm font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
+              >
+                {showPreview ? (
+                  <ChevronDown className="w-4 h-4" />
+                ) : (
+                  <ChevronRight className="w-4 h-4" />
+                )}
+                <Code className="w-4 h-4" />
+                Preview SQL
+              </button>
+              {showPreview && (
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(previewSQL);
+                    setCopied(true);
+                    setTimeout(() => setCopied(false), 2000);
+                  }}
+                  className={cn(
+                    "flex items-center gap-1.5 px-2 py-1 text-xs rounded",
+                    "transition-colors",
+                    copied
+                      ? "text-green-400 bg-green-500/10"
+                      : "text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)]"
+                  )}
+                >
+                  {copied ? (
+                    <>
+                      <Check className="w-3.5 h-3.5" />
+                      Copied!
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-3.5 h-3.5" />
+                      Copy
+                    </>
+                  )}
+                </button>
+              )}
+            </div>
+            {showPreview && (
+              <div className="mt-5">
+                <CodeBlock code={previewSQL} language="sql" />
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /**
  * Renders content based on the active tab
  */
@@ -520,6 +1615,11 @@ export function TabContent() {
         table={activeTab.table}
       />
     );
+  }
+
+  // Create table tab
+  if (activeTab.type === "create-table") {
+    return <CreateTableTabContent key={activeTab.id} tab={activeTab} />;
   }
 
   // Query tab (TODO: implement)

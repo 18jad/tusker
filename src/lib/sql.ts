@@ -110,6 +110,91 @@ function formatValue(value: unknown, _column?: Column): string {
 }
 
 /**
+ * Column definition for CREATE TABLE
+ */
+export interface ColumnDefinition {
+  name: string;
+  dataType: string;
+  isNullable: boolean;
+  isPrimaryKey: boolean;
+  isUnique: boolean;
+  defaultValue: string;
+  references?: {
+    schema: string;
+    table: string;
+    column: string;
+  };
+}
+
+/**
+ * Generate CREATE TABLE SQL statement
+ */
+export function generateCreateTableSQL(
+  schema: string,
+  tableName: string,
+  columns: ColumnDefinition[]
+): string {
+  if (!tableName.trim()) {
+    throw new Error("Table name is required");
+  }
+
+  if (columns.length === 0) {
+    throw new Error("At least one column is required");
+  }
+
+  const primaryKeyColumns = columns.filter((c) => c.isPrimaryKey);
+  const hasCompositePK = primaryKeyColumns.length > 1;
+
+  const columnDefs = columns.map((col) => {
+    if (!col.name.trim()) {
+      throw new Error("Column name is required");
+    }
+    if (!col.dataType.trim()) {
+      throw new Error(`Data type is required for column "${col.name}"`);
+    }
+
+    const parts: string[] = [`"${col.name}"`, col.dataType];
+
+    // Add PRIMARY KEY inline only if single PK
+    if (col.isPrimaryKey && !hasCompositePK) {
+      parts.push("PRIMARY KEY");
+    }
+
+    // Add NOT NULL (skip for PKs as they're implicitly NOT NULL)
+    if (!col.isNullable && !col.isPrimaryKey) {
+      parts.push("NOT NULL");
+    }
+
+    // Add UNIQUE
+    if (col.isUnique && !col.isPrimaryKey) {
+      parts.push("UNIQUE");
+    }
+
+    // Add DEFAULT
+    if (col.defaultValue.trim()) {
+      parts.push(`DEFAULT ${col.defaultValue}`);
+    }
+
+    // Add REFERENCES
+    if (col.references) {
+      parts.push(
+        `REFERENCES "${col.references.schema}"."${col.references.table}"("${col.references.column}")`
+      );
+    }
+
+    return parts.join(" ");
+  });
+
+  // Add composite primary key constraint if needed
+  if (hasCompositePK) {
+    const pkCols = primaryKeyColumns.map((c) => `"${c.name}"`).join(", ");
+    columnDefs.push(`PRIMARY KEY (${pkCols})`);
+  }
+
+  return `CREATE TABLE "${schema}"."${tableName}" (\n  ${columnDefs.join(",\n  ")}\n)`;
+}
+
+/**
  * Validate SQL to prevent obvious injection (basic check)
  */
 export function validateSQL(sql: string): { valid: boolean; error?: string } {

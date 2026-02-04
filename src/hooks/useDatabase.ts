@@ -435,6 +435,61 @@ export function useCommitChanges() {
   });
 }
 
+// Execute a single SQL statement (for DDL like CREATE TABLE)
+export function useExecuteSQL() {
+  const queryClient = useQueryClient();
+  const { setSchemas, setSchemasLoading } = useProjectStore.getState();
+
+  return useMutation({
+    mutationFn: async (params: { sql: string }) => {
+      if (!currentConnectionId) throw new Error("Not connected");
+      await invoke("execute_query", {
+        connectionId: currentConnectionId,
+        sql: params.sql,
+      });
+    },
+    onSuccess: async () => {
+      // Refresh schemas to show new/modified tables
+      queryClient.invalidateQueries({ queryKey: ["tableData"] });
+
+      // Also refresh the schema list in the sidebar
+      if (currentConnectionId) {
+        setSchemasLoading(true);
+        try {
+          const schemaInfos = await invoke<SchemaInfo[]>("get_schemas", {
+            connectionId: currentConnectionId,
+          });
+
+          // Convert to our Schema type with tables (same pattern as connect)
+          const schemasWithTables: Schema[] = await Promise.all(
+            schemaInfos
+              .filter((s) => !s.name.startsWith("pg_") && s.name !== "information_schema")
+              .map(async (schemaInfo) => {
+                const tables = await invoke<TableInfo[]>("get_tables", {
+                  connectionId: currentConnectionId,
+                  schema: schemaInfo.name,
+                });
+
+                return {
+                  name: schemaInfo.name,
+                  tables: tables.map((t) => ({
+                    name: t.name,
+                    schema: t.schema,
+                    rowCount: t.row_count,
+                  })),
+                };
+              })
+          );
+
+          setSchemas(schemasWithTables);
+        } finally {
+          setSchemasLoading(false);
+        }
+      }
+    },
+  });
+}
+
 // Helper to get connection config - used by components that need to connect
 export function getConnectionConfig(config: ConnectionConfig): ConnectionConfig {
   return config;

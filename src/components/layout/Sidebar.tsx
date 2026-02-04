@@ -24,6 +24,7 @@ interface TreeItemProps {
   onClick?: () => void;
   children?: React.ReactNode;
   isActive?: boolean;
+  action?: React.ReactNode;
 }
 
 function TreeItem({
@@ -35,14 +36,14 @@ function TreeItem({
   onClick,
   children,
   isActive,
+  action,
 }: TreeItemProps) {
   const hasChildren = !!children;
   const paddingLeft = 12 + level * 16;
 
   return (
-    <div>
-      <button
-        onClick={hasChildren ? onToggle : onClick}
+    <div className="group/tree-item">
+      <div
         className={cn(
           "w-full flex items-center gap-2 h-7 text-sm",
           "hover:bg-[var(--bg-tertiary)] transition-colors duration-150",
@@ -50,20 +51,30 @@ function TreeItem({
         )}
         style={{ paddingLeft }}
       >
-        {hasChildren ? (
-          <span className="w-4 h-4 flex items-center justify-center shrink-0">
-            {isExpanded ? (
-              <ChevronDown className="w-3.5 h-3.5 text-[var(--text-muted)]" />
-            ) : (
-              <ChevronRight className="w-3.5 h-3.5 text-[var(--text-muted)]" />
-            )}
+        <button
+          onClick={hasChildren ? onToggle : onClick}
+          className="flex items-center gap-2 flex-1 min-w-0"
+        >
+          {hasChildren ? (
+            <span className="w-4 h-4 flex items-center justify-center shrink-0">
+              {isExpanded ? (
+                <ChevronDown className="w-3.5 h-3.5 text-[var(--text-muted)]" />
+              ) : (
+                <ChevronRight className="w-3.5 h-3.5 text-[var(--text-muted)]" />
+              )}
+            </span>
+          ) : (
+            <span className="w-4 h-4 shrink-0" />
+          )}
+          <span className="shrink-0">{icon}</span>
+          <span className="truncate text-left">{label}</span>
+        </button>
+        {action && (
+          <span className="opacity-0 group-hover/tree-item:opacity-100 transition-opacity duration-150 pr-2">
+            {action}
           </span>
-        ) : (
-          <span className="w-4 h-4 shrink-0" />
         )}
-        <span className="shrink-0">{icon}</span>
-        <span className="truncate text-left">{label}</span>
-      </button>
+      </div>
       {hasChildren && isExpanded && (
         <div className="overflow-hidden transition-all duration-200">
           {children}
@@ -79,10 +90,12 @@ interface SchemaTreeProps {
 }
 
 function SchemaTree({ schema, level }: SchemaTreeProps) {
-  const [isExpanded, setIsExpanded] = useState(false);
   const addTab = useUIStore((state) => state.addTab);
   const activeTabId = useUIStore((state) => state.activeTabId);
   const tabs = useUIStore((state) => state.tabs);
+  const addCreateTableTab = useUIStore((state) => state.addCreateTableTab);
+  const isExpanded = useUIStore((state) => state.expandedSchemas.has(schema.name));
+  const toggleSchemaExpanded = useUIStore((state) => state.toggleSchemaExpanded);
 
   const handleTableClick = (table: Table) => {
     addTab({
@@ -104,6 +117,11 @@ function SchemaTree({ schema, level }: SchemaTreeProps) {
     );
   };
 
+  const handleCreateTable = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    addCreateTableTab(schema.name);
+  };
+
   return (
     <TreeItem
       label={schema.name}
@@ -116,7 +134,20 @@ function SchemaTree({ schema, level }: SchemaTreeProps) {
       }
       level={level}
       isExpanded={isExpanded}
-      onToggle={() => setIsExpanded(!isExpanded)}
+      onToggle={() => toggleSchemaExpanded(schema.name)}
+      action={
+        <button
+          onClick={handleCreateTable}
+          className={cn(
+            "p-0.5 rounded hover:bg-[var(--bg-tertiary)]",
+            "text-[var(--text-muted)] hover:text-purple-400",
+            "transition-colors duration-150"
+          )}
+          title={`Create table in ${schema.name}`}
+        >
+          <Plus className="w-3.5 h-3.5" />
+        </button>
+      }
     >
       {schema.tables.map((table) => (
         <TreeItem
@@ -210,6 +241,8 @@ export function Sidebar({
   onWidthChange,
 }: SidebarProps) {
   const openProjectModal = useUIStore((state) => state.openProjectModal);
+  const addCreateTableTab = useUIStore((state) => state.addCreateTableTab);
+  const connectionStatus = useProjectStore((state) => state.connectionStatus);
 
   return (
     <aside
@@ -258,8 +291,23 @@ export function Sidebar({
             <ProjectTree />
           </div>
 
-          {/* Footer - New Project button */}
-          <div className="p-2 border-t border-[var(--border-color)] shrink-0">
+          {/* Footer buttons */}
+          <div className="p-2 border-t border-[var(--border-color)] shrink-0 flex flex-col gap-2">
+            {connectionStatus === "connected" && (
+              <button
+                onClick={() => addCreateTableTab()}
+                className={cn(
+                  "w-full flex items-center justify-center gap-2 h-8",
+                  "bg-purple-600/20 hover:bg-purple-600/30",
+                  "rounded text-sm text-purple-400",
+                  "hover:text-purple-300",
+                  "transition-colors duration-150"
+                )}
+              >
+                <Table2 className="w-4 h-4" />
+                <span>New Table</span>
+              </button>
+            )}
             <button
               onClick={() => openProjectModal()}
               className={cn(
