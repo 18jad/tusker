@@ -34,14 +34,23 @@ import {
   Copy,
   Check,
   Search,
+  Link,
 } from "lucide-react";
+import { invoke } from "@tauri-apps/api/core";
 import { useUIStore } from "../../stores/uiStore";
 import { useProjectStore } from "../../stores/projectStore";
 import { useChangesStore } from "../../stores/changesStore";
-import { useTableData, useCommitChanges, useExecuteSQL } from "../../hooks/useDatabase";
+import { useTableData, useCommitChanges, useExecuteSQL, getCurrentConnectionId } from "../../hooks/useDatabase";
 import { TableView } from "../table/TableView";
 import { RowDetailModal } from "../table/RowDetailModal";
-import { CodeBlock } from "../ui";
+import {
+  CodeBlock,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../ui";
 import { generateUpdateSQL, generateDeleteSQL, generateInsertSQL, generateCreateTableSQL, type ColumnDefinition } from "../../lib/sql";
 import { cn } from "../../lib/utils";
 import type { CellValue, Row, Column, Tab } from "../../types";
@@ -587,6 +596,16 @@ const POSTGRES_TYPES = {
   ],
 };
 
+type ForeignKeyAction = "NO ACTION" | "RESTRICT" | "CASCADE" | "SET NULL" | "SET DEFAULT";
+
+const FK_ACTIONS: { value: ForeignKeyAction; label: string; description: string }[] = [
+  { value: "NO ACTION", label: "No Action", description: "Raise error if referenced rows exist" },
+  { value: "RESTRICT", label: "Restrict", description: "Prevent delete/update (checked immediately)" },
+  { value: "CASCADE", label: "Cascade", description: "Automatically delete/update related rows" },
+  { value: "SET NULL", label: "Set NULL", description: "Set foreign key column to NULL" },
+  { value: "SET DEFAULT", label: "Set Default", description: "Set foreign key to its default value" },
+];
+
 interface ColumnFormState {
   id: string;
   name: string;
@@ -595,6 +614,12 @@ interface ColumnFormState {
   isNullable: boolean;
   isPrimaryKey: boolean;
   isUnique: boolean;
+  isForeignKey: boolean;
+  foreignKeySchema: string;
+  foreignKeyTable: string;
+  foreignKeyColumn: string;
+  foreignKeyOnDelete: ForeignKeyAction;
+  foreignKeyOnUpdate: ForeignKeyAction;
   defaultValue: string;
   isExpanded: boolean;
 }
@@ -607,6 +632,12 @@ const createEmptyColumn = (): ColumnFormState => ({
   isNullable: true,
   isPrimaryKey: false,
   isUnique: false,
+  isForeignKey: false,
+  foreignKeySchema: "",
+  foreignKeyTable: "",
+  foreignKeyColumn: "",
+  foreignKeyOnDelete: "NO ACTION",
+  foreignKeyOnUpdate: "NO ACTION",
   defaultValue: "",
   isExpanded: true,
 });
@@ -807,6 +838,10 @@ function ColumnEditorRow({
   onRemove,
   onToggleExpanded,
   canRemove,
+  schemas,
+  onFetchColumns,
+  availableColumns,
+  isLoadingColumns,
 }: {
   column: ColumnFormState;
   index: number;
@@ -814,6 +849,10 @@ function ColumnEditorRow({
   onRemove: () => void;
   onToggleExpanded: () => void;
   canRemove: boolean;
+  schemas: { name: string; tables: { name: string; schema: string }[] }[];
+  onFetchColumns: (schema: string, table: string) => void;
+  availableColumns: { name: string; dataType: string; isPrimaryKey: boolean; isUnique: boolean }[];
+  isLoadingColumns: boolean;
 }) {
   const [showTypeDropdown, setShowTypeDropdown] = useState(false);
   const typeButtonRef = useRef<HTMLButtonElement>(null);
@@ -1009,7 +1048,7 @@ function ColumnEditorRow({
           </div>
 
           {/* Constraints Row */}
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-4 flex-wrap">
             <label className="flex items-center gap-2 cursor-pointer">
               <input
                 type="checkbox"
@@ -1050,7 +1089,233 @@ function ColumnEditorRow({
                 Unique
               </span>
             </label>
+
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={column.isForeignKey}
+                onChange={(e) => {
+                  if (e.target.checked) {
+                    // Set default schema when enabling FK
+                    const defaultSchema = schemas[0]?.name || "";
+                    onUpdate({
+                      isForeignKey: true,
+                      foreignKeySchema: defaultSchema,
+                      foreignKeyTable: "",
+                      foreignKeyColumn: "",
+                      foreignKeyOnDelete: "NO ACTION",
+                      foreignKeyOnUpdate: "NO ACTION",
+                    });
+                  } else {
+                    onUpdate({
+                      isForeignKey: false,
+                      foreignKeySchema: "",
+                      foreignKeyTable: "",
+                      foreignKeyColumn: "",
+                      foreignKeyOnDelete: "NO ACTION",
+                      foreignKeyOnUpdate: "NO ACTION",
+                    });
+                  }
+                }}
+                className="w-4 h-4 rounded border-[var(--border-color)] text-[var(--accent)] focus:ring-[var(--accent)]"
+              />
+              <span className="text-xs text-[var(--text-secondary)]">Foreign Key</span>
+            </label>
           </div>
+
+          {/* Foreign Key Configuration */}
+          {column.isForeignKey && (
+            <div className="pt-3 border-t border-[var(--border-color)] space-y-3">
+              {/* Reference Section */}
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <Link className="w-4 h-4 text-blue-400" />
+                  <span className="text-xs font-medium text-[var(--text-secondary)]">
+                    References
+                  </span>
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  {/* Schema Select */}
+                  <div>
+                    <label className="block text-xs text-[var(--text-muted)] mb-1">
+                      Schema
+                    </label>
+                    <Select
+                      value={column.foreignKeySchema || undefined}
+                      onValueChange={(value) => {
+                        onUpdate({
+                          foreignKeySchema: value,
+                          foreignKeyTable: "",
+                          foreignKeyColumn: "",
+                        });
+                      }}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {schemas.map((s) => (
+                          <SelectItem key={s.name} value={s.name}>
+                            {s.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Table Select */}
+                  <div>
+                    <label className="block text-xs text-[var(--text-muted)] mb-1">
+                      Table
+                    </label>
+                    <Select
+                      value={column.foreignKeyTable || undefined}
+                      onValueChange={(value) => {
+                        onUpdate({
+                          foreignKeyTable: value,
+                          foreignKeyColumn: "",
+                        });
+                        if (value && column.foreignKeySchema) {
+                          onFetchColumns(column.foreignKeySchema, value);
+                        }
+                      }}
+                      disabled={!column.foreignKeySchema}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {schemas
+                          .find((s) => s.name === column.foreignKeySchema)
+                          ?.tables.map((t) => (
+                            <SelectItem key={t.name} value={t.name}>
+                              {t.name}
+                            </SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Column Select - Only shows PK/UNIQUE columns (valid FK targets) */}
+                  <div>
+                    <label className="block text-xs text-[var(--text-muted)] mb-1">
+                      Column
+                    </label>
+                    <Select
+                      value={column.foreignKeyColumn || undefined}
+                      onValueChange={(value) => onUpdate({ foreignKeyColumn: value })}
+                      disabled={!column.foreignKeyTable || isLoadingColumns || availableColumns.length === 0}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder={
+                          isLoadingColumns
+                            ? "Loading..."
+                            : column.foreignKeyTable && availableColumns.length === 0
+                              ? "No valid targets"
+                              : "Select..."
+                        } />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {availableColumns.length === 0 ? (
+                          <div className="px-2 py-3 text-xs text-[var(--text-muted)] text-center">
+                            No columns with PRIMARY KEY or UNIQUE constraint
+                          </div>
+                        ) : (
+                          availableColumns.map((col) => (
+                            <SelectItem
+                              key={col.name}
+                              value={col.name}
+                              description={col.isPrimaryKey ? "Primary Key" : "Unique"}
+                            >
+                              <span className="flex items-center gap-2">
+                                {col.isPrimaryKey ? (
+                                  <Key className="w-3 h-3 text-amber-400" />
+                                ) : (
+                                  <span className="w-3 h-3 text-xs text-blue-400 font-bold">U</span>
+                                )}
+                                {col.name}
+                                <span className="text-[var(--text-muted)]">({col.dataType})</span>
+                              </span>
+                            </SelectItem>
+                          ))
+                        )}
+                      </SelectContent>
+                    </Select>
+                    {column.foreignKeyTable && !isLoadingColumns && availableColumns.length === 0 && (
+                      <p className="text-xs text-amber-400 mt-1">
+                        Table has no PRIMARY KEY or UNIQUE columns
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Actions Section */}
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-xs font-medium text-[var(--text-secondary)]">
+                    Referential Actions
+                  </span>
+                  <span className="text-xs text-[var(--text-muted)]">
+                    — What happens when referenced row changes
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  {/* ON DELETE */}
+                  <div>
+                    <label className="block text-xs text-[var(--text-muted)] mb-1">
+                      On Delete
+                    </label>
+                    <Select
+                      value={column.foreignKeyOnDelete}
+                      onValueChange={(value) => onUpdate({ foreignKeyOnDelete: value as ForeignKeyAction })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {FK_ACTIONS.map((action) => (
+                          <SelectItem
+                            key={action.value}
+                            value={action.value}
+                            description={action.description}
+                          >
+                            {action.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* ON UPDATE */}
+                  <div>
+                    <label className="block text-xs text-[var(--text-muted)] mb-1">
+                      On Update
+                    </label>
+                    <Select
+                      value={column.foreignKeyOnUpdate}
+                      onValueChange={(value) => onUpdate({ foreignKeyOnUpdate: value as ForeignKeyAction })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {FK_ACTIONS.map((action) => (
+                          <SelectItem
+                            key={action.value}
+                            value={action.value}
+                            description={action.description}
+                          >
+                            {action.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -1161,6 +1426,16 @@ function CreateTableTabContent({ tab }: { tab: Tab }) {
   const [success, setSuccess] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  // FK column cache includes constraint info to filter valid FK targets
+  // Key = "schema.table", value = columns (empty array means fetched but no valid targets)
+  const [fkColumnsCache, setFkColumnsCache] = useState<Record<string, {
+    name: string;
+    dataType: string;
+    isPrimaryKey: boolean;
+    isUnique: boolean;
+  }[]>>({});
+  // Track tables currently being fetched to avoid showing error during load
+  const [fkColumnsLoading, setFkColumnsLoading] = useState<Set<string>>(new Set());
 
   // Initialize schema on mount
   useEffect(() => {
@@ -1225,6 +1500,59 @@ function CreateTableTabContent({ tab }: { tab: Tab }) {
     setActiveId(null);
   }, []);
 
+  // Fetch columns for foreign key reference - only stores columns that are valid FK targets
+  const fetchFkColumns = useCallback(async (schema: string, table: string) => {
+    const cacheKey = `${schema}.${table}`;
+    if (fkColumnsCache[cacheKey] !== undefined) return; // Already cached (even if empty)
+    if (fkColumnsLoading.has(cacheKey)) return; // Already loading
+
+    const connectionId = getCurrentConnectionId();
+    if (!connectionId) return;
+
+    // Mark as loading
+    setFkColumnsLoading((prev) => new Set(prev).add(cacheKey));
+
+    try {
+      const cols = await invoke<{
+        name: string;
+        data_type: string;
+        is_primary_key: boolean;
+        is_unique: boolean;
+      }[]>("get_columns", {
+        connectionId,
+        schema,
+        table,
+      });
+      // Only include columns that are valid FK targets (PRIMARY KEY or UNIQUE)
+      const validFkTargets = cols
+        .filter((c) => c.is_primary_key || c.is_unique)
+        .map((c) => ({
+          name: c.name,
+          dataType: c.data_type,
+          isPrimaryKey: c.is_primary_key,
+          isUnique: c.is_unique,
+        }));
+      setFkColumnsCache((prev) => ({
+        ...prev,
+        [cacheKey]: validFkTargets,
+      }));
+    } catch (err) {
+      console.error("Failed to fetch columns for FK:", err);
+      // Still cache empty array on error to prevent repeated attempts
+      setFkColumnsCache((prev) => ({
+        ...prev,
+        [cacheKey]: [],
+      }));
+    } finally {
+      // Remove from loading set
+      setFkColumnsLoading((prev) => {
+        const next = new Set(prev);
+        next.delete(cacheKey);
+        return next;
+      });
+    }
+  }, [fkColumnsCache, fkColumnsLoading]);
+
   const getColumnDefinitions = (): ColumnDefinition[] => {
     return columns.map((col) => ({
       name: col.name.trim(),
@@ -1233,6 +1561,15 @@ function CreateTableTabContent({ tab }: { tab: Tab }) {
       isPrimaryKey: col.isPrimaryKey,
       isUnique: col.isUnique,
       defaultValue: col.defaultValue.trim(),
+      references: col.isForeignKey && col.foreignKeySchema && col.foreignKeyTable && col.foreignKeyColumn
+        ? {
+            schema: col.foreignKeySchema,
+            table: col.foreignKeyTable,
+            column: col.foreignKeyColumn,
+            onDelete: col.foreignKeyOnDelete,
+            onUpdate: col.foreignKeyOnUpdate,
+          }
+        : undefined,
     }));
   };
 
@@ -1258,6 +1595,18 @@ function CreateTableTabContent({ tab }: { tab: Tab }) {
 
       if (col.defaultValue.trim()) {
         parts.push(`DEFAULT ${col.defaultValue.trim()}`);
+      }
+
+      // Add foreign key reference
+      if (col.isForeignKey && col.foreignKeySchema && col.foreignKeyTable && col.foreignKeyColumn) {
+        let fkRef = `REFERENCES "${col.foreignKeySchema}"."${col.foreignKeyTable}"("${col.foreignKeyColumn}")`;
+        if (col.foreignKeyOnDelete && col.foreignKeyOnDelete !== "NO ACTION") {
+          fkRef += ` ON DELETE ${col.foreignKeyOnDelete}`;
+        }
+        if (col.foreignKeyOnUpdate && col.foreignKeyOnUpdate !== "NO ACTION") {
+          fkRef += ` ON UPDATE ${col.foreignKeyOnUpdate}`;
+        }
+        parts.push(fkRef);
       }
 
       return `  ${parts.join(" ")}`;
@@ -1420,24 +1769,22 @@ function CreateTableTabContent({ tab }: { tab: Tab }) {
               <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
                 Schema
               </label>
-              <select
-                value={selectedSchema}
-                onChange={(e) => setSelectedSchema(e.target.value)}
+              <Select
+                value={selectedSchema || undefined}
+                onValueChange={setSelectedSchema}
                 disabled={success}
-                className={cn(
-                  "w-full h-10 px-3 rounded-lg text-sm",
-                  "bg-[var(--bg-secondary)] text-[var(--text-primary)]",
-                  "border border-[var(--border-color)]",
-                  "focus:border-[var(--accent)] focus:outline-none",
-                  "disabled:opacity-50"
-                )}
               >
-                {schemas.map((schema) => (
-                  <option key={schema.name} value={schema.name}>
-                    {schema.name}
-                  </option>
-                ))}
-              </select>
+                <SelectTrigger className="h-10 rounded-lg bg-[var(--bg-secondary)]">
+                  <SelectValue placeholder="Select schema..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {schemas.map((schema) => (
+                    <SelectItem key={schema.name} value={schema.name}>
+                      {schema.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div>
               <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
@@ -1499,6 +1846,18 @@ function CreateTableTabContent({ tab }: { tab: Tab }) {
                       onRemove={() => removeColumn(column.id)}
                       onToggleExpanded={() => toggleColumnExpanded(column.id)}
                       canRemove={columns.length > 1 && !success}
+                      schemas={schemas}
+                      onFetchColumns={fetchFkColumns}
+                      availableColumns={
+                        column.foreignKeySchema && column.foreignKeyTable
+                          ? fkColumnsCache[`${column.foreignKeySchema}.${column.foreignKeyTable}`] || []
+                          : []
+                      }
+                      isLoadingColumns={
+                        column.foreignKeySchema && column.foreignKeyTable
+                          ? fkColumnsLoading.has(`${column.foreignKeySchema}.${column.foreignKeyTable}`)
+                          : false
+                      }
                     />
                   ))}
                 </div>

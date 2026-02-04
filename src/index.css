@@ -165,18 +165,79 @@ button:not(:disabled) {
   }
 }
 
+/* Radix animation utilities */
+@keyframes fade-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+@keyframes zoom-out {
+  from { transform: scale(1); }
+  to { transform: scale(0.95); }
+}
+
+@keyframes slide-in-from-top {
+  from { transform: translateY(-0.5rem); }
+  to { transform: translateY(0); }
+}
+
+@keyframes slide-in-from-bottom {
+  from { transform: translateY(0.5rem); }
+  to { transform: translateY(0); }
+}
+
+@keyframes slide-in-from-left {
+  from { transform: translateX(-0.5rem); }
+  to { transform: translateX(0); }
+}
+
+@keyframes slide-in-from-right {
+  from { transform: translateX(0.5rem); }
+  to { transform: translateX(0); }
+}
+
 .animate-in {
   animation-duration: 150ms;
   animation-fill-mode: both;
   animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
+.animate-out {
+  animation-duration: 100ms;
+  animation-fill-mode: both;
+  animation-timing-function: ease-in;
+}
+
 .fade-in-0 {
   animation-name: fade-in;
 }
 
+.fade-out-0 {
+  animation-name: fade-out;
+}
+
 .zoom-in-95 {
   animation-name: zoom-in;
+}
+
+.zoom-out-95 {
+  animation-name: zoom-out;
+}
+
+.slide-in-from-top-2 {
+  animation-name: slide-in-from-top;
+}
+
+.slide-in-from-bottom-2 {
+  animation-name: slide-in-from-bottom;
+}
+
+.slide-in-from-left-2 {
+  animation-name: slide-in-from-left;
+}
+
+.slide-in-from-right-2 {
+  animation-name: slide-in-from-right;
 }
 
 .spotlight-backdrop {

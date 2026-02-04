@@ -112,6 +112,8 @@ function formatValue(value: unknown, _column?: Column): string {
 /**
  * Column definition for CREATE TABLE
  */
+export type ForeignKeyAction = "NO ACTION" | "RESTRICT" | "CASCADE" | "SET NULL" | "SET DEFAULT";
+
 export interface ColumnDefinition {
   name: string;
   dataType: string;
@@ -123,6 +125,8 @@ export interface ColumnDefinition {
     schema: string;
     table: string;
     column: string;
+    onDelete?: ForeignKeyAction;
+    onUpdate?: ForeignKeyAction;
   };
 }
 
@@ -175,11 +179,16 @@ export function generateCreateTableSQL(
       parts.push(`DEFAULT ${col.defaultValue}`);
     }
 
-    // Add REFERENCES
+    // Add REFERENCES with ON DELETE/UPDATE actions
     if (col.references) {
-      parts.push(
-        `REFERENCES "${col.references.schema}"."${col.references.table}"("${col.references.column}")`
-      );
+      let refClause = `REFERENCES "${col.references.schema}"."${col.references.table}"("${col.references.column}")`;
+      if (col.references.onDelete && col.references.onDelete !== "NO ACTION") {
+        refClause += ` ON DELETE ${col.references.onDelete}`;
+      }
+      if (col.references.onUpdate && col.references.onUpdate !== "NO ACTION") {
+        refClause += ` ON UPDATE ${col.references.onUpdate}`;
+      }
+      parts.push(refClause);
     }
 
     return parts.join(" ");
