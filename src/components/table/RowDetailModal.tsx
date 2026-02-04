@@ -242,7 +242,7 @@ export function RowDetailModal({
           <div className="flex items-center gap-3">
             {isCreateMode ? (
               <div className="flex items-center gap-2">
-                <Plus className="w-4 h-4 text-[var(--accent)]" />
+                <Plus className="w-4 h-4 text-purple-400" />
                 <span className="text-sm font-medium text-[var(--text-primary)]">
                   Add New Row
                 </span>
@@ -418,7 +418,7 @@ export function RowDetailModal({
                   disabled={!hasChanges}
                   className={cn(
                     "flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md",
-                    "bg-[var(--accent)] text-white",
+                    isCreateMode ? "bg-purple-500 text-white" : "bg-[var(--accent)] text-white",
                     "hover:opacity-90 transition-opacity",
                     "disabled:opacity-50 disabled:cursor-not-allowed"
                   )}

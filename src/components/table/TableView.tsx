@@ -181,8 +181,8 @@ export function TableView({
                 onClick={() => handleRowView(selectedRowIndex)}
                 className={cn(
                   "flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs",
-                  "text-[var(--text-secondary)] hover:text-[var(--accent)]",
-                  "hover:bg-[var(--bg-tertiary)] transition-colors"
+                  "text-blue-400 hover:text-blue-300",
+                  "hover:bg-blue-500/10 transition-colors"
                 )}
                 title="View/Edit row"
               >
@@ -195,7 +195,7 @@ export function TableView({
                   onClick={() => handleRowDelete(selectedRowIndex)}
                   className={cn(
                     "flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs",
-                    "text-[var(--text-secondary)] hover:text-red-400",
+                    "text-red-400 hover:text-red-300",
                     "hover:bg-red-500/10 transition-colors"
                   )}
                   title="Delete row"
@@ -227,8 +227,8 @@ export function TableView({
               onClick={onAddRow}
               className={cn(
                 "flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs",
-                "text-[var(--accent)] hover:text-[var(--accent)]",
-                "hover:bg-[var(--accent)]/10 transition-colors"
+                "text-purple-400 hover:text-purple-300",
+                "hover:bg-purple-500/10 transition-colors"
               )}
               title="Add new row"
             >
