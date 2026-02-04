@@ -44,6 +44,7 @@ import { useTableData, useCommitChanges, useExecuteSQL, getCurrentConnectionId }
 import { TableView } from "../table/TableView";
 import { RowDetailModal } from "../table/RowDetailModal";
 import {
+  Checkbox,
   CodeBlock,
   Select,
   SelectContent,
@@ -1050,46 +1051,30 @@ function ColumnEditorRow({
 
           {/* Constraints Row */}
           <div className="flex items-center gap-4 flex-wrap">
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={column.isPrimaryKey}
-                onChange={(e) => {
-                  onUpdate({
-                    isPrimaryKey: e.target.checked,
-                    isNullable: e.target.checked ? false : column.isNullable,
-                  });
-                }}
-                className="w-4 h-4 rounded border-[var(--border-color)] text-[var(--accent)] focus:ring-[var(--accent)]"
-              />
-              <span className="text-xs text-[var(--text-secondary)]">Primary Key</span>
-            </label>
+            <Checkbox
+              checked={column.isPrimaryKey}
+              onChange={(checked) => {
+                onUpdate({
+                  isPrimaryKey: checked,
+                  isNullable: checked ? false : column.isNullable,
+                });
+              }}
+              label="Primary Key"
+            />
 
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={!column.isNullable}
-                disabled={column.isPrimaryKey}
-                onChange={(e) => onUpdate({ isNullable: !e.target.checked })}
-                className="w-4 h-4 rounded border-[var(--border-color)] text-[var(--accent)] focus:ring-[var(--accent)] disabled:opacity-50"
-              />
-              <span className={cn("text-xs", column.isPrimaryKey ? "text-[var(--text-muted)]" : "text-[var(--text-secondary)]")}>
-                Not Null
-              </span>
-            </label>
+            <Checkbox
+              checked={!column.isNullable}
+              disabled={column.isPrimaryKey}
+              onChange={(checked) => onUpdate({ isNullable: !checked })}
+              label="Not Null"
+            />
 
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={column.isUnique}
-                disabled={column.isPrimaryKey}
-                onChange={(e) => onUpdate({ isUnique: e.target.checked })}
-                className="w-4 h-4 rounded border-[var(--border-color)] text-[var(--accent)] focus:ring-[var(--accent)] disabled:opacity-50"
-              />
-              <span className={cn("text-xs", column.isPrimaryKey ? "text-[var(--text-muted)]" : "text-[var(--text-secondary)]")}>
-                Unique
-              </span>
-            </label>
+            <Checkbox
+              checked={column.isUnique}
+              disabled={column.isPrimaryKey}
+              onChange={(checked) => onUpdate({ isUnique: checked })}
+              label="Unique"
+            />
           </div>
 
           {/* Foreign Key Reference - Separate Section */}
