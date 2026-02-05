@@ -101,7 +101,7 @@ function parseValue(value: string, dataType: string): CellValue {
 /**
  * Get the input type for a PostgreSQL data type
  */
-function getInputType(dataType: string): "text" | "number" | "boolean" | "date" | "time" | "datetime" {
+function getInputType(dataType: string): "text" | "number" | "boolean" | "date" | "time" | "datetime" | "array" {
   const type = dataType.toLowerCase();
   if (type === "boolean" || type === "bool") return "boolean";
   if (type.includes("int") || type.includes("serial") || type === "smallint" || type === "bigint") return "number";
@@ -109,7 +109,100 @@ function getInputType(dataType: string): "text" | "number" | "boolean" | "date" 
   if (type === "date") return "date";
   if (type === "time" || type === "time without time zone") return "time";
   if (type.includes("timestamp") || type === "timestamptz") return "datetime";
+  if (type.endsWith("[]") || type.startsWith("_")) return "array";
   return "text";
+}
+
+/**
+ * Parse PostgreSQL array literal to JavaScript array
+ */
+function parseArrayValue(value: CellValue): string[] {
+  if (value === null || value === undefined) return [];
+
+  // Already an array (from JSON response)
+  if (Array.isArray(value)) {
+    return value.map(v => String(v ?? ""));
+  }
+
+  const str = String(value).trim();
+  if (!str || str === "NULL" || str === "null") return [];
+
+  // PostgreSQL array format: {item1,item2,"item with spaces"}
+  if (str.startsWith("{") && str.endsWith("}")) {
+    const inner = str.slice(1, -1);
+    if (!inner) return [];
+
+    const items: string[] = [];
+    let current = "";
+    let inQuotes = false;
+    let escaped = false;
+
+    for (let i = 0; i < inner.length; i++) {
+      const char = inner[i];
+
+      if (escaped) {
+        current += char;
+        escaped = false;
+        continue;
+      }
+
+      if (char === "\\") {
+        escaped = true;
+        continue;
+      }
+
+      if (char === '"') {
+        inQuotes = !inQuotes;
+        continue;
+      }
+
+      if (char === "," && !inQuotes) {
+        items.push(current);
+        current = "";
+        continue;
+      }
+
+      current += char;
+    }
+
+    if (current || inner.endsWith(",")) {
+      items.push(current);
+    }
+
+    return items.map(item => item === "NULL" ? "" : item);
+  }
+
+  // JSON array format: ["item1", "item2"]
+  try {
+    const parsed = JSON.parse(str);
+    if (Array.isArray(parsed)) {
+      return parsed.map(v => String(v ?? ""));
+    }
+  } catch {
+    // Not JSON
+  }
+
+  // Single value
+  return [str];
+}
+
+/**
+ * Format JavaScript array to PostgreSQL array literal
+ */
+function formatArrayValue(items: string[]): string {
+  if (items.length === 0) return "{}";
+
+  const formatted = items.map(item => {
+    // Check if item needs quoting (contains comma, quote, backslash, or whitespace)
+    if (/[,"\\\s]/.test(item) || item === "") {
+      // Escape backslashes and quotes
+      const escaped = item.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+      return `"${escaped}"`;
+    }
+    return item;
+  });
+
+  return `{${formatted.join(",")}}`;
 }
 
 /**
@@ -297,6 +390,190 @@ function LargeValueEditor({
 }
 
 /**
+ * Array editor component - modal for editing array values
+ */
+function ArrayEditor({
+  value,
+  column,
+  onSave,
+  onCancel,
+}: {
+  value: CellValue;
+  column: Column;
+  onSave: (value: CellValue) => void;
+  onCancel: () => void;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [items, setItems] = useState<string[]>(() => parseArrayValue(value));
+  const [newItem, setNewItem] = useState("");
+
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, []);
+
+  const handleAddItem = () => {
+    const trimmed = newItem.trim();
+    if (trimmed) {
+      setItems([...items, trimmed]);
+      setNewItem("");
+      inputRef.current?.focus();
+    }
+  };
+
+  const handleRemoveItem = (index: number) => {
+    setItems(items.filter((_, i) => i !== index));
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Escape") {
+      e.preventDefault();
+      onCancel();
+    }
+    if (e.key === "Enter") {
+      e.preventDefault();
+      if (newItem.trim()) {
+        handleAddItem();
+      } else if (e.metaKey || e.ctrlKey) {
+        onSave(formatArrayValue(items));
+      }
+    }
+  };
+
+  const handleSave = () => {
+    onSave(formatArrayValue(items));
+  };
+
+  // Get base type for display
+  const baseType = column.dataType.replace("[]", "").replace(/^_/, "");
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+      <div
+        className={cn(
+          "w-[500px] max-w-[90vw] max-h-[80vh] flex flex-col",
+          "bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-lg shadow-xl"
+        )}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border-color)]">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium text-[var(--text-primary)]">
+              Edit {column.name}
+            </span>
+            <span className="text-xs text-[var(--text-muted)]">({column.dataType})</span>
+          </div>
+          <span className="text-xs text-[var(--text-muted)]">
+            {items.length} {items.length === 1 ? "item" : "items"}
+          </span>
+        </div>
+
+        {/* Items list */}
+        <div className="flex-1 p-4 min-h-0 overflow-y-auto">
+          {items.length === 0 ? (
+            <div className="text-sm text-[var(--text-muted)] text-center py-4">
+              No items. Add some below.
+            </div>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              {items.map((item, index) => (
+                <div
+                  key={index}
+                  className={cn(
+                    "flex items-center gap-1.5 px-2.5 py-1 rounded-md",
+                    "bg-[var(--bg-tertiary)] text-[var(--text-primary)]",
+                    "border border-[var(--border-color)]",
+                    "text-sm group"
+                  )}
+                >
+                  <span className="max-w-[200px] truncate" title={item}>
+                    {item || <span className="text-[var(--text-muted)] italic">empty</span>}
+                  </span>
+                  <button
+                    onClick={() => handleRemoveItem(index)}
+                    className={cn(
+                      "p-0.5 rounded",
+                      "text-[var(--text-muted)] hover:text-red-400",
+                      "hover:bg-red-500/10 transition-colors"
+                    )}
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Add item input */}
+        <div className="px-4 py-3 border-t border-[var(--border-color)]">
+          <div className="flex items-center gap-2">
+            <input
+              ref={inputRef}
+              type="text"
+              value={newItem}
+              onChange={(e) => setNewItem(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder={`Add ${baseType} value...`}
+              className={cn(
+                "flex-1 h-9 px-3 text-sm rounded-md",
+                "bg-[var(--bg-secondary)] text-[var(--text-primary)]",
+                "border border-[var(--border-color)]",
+                "focus:border-[var(--accent)] focus:outline-none focus:ring-1 focus:ring-[var(--accent)]",
+                "placeholder:text-[var(--text-muted)]"
+              )}
+            />
+            <button
+              onClick={handleAddItem}
+              disabled={!newItem.trim()}
+              className={cn(
+                "h-9 px-3 rounded-md text-sm font-medium",
+                "bg-[var(--accent)] text-white",
+                "hover:opacity-90 transition-opacity",
+                "disabled:opacity-50 disabled:cursor-not-allowed"
+              )}
+            >
+              Add
+            </button>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="flex items-center justify-between px-4 py-3 border-t border-[var(--border-color)]">
+          <span className="text-xs text-[var(--text-muted)]">
+            Enter to add • Cmd/Ctrl+Enter to save • Escape to cancel
+          </span>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={onCancel}
+              className={cn(
+                "px-3 py-1.5 text-sm rounded-md",
+                "text-[var(--text-secondary)] hover:text-[var(--text-primary)]",
+                "hover:bg-[var(--bg-tertiary)] transition-colors"
+              )}
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleSave}
+              className={cn(
+                "px-3 py-1.5 text-sm rounded-md",
+                "bg-[var(--accent)] text-white",
+                "hover:opacity-90 transition-opacity"
+              )}
+            >
+              Save
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
  * Editable cell component
  */
 function EditableCell({
@@ -440,6 +717,26 @@ function EditableCell({
             className="text-sm [&_button]:py-1 [&_button]:px-2"
           />
         </div>
+      );
+    }
+
+    // Array - use ArrayEditor modal
+    if (inputType === "array") {
+      return (
+        <>
+          <div className={cn("px-3 py-2 truncate text-sm h-full flex items-center gap-1")}>
+            {isEdited && (
+              <span className="w-1.5 h-1.5 rounded-full bg-[var(--warning)] shrink-0" title="Modified" />
+            )}
+            <span className="text-[var(--text-muted)] italic text-xs">Editing array...</span>
+          </div>
+          <ArrayEditor
+            value={value}
+            column={column}
+            onSave={onSave}
+            onCancel={onCancel}
+          />
+        </>
       );
     }
 
