@@ -667,6 +667,7 @@ export function DataTable({
   const setColumnWidth = useUIStore((state) => state.setColumnWidth);
   const [resizing, setResizing] = useState<string | null>(null);
   const [editingCell, setEditingCell] = useState<{ row: number; col: string } | null>(null);
+  const [hoveringRowNumber, setHoveringRowNumber] = useState<number | null>(null);
 
   const columnWidths = allColumnWidths[tableKey] || {};
   const getColumnWidth = (colName: string) => columnWidths[colName] || 180;
@@ -796,37 +797,39 @@ export function DataTable({
             const isSelected = selectedRowIndices.has(rowIndex);
             const isEven = rowIndex % 2 === 0;
             const isDeleted = deletedRows.has(rowIndex);
+            const isRowHovered = hoveringRowNumber === rowIndex;
 
             return (
               <tr
                 key={rowIndex}
                 className={cn(
-                  "transition-colors group",
+                  "transition-colors",
                   isDeleted
-                    ? "bg-red-500/10 hover:bg-red-500/20"
+                    ? "bg-red-500/10"
                     : isEven
                       ? "bg-[var(--bg-primary)]"
                       : "bg-[var(--bg-secondary)]/30",
                   isSelected && !isDeleted && "!bg-[var(--accent)]/10",
-                  !isDeleted && "hover:bg-[var(--bg-tertiary)]"
+                  isRowHovered && !isDeleted && !isSelected && "!bg-[var(--bg-tertiary)]"
                 )}
               >
                 {/* Row number cell - sticky on left, handles row selection */}
                 <td
                   onClick={(e) => onRowSelect?.(rowIndex, { shift: e.shiftKey, ctrl: e.metaKey || e.ctrlKey })}
+                  onMouseEnter={() => setHoveringRowNumber(rowIndex)}
+                  onMouseLeave={() => setHoveringRowNumber(null)}
                   className={cn(
                     "text-center border-b border-[var(--border-color)]",
                     "text-xs select-none cursor-pointer",
                     "sticky left-0 z-10 shadow-[inset_-2px_0_0_0_var(--border-color)]",
                     "transition-colors",
                     isDeleted
-                      ? "bg-red-950 text-red-400"
+                      ? "bg-red-950 text-red-400 hover:bg-red-900"
                       : isSelected
-                        ? "bg-[var(--bg-tertiary)] text-[var(--text-muted)]"
+                        ? "bg-[var(--bg-tertiary)] text-[var(--text-muted)] hover:bg-[var(--bg-tertiary)]"
                         : isEven
-                          ? "bg-[var(--bg-primary)] text-[var(--text-muted)]"
-                          : "bg-[var(--bg-secondary)] text-[var(--text-muted)]",
-                    !isDeleted && "group-hover:bg-[var(--bg-tertiary)]"
+                          ? "bg-[var(--bg-primary)] text-[var(--text-muted)] hover:bg-[var(--bg-tertiary)]"
+                          : "bg-[var(--bg-secondary)] text-[var(--text-muted)] hover:bg-[var(--bg-tertiary)]"
                   )}
                   style={{ width: 50, minWidth: 50 }}
                 >
@@ -843,9 +846,12 @@ export function DataTable({
                       key={column.name}
                       className={cn(
                         "border-b border-r border-[var(--border-color)] last:border-r-0",
+                        "transition-colors",
                         isEditing && "p-0",
                         isEdited && !isDeleted && "bg-[var(--warning)]/10",
-                        isDeleted && "line-through text-red-400/70"
+                        isDeleted && "line-through text-red-400/70",
+                        // Cell hover - only when not editing, not deleted, not row-number-hovered
+                        !isEditing && !isDeleted && !isRowHovered && "hover:bg-[var(--bg-tertiary)]"
                       )}
                       style={{
                         width: getColumnWidth(column.name),
