@@ -58,6 +58,7 @@ export function QueryToolbar({
               <Play className="w-4 h-4" />
             )}
             <span>Execute</span>
+            <kbd className="text-green-200/70 text-xs ml-1 hidden sm:inline">{modKey}+↵</kbd>
           </button>
         </Tooltip>
 
@@ -75,6 +76,7 @@ export function QueryToolbar({
           >
             <PlaySquare className="w-4 h-4" />
             <span className="hidden sm:inline">Selection</span>
+            <kbd className="text-[var(--text-muted)] text-xs ml-1 hidden lg:inline">{modKey}+⇧+↵</kbd>
           </button>
         </Tooltip>
 
@@ -94,6 +96,7 @@ export function QueryToolbar({
           >
             <Sparkles className="w-4 h-4" />
             <span className="hidden sm:inline">Format</span>
+            <kbd className="text-[var(--text-muted)] text-xs ml-1 hidden lg:inline">{modKey}+⇧+F</kbd>
           </button>
         </Tooltip>
       </div>
@@ -114,6 +117,7 @@ export function QueryToolbar({
           >
             <Save className="w-4 h-4" />
             <span className="hidden sm:inline">Save</span>
+            <kbd className="text-[var(--text-muted)] text-xs ml-1 hidden lg:inline">{modKey}+S</kbd>
           </button>
         </Tooltip>
 
