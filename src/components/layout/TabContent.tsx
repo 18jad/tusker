@@ -55,6 +55,7 @@ import {
 } from "../ui";
 import { generateUpdateSQL, generateDeleteSQL, generateInsertSQL, generateCreateTableSQL, type ColumnDefinition } from "../../lib/sql";
 import { cn } from "../../lib/utils";
+import { ImportDataTab } from "../tabs/ImportDataTab";
 import type { CellValue, Row, Column, Tab } from "../../types";
 
 /**
@@ -100,6 +101,7 @@ function TableTabContent({ schema, table }: { schema: string; table: string }) {
   const activeProject = useProjectStore((state) => state.getActiveProject());
   const readOnly = activeProject?.settings.readOnly ?? false;
   const instantCommit = activeProject?.settings.instantCommit ?? false;
+  const openDeleteTableModal = useUIStore((state) => state.openDeleteTableModal);
 
   const { data, isLoading, error, refetch } = useTableData(schema, table, page);
   const commitChanges = useCommitChanges();
@@ -478,6 +480,12 @@ function TableTabContent({ schema, table }: { schema: string; table: string }) {
     refetch();
   };
 
+  // Handle delete table
+  const handleDeleteTable = () => {
+    const rowCount = data?.totalRows;
+    openDeleteTableModal(schema, table, rowCount);
+  };
+
   // Get the row data for the modal
   const viewingRow = viewingRowIndex !== null && mergedData?.rows[viewingRowIndex]
     ? mergedData.rows[viewingRowIndex]
@@ -499,6 +507,7 @@ function TableTabContent({ schema, table }: { schema: string; table: string }) {
         onRowDelete={handleRowDelete}
         onRefresh={handleRefresh}
         onAddRow={handleAddRowClick}
+        onDeleteTable={handleDeleteTable}
         editedCells={editedCells}
         deletedRows={deletedRows}
         readOnly={readOnly}
@@ -1961,6 +1970,11 @@ export function TabContent() {
   // Create table tab
   if (activeTab.type === "create-table") {
     return <CreateTableTabContent key={activeTab.id} tab={activeTab} />;
+  }
+
+  // Import data tab
+  if (activeTab.type === "import-data" && activeTab.schema && activeTab.table) {
+    return <ImportDataTab key={activeTab.id} tab={activeTab} />;
   }
 
   // Query tab (TODO: implement)

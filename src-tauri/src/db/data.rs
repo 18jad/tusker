@@ -38,6 +38,13 @@ pub struct InsertRequest {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BulkInsertRequest {
+    pub schema: String,
+    pub table: String,
+    pub rows: Vec<serde_json::Map<String, JsonValue>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UpdateRequest {
     pub schema: String,
     pub table: String,
@@ -149,6 +156,56 @@ impl DataOperations {
         Ok(JsonValue::Object(
             rows.into_iter().next().unwrap_or_default(),
         ))
+    }
+
+    /// Bulk insert multiple rows into a table
+    pub async fn bulk_insert(pool: &PgPool, request: BulkInsertRequest) -> Result<u64> {
+        if request.rows.is_empty() {
+            return Ok(0);
+        }
+
+        // Get columns from the first row
+        let first_row = &request.rows[0];
+        if first_row.is_empty() {
+            return Err(DbViewerError::InvalidQuery(
+                "No data provided for insert".to_string(),
+            ));
+        }
+
+        let columns: Vec<&str> = first_row.keys().map(|s| s.as_str()).collect();
+        let column_list = columns
+            .iter()
+            .map(|c| quote_identifier(c))
+            .collect::<Vec<_>>()
+            .join(", ");
+
+        // Build VALUES clause for all rows
+        let values_list: Vec<String> = request
+            .rows
+            .iter()
+            .map(|row| {
+                let values: Vec<String> = columns
+                    .iter()
+                    .map(|col| {
+                        row.get(*col)
+                            .map(json_value_to_sql)
+                            .unwrap_or_else(|| "NULL".to_string())
+                    })
+                    .collect();
+                format!("({})", values.join(", "))
+            })
+            .collect();
+
+        let query = format!(
+            "INSERT INTO {}.{} ({}) VALUES {}",
+            quote_identifier(&request.schema),
+            quote_identifier(&request.table),
+            column_list,
+            values_list.join(", ")
+        );
+
+        let result = pool.execute(query.as_str()).await?;
+        Ok(result.rows_affected())
     }
 
     /// Update a row in a table

@@ -9,10 +9,22 @@ import {
   Plus,
   PanelLeftClose,
   PanelLeft,
+  Trash2,
+  Copy,
+  Code,
+  RefreshCw,
+  Eraser,
+  Download,
+  Upload,
+  FileSpreadsheet,
+  FileJson,
 } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useProjectStore } from "../../stores/projectStore";
 import { useUIStore } from "../../stores/uiStore";
 import { cn, generateId, PROJECT_COLORS } from "../../lib/utils";
+import { exportTable } from "../../lib/exportTable";
+import { ContextMenu } from "../ui";
 import type { Schema, Table } from "../../types";
 
 interface TreeItemProps {
@@ -42,7 +54,7 @@ function TreeItem({
   const paddingLeft = 12 + level * 16;
 
   return (
-    <div className="group/tree-item">
+    <div className="group/tree-item select-none">
       <div
         className={cn(
           "w-full flex items-center gap-2 h-7 text-sm",
@@ -90,10 +102,15 @@ interface SchemaTreeProps {
 }
 
 function SchemaTree({ schema, level }: SchemaTreeProps) {
+  const queryClient = useQueryClient();
   const addTab = useUIStore((state) => state.addTab);
   const activeTabId = useUIStore((state) => state.activeTabId);
   const tabs = useUIStore((state) => state.tabs);
   const addCreateTableTab = useUIStore((state) => state.addCreateTableTab);
+  const openDeleteTableModal = useUIStore((state) => state.openDeleteTableModal);
+  const openTruncateTableModal = useUIStore((state) => state.openTruncateTableModal);
+  const addImportDataTab = useUIStore((state) => state.addImportDataTab);
+  const showToast = useUIStore((state) => state.showToast);
   const isExpanded = useUIStore((state) => state.expandedSchemas.has(schema.name));
   const toggleSchemaExpanded = useUIStore((state) => state.toggleSchemaExpanded);
 
@@ -150,14 +167,114 @@ function SchemaTree({ schema, level }: SchemaTreeProps) {
       }
     >
       {schema.tables.map((table) => (
-        <TreeItem
+        <ContextMenu
           key={`${schema.name}.${table.name}`}
-          label={table.name}
-          icon={<Table2 className="w-4 h-4 text-[var(--accent)]" />}
-          level={level + 1}
-          onClick={() => handleTableClick(table)}
-          isActive={isTableActive(table.name)}
-        />
+          items={[
+            {
+              label: "Copy Name",
+              icon: <Copy className="w-4 h-4" />,
+              onClick: () => {
+                navigator.clipboard.writeText(`${schema.name}.${table.name}`);
+              },
+            },
+            {
+              label: "Copy SELECT",
+              icon: <Code className="w-4 h-4" />,
+              onClick: () => {
+                navigator.clipboard.writeText(`SELECT * FROM "${schema.name}"."${table.name}"`);
+              },
+            },
+            {
+              label: "Refresh",
+              icon: <RefreshCw className="w-4 h-4" />,
+              onClick: () => {
+                queryClient.invalidateQueries({
+                  queryKey: ["tableData", schema.name, table.name],
+                });
+              },
+            },
+            {
+              type: "separator" as const,
+            },
+            {
+              type: "submenu" as const,
+              label: "Export",
+              icon: <Download className="w-4 h-4" />,
+              items: [
+                {
+                  label: "Export as CSV",
+                  icon: <FileSpreadsheet className="w-4 h-4" />,
+                  onClick: () => {
+                    exportTable(
+                      schema.name,
+                      table.name,
+                      "csv",
+                      (message) => showToast(message),
+                      (message) => showToast(message, "error")
+                    );
+                  },
+                },
+                {
+                  label: "Export as JSON",
+                  icon: <FileJson className="w-4 h-4" />,
+                  onClick: () => {
+                    exportTable(
+                      schema.name,
+                      table.name,
+                      "json",
+                      (message) => showToast(message),
+                      (message) => showToast(message, "error")
+                    );
+                  },
+                },
+              ],
+            },
+            {
+              type: "submenu" as const,
+              label: "Import",
+              icon: <Upload className="w-4 h-4" />,
+              items: [
+                {
+                  label: "Import from CSV",
+                  icon: <FileSpreadsheet className="w-4 h-4" />,
+                  onClick: () => {
+                    addImportDataTab(schema.name, table.name, "csv");
+                  },
+                },
+                {
+                  label: "Import from JSON",
+                  icon: <FileJson className="w-4 h-4" />,
+                  onClick: () => {
+                    addImportDataTab(schema.name, table.name, "json");
+                  },
+                },
+              ],
+            },
+            {
+              type: "separator" as const,
+            },
+            {
+              label: "Truncate Table",
+              icon: <Eraser className="w-4 h-4" />,
+              variant: "danger",
+              onClick: () => openTruncateTableModal(schema.name, table.name, table.rowCount),
+            },
+            {
+              label: "Delete Table",
+              icon: <Trash2 className="w-4 h-4" />,
+              variant: "danger",
+              onClick: () => openDeleteTableModal(schema.name, table.name, table.rowCount),
+            },
+          ]}
+        >
+          <TreeItem
+            label={table.name}
+            icon={<Table2 className="w-4 h-4 text-[var(--accent)]" />}
+            level={level + 1}
+            onClick={() => handleTableClick(table)}
+            isActive={isTableActive(table.name)}
+          />
+        </ContextMenu>
       ))}
       {schema.tables.length === 0 && (
         <div

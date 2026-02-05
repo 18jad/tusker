@@ -84,12 +84,13 @@ export interface StagedChange {
 // Tab types
 export interface Tab {
   id: string;
-  type: "table" | "query" | "create-table";
+  type: "table" | "query" | "create-table" | "import-data";
   title: string;
   schema?: string;
   table?: string;
   queryContent?: string;
   createTableSchema?: string; // Pre-selected schema for create-table tabs
+  importFormat?: "csv" | "json"; // Format for import-data tabs
 }
 
 // Command palette

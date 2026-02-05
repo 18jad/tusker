@@ -1,6 +1,12 @@
 import { create } from "zustand";
 import type { Tab } from "../types";
 
+interface Toast {
+  id: string;
+  message: string;
+  type: "success" | "error" | "info";
+}
+
 interface UIState {
   // Sidebar
   sidebarCollapsed: boolean;
@@ -28,6 +34,27 @@ interface UIState {
   stagedChangesOpen: boolean;
   createTableModalOpen: boolean;
   createTableSchema: string | null;
+  deleteTableModal: {
+    isOpen: boolean;
+    schema: string | null;
+    table: string | null;
+    rowCount: number | null;
+  };
+  truncateTableModal: {
+    isOpen: boolean;
+    schema: string | null;
+    table: string | null;
+    rowCount: number | null;
+  };
+  exportTableModal: {
+    isOpen: boolean;
+    schema: string | null;
+    table: string | null;
+    rowCount: number | null;
+  };
+
+  // Toasts
+  toasts: Toast[];
 
   // Theme
   theme: "dark" | "light";
@@ -49,6 +76,15 @@ interface UIState {
   openCreateTableModal: (schema?: string) => void;
   closeCreateTableModal: () => void;
   addCreateTableTab: (schema?: string) => void;
+  openDeleteTableModal: (schema: string, table: string, rowCount?: number) => void;
+  closeDeleteTableModal: () => void;
+  openTruncateTableModal: (schema: string, table: string, rowCount?: number) => void;
+  closeTruncateTableModal: () => void;
+  openExportTableModal: (schema: string, table: string, rowCount?: number) => void;
+  closeExportTableModal: () => void;
+  addImportDataTab: (schema: string, table: string, format: "csv" | "json") => void;
+  showToast: (message: string, type?: "success" | "error" | "info") => void;
+  dismissToast: (id: string) => void;
   setTheme: (theme: "dark" | "light") => void;
   getColumnWidths: (tableKey: string) => Record<string, number>;
   setColumnWidth: (tableKey: string, columnName: string, width: number) => void;
@@ -71,6 +107,25 @@ export const useUIStore = create<UIState>((set, get) => ({
   stagedChangesOpen: false,
   createTableModalOpen: false,
   createTableSchema: null,
+  deleteTableModal: {
+    isOpen: false,
+    schema: null,
+    table: null,
+    rowCount: null,
+  },
+  truncateTableModal: {
+    isOpen: false,
+    schema: null,
+    table: null,
+    rowCount: null,
+  },
+  exportTableModal: {
+    isOpen: false,
+    schema: null,
+    table: null,
+    rowCount: null,
+  },
+  toasts: [],
   theme: "dark",
 
   toggleSidebar: () =>
@@ -141,6 +196,112 @@ export const useUIStore = create<UIState>((set, get) => ({
 
   closeCreateTableModal: () =>
     set({ createTableModalOpen: false, createTableSchema: null }),
+
+  openDeleteTableModal: (schema, table, rowCount) =>
+    set({
+      deleteTableModal: {
+        isOpen: true,
+        schema,
+        table,
+        rowCount: rowCount ?? null,
+      },
+    }),
+
+  closeDeleteTableModal: () =>
+    set({
+      deleteTableModal: {
+        isOpen: false,
+        schema: null,
+        table: null,
+        rowCount: null,
+      },
+    }),
+
+  openTruncateTableModal: (schema, table, rowCount) =>
+    set({
+      truncateTableModal: {
+        isOpen: true,
+        schema,
+        table,
+        rowCount: rowCount ?? null,
+      },
+    }),
+
+  closeTruncateTableModal: () =>
+    set({
+      truncateTableModal: {
+        isOpen: false,
+        schema: null,
+        table: null,
+        rowCount: null,
+      },
+    }),
+
+  openExportTableModal: (schema, table, rowCount) =>
+    set({
+      exportTableModal: {
+        isOpen: true,
+        schema,
+        table,
+        rowCount: rowCount ?? null,
+      },
+    }),
+
+  closeExportTableModal: () =>
+    set({
+      exportTableModal: {
+        isOpen: false,
+        schema: null,
+        table: null,
+        rowCount: null,
+      },
+    }),
+
+  addImportDataTab: (schema, table, format) =>
+    set((state) => {
+      // Check if an import tab already exists for this table and format
+      const existing = state.tabs.find(
+        (t) =>
+          t.type === "import-data" &&
+          t.schema === schema &&
+          t.table === table &&
+          t.importFormat === format
+      );
+      if (existing) {
+        return { activeTabId: existing.id };
+      }
+      // Create a new import-data tab
+      const newTab = {
+        id: `import-${schema}-${table}-${format}-${Date.now()}`,
+        type: "import-data" as const,
+        title: `Import ${format.toUpperCase()}`,
+        schema,
+        table,
+        importFormat: format,
+      };
+      return {
+        tabs: [...state.tabs, newTab],
+        activeTabId: newTab.id,
+      };
+    }),
+
+  showToast: (message, type = "success") => {
+    const id = `toast-${Date.now()}`;
+    set((state) => ({
+      toasts: [...state.toasts, { id, message, type }],
+    }));
+    // Auto-dismiss after 3 seconds
+    setTimeout(() => {
+      set((state) => ({
+        toasts: state.toasts.filter((t) => t.id !== id),
+      }));
+    }, 3000);
+  },
+
+  dismissToast: (id) =>
+    set((state) => ({
+      toasts: state.toasts.filter((t) => t.id !== id),
+    })),
 
   addCreateTableTab: (schema) =>
     set((state) => {

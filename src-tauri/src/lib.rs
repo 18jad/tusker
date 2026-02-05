@@ -10,6 +10,8 @@ pub fn run() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_fs::init())
         .manage(AppState::default())
         .invoke_handler(tauri::generate_handler![
             // Connection commands
@@ -37,6 +39,7 @@ pub fn run() {
             // Data commands
             commands::fetch_table_data,
             commands::insert_row,
+            commands::bulk_insert,
             commands::update_row,
             commands::delete_row,
             commands::execute_query,

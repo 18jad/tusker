@@ -1,7 +1,7 @@
 use crate::db::{
-    ColumnInfo, ConnectionConfig, ConnectionInfo, ConnectionManager, ConstraintInfo,
-    CredentialStorage, DataOperations, DeleteRequest, IndexInfo, InsertRequest, PaginatedResult,
-    QueryResult, SchemaInfo, SchemaIntrospector, SslMode, TableInfo, UpdateRequest,
+    BulkInsertRequest, ColumnInfo, ConnectionConfig, ConnectionInfo, ConnectionManager,
+    ConstraintInfo, CredentialStorage, DataOperations, DeleteRequest, IndexInfo, InsertRequest,
+    PaginatedResult, QueryResult, SchemaInfo, SchemaIntrospector, SslMode, TableInfo, UpdateRequest,
 };
 use crate::error::Result;
 use serde::{Deserialize, Serialize};
@@ -308,6 +308,26 @@ pub async fn insert_row(
     };
 
     DataOperations::insert_row(&pool, request).await
+}
+
+#[tauri::command]
+pub async fn bulk_insert(
+    state: State<'_, AppState>,
+    connection_id: String,
+    schema: String,
+    table: String,
+    rows: Vec<serde_json::Map<String, JsonValue>>,
+) -> Result<u64> {
+    let connection_manager = state.connection_manager.read().await;
+    let pool = connection_manager.get_pool(&connection_id).await?;
+
+    let request = BulkInsertRequest {
+        schema,
+        table,
+        rows,
+    };
+
+    DataOperations::bulk_insert(&pool, request).await
 }
 
 #[tauri::command]
