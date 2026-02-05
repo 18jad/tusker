@@ -72,7 +72,25 @@ export function StagedChangesModal() {
       clearChanges();
       toggleStagedChanges();
     } catch (err) {
-      setCommitError(err instanceof Error ? err.message : "Failed to commit changes");
+      // Extract detailed error message from various error formats
+      let errorMessage: string;
+      if (err instanceof Error) {
+        errorMessage = err.message;
+      } else if (typeof err === "string") {
+        errorMessage = err;
+      } else if (typeof err === "object" && err !== null) {
+        // Handle Tauri error objects which may have message, error, or other properties
+        const errObj = err as Record<string, unknown>;
+        errorMessage = (
+          errObj.message ||
+          errObj.error ||
+          errObj.description ||
+          JSON.stringify(err, null, 2)
+        ) as string;
+      } else {
+        errorMessage = "Failed to commit changes";
+      }
+      setCommitError(errorMessage);
     }
   };
 
@@ -153,8 +171,11 @@ export function StagedChangesModal() {
         {changes.length > 0 && (
           <div className="px-6 py-4 border-t border-[var(--border-color)]">
             {commitError && (
-              <div className="mb-3 px-3 py-2 rounded-md bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
-                {commitError}
+              <div className="mb-3 px-3 py-2 rounded-md bg-red-500/10 border border-red-500/20 text-red-400 text-sm max-h-32 overflow-y-auto">
+                <div className="flex items-start gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                  <pre className="whitespace-pre-wrap break-words font-mono text-xs flex-1">{commitError}</pre>
+                </div>
               </div>
             )}
             <div className="flex items-center justify-between">
