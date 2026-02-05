@@ -3,7 +3,7 @@ pub mod db;
 pub mod error;
 
 use commands::AppState;
-use tauri::menu::{Menu, MenuItemBuilder, SubmenuBuilder};
+use tauri::menu::{Menu, MenuItemBuilder};
 use tauri::Emitter;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -21,14 +21,18 @@ pub fn run() {
                 .accelerator("CmdOrCtrl+/")
                 .build(app)?;
 
-            // Create Help submenu
-            let help_menu = SubmenuBuilder::new(app, "Help")
-                .item(&keyboard_shortcuts)
-                .build()?;
-
-            // Get the default menu and add our Help submenu to it
+            // Get the default menu
             let menu = Menu::default(app.handle())?;
-            menu.append(&help_menu)?;
+
+            // Find the Help submenu and add our item to it
+            for item in menu.items()? {
+                if let Some(submenu) = item.as_submenu() {
+                    if submenu.text()? == "Help" {
+                        submenu.append(&keyboard_shortcuts)?;
+                        break;
+                    }
+                }
+            }
 
             app.set_menu(menu)?;
 
