@@ -7,7 +7,7 @@ import {
   History,
   Loader2,
 } from "lucide-react";
-import { cn } from "../../lib/utils";
+import { cn, modKey } from "../../lib/utils";
 import { Tooltip } from "../ui/Tooltip";
 
 interface QueryToolbarProps {
@@ -34,9 +34,6 @@ export function QueryToolbar({
   showSavedQueries,
   showHistory,
 }: QueryToolbarProps) {
-  const isMac = typeof navigator !== "undefined" && navigator.platform.includes("Mac");
-  const modKey = isMac ? "⌘" : "Ctrl";
-
   return (
     <div className="flex items-center justify-between px-3 py-2 border-b border-[var(--border-color)] bg-[var(--bg-secondary)] shrink-0">
       {/* Left side - Execute buttons */}

@@ -17,6 +17,7 @@ import { useProjectStore } from "../../stores/projectStore";
 import { useUIStore } from "../../stores/uiStore";
 import { useChangesStore } from "../../stores/changesStore";
 import { useConnect, useDisconnect } from "../../hooks/useDatabase";
+import { useGlobalKeyboardShortcuts } from "../../hooks/useKeyboard";
 import { cn, PROJECT_COLORS } from "../../lib/utils";
 
 function ProjectMenu() {
@@ -253,6 +254,9 @@ export function AppLayout({ children }: AppLayoutProps) {
   const setSidebarWidth = useUIStore((state) => state.setSidebarWidth);
   const activeTabId = useUIStore((state) => state.activeTabId);
   const connectionStatus = useProjectStore((state) => state.connectionStatus);
+
+  // Global keyboard shortcuts (Cmd+W to close tab, Cmd+K for command palette, etc.)
+  useGlobalKeyboardShortcuts();
 
   // Determine what content to show
   const showTabContent = activeTabId && connectionStatus === "connected";

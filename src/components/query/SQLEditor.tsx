@@ -18,6 +18,7 @@ import {
 import { searchKeymap, highlightSelectionMatches } from "@codemirror/search";
 import { lineNumbers, highlightActiveLine, highlightActiveLineGutter } from "@codemirror/view";
 import { sqlTheme } from "../../lib/codemirrorTheme";
+import { modKeyName } from "../../lib/utils";
 import { useProjectStore } from "../../stores/projectStore";
 
 interface SQLEditorProps {
@@ -43,9 +44,7 @@ export const SQLEditor = forwardRef<SQLEditorHandle, SQLEditorProps>(function SQ
   onFormat,
   onSave,
   readOnly = false,
-  placeholderText = typeof navigator !== "undefined" && navigator.platform.includes("Mac")
-    ? "-- Write your SQL query here... (Cmd+Enter to execute)"
-    : "-- Write your SQL query here... (Ctrl+Enter to execute)",
+  placeholderText = `-- Write your SQL query here... (${modKeyName}+Enter to execute)`,
 }, ref) {
   const editorRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);

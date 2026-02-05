@@ -53,6 +53,9 @@ interface UIState {
     rowCount: number | null;
   };
 
+  // Help modal
+  helpModalOpen: boolean;
+
   // Toasts
   toasts: Toast[];
 
@@ -83,6 +86,10 @@ interface UIState {
   openExportTableModal: (schema: string, table: string, rowCount?: number) => void;
   closeExportTableModal: () => void;
   addImportDataTab: (schema: string, table: string, format: "csv" | "json") => void;
+  addQueryTab: (initialSql?: string) => void;
+  reorderTabs: (fromIndex: number, toIndex: number) => void;
+  openHelpModal: () => void;
+  closeHelpModal: () => void;
   showToast: (message: string, type?: "success" | "error" | "info") => void;
   dismissToast: (id: string) => void;
   setTheme: (theme: "dark" | "light") => void;
@@ -125,6 +132,7 @@ export const useUIStore = create<UIState>((set, get) => ({
     table: null,
     rowCount: null,
   },
+  helpModalOpen: false,
   toasts: [],
   theme: "dark",
 
@@ -284,6 +292,35 @@ export const useUIStore = create<UIState>((set, get) => ({
         activeTabId: newTab.id,
       };
     }),
+
+  addQueryTab: (initialSql) =>
+    set((state) => {
+      // Count existing query tabs to generate a unique title
+      const queryTabCount = state.tabs.filter((t) => t.type === "query").length;
+      const newTab = {
+        id: `query-${Date.now()}`,
+        type: "query" as const,
+        title: `Query ${queryTabCount + 1}`,
+        queryContent: initialSql || "",
+      };
+      return {
+        tabs: [...state.tabs, newTab],
+        activeTabId: newTab.id,
+      };
+    }),
+
+  reorderTabs: (fromIndex, toIndex) =>
+    set((state) => {
+      if (fromIndex === toIndex) return state;
+      const newTabs = [...state.tabs];
+      const [movedTab] = newTabs.splice(fromIndex, 1);
+      newTabs.splice(toIndex, 0, movedTab);
+      return { tabs: newTabs };
+    }),
+
+  openHelpModal: () => set({ helpModalOpen: true }),
+
+  closeHelpModal: () => set({ helpModalOpen: false }),
 
   showToast: (message, type = "success") => {
     const id = `toast-${Date.now()}`;

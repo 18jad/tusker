@@ -1,8 +1,23 @@
 import { useRef, useState, useEffect, useCallback } from "react";
-import { X, Table2, FileCode, ChevronLeft, ChevronRight } from "lucide-react";
+import { X, Table2, FileCode, ChevronLeft, ChevronRight, Database, FileUp } from "lucide-react";
 import { useUIStore } from "../../stores/uiStore";
 import { cn } from "../../lib/utils";
 import type { Tab } from "../../types";
+
+function getTabIcon(type: Tab["type"]) {
+  switch (type) {
+    case "table":
+      return Table2;
+    case "query":
+      return FileCode;
+    case "create-table":
+      return Database;
+    case "import-data":
+      return FileUp;
+    default:
+      return FileCode;
+  }
+}
 
 interface TabItemProps {
   tab: Tab;
@@ -12,7 +27,7 @@ interface TabItemProps {
 }
 
 function TabItem({ tab, isActive, onActivate, onClose }: TabItemProps) {
-  const Icon = tab.type === "table" ? Table2 : FileCode;
+  const Icon = getTabIcon(tab.type);
 
   return (
     <div
@@ -23,16 +38,17 @@ function TabItem({ tab, isActive, onActivate, onClose }: TabItemProps) {
       className={cn(
         "group flex items-center gap-2 px-3 h-10 min-w-[120px] max-w-[200px]",
         "border-r border-[var(--border-color)]",
-        "transition-colors duration-150 shrink-0 cursor-pointer",
+        "transition-colors duration-150 shrink-0 cursor-grab active:cursor-grabbing",
         isActive
           ? "bg-[var(--bg-primary)] text-[var(--text-primary)]"
           : "bg-[var(--bg-tertiary)] text-[var(--text-secondary)] hover:bg-[var(--bg-secondary)] hover:text-[var(--text-primary)]"
       )}
     >
       <Icon className="w-4 h-4 shrink-0 text-[var(--text-muted)]" />
-      <span className="truncate text-sm">{tab.title}</span>
+      <span className="truncate text-sm select-none">{tab.title}</span>
       <button
         onClick={onClose}
+        onMouseDown={(e) => e.stopPropagation()}
         className={cn(
           "ml-auto p-0.5 rounded shrink-0",
           "opacity-0 group-hover:opacity-100",
@@ -52,10 +68,18 @@ export function TabBar() {
   const activeTabId = useUIStore((state) => state.activeTabId);
   const setActiveTab = useUIStore((state) => state.setActiveTab);
   const closeTab = useUIStore((state) => state.closeTab);
+  const reorderTabs = useUIStore((state) => state.reorderTabs);
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const tabRefs = useRef<(HTMLDivElement | null)[]>([]);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
+
+  // Drag state - use refs for values needed in event handlers (closure issue)
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [dropIndicatorLeft, setDropIndicatorLeft] = useState<number | null>(null);
+  const dragIndexRef = useRef<number | null>(null);
+  const dropIndexRef = useRef<number | null>(null);
 
   const checkScrollState = useCallback(() => {
     const container = scrollContainerRef.current;
@@ -94,6 +118,91 @@ export function TabBar() {
   const handleClose = (e: React.MouseEvent, tabId: string) => {
     e.stopPropagation();
     closeTab(tabId);
+  };
+
+  const handleMouseDown = (e: React.MouseEvent, index: number) => {
+    // Only start drag on left click and not on close button
+    if (e.button !== 0) return;
+
+    const startX = e.clientX;
+    const startY = e.clientY;
+    let isDragging = false;
+
+    // Store in ref for access in mouseup handler
+    dragIndexRef.current = index;
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      // Start drag only after moving a few pixels (to allow clicks)
+      if (!isDragging) {
+        const dx = Math.abs(moveEvent.clientX - startX);
+        const dy = Math.abs(moveEvent.clientY - startY);
+        if (dx > 5 || dy > 5) {
+          isDragging = true;
+          setDragIndex(index);
+        }
+      }
+
+      if (isDragging && scrollContainerRef.current) {
+        const container = scrollContainerRef.current;
+        const containerRect = container.getBoundingClientRect();
+        const mouseX = moveEvent.clientX - containerRect.left + container.scrollLeft;
+
+        // Find drop position
+        let newDropIndex = tabs.length;
+        let indicatorLeft = 0;
+
+        for (let i = 0; i < tabRefs.current.length; i++) {
+          const tabEl = tabRefs.current[i];
+          if (!tabEl) continue;
+
+          const tabRect = tabEl.getBoundingClientRect();
+          const tabLeft = tabRect.left - containerRect.left + container.scrollLeft;
+          const tabCenter = tabLeft + tabRect.width / 2;
+
+          if (mouseX < tabCenter) {
+            newDropIndex = i;
+            indicatorLeft = tabLeft;
+            break;
+          } else {
+            indicatorLeft = tabLeft + tabRect.width;
+          }
+        }
+
+        // Don't show indicator at the original position or right next to it
+        if (newDropIndex === index || newDropIndex === index + 1) {
+          dropIndexRef.current = null;
+          setDropIndicatorLeft(null);
+        } else {
+          dropIndexRef.current = newDropIndex;
+          setDropIndicatorLeft(indicatorLeft);
+        }
+      }
+    };
+
+    const handleMouseUp = () => {
+      const fromIndex = dragIndexRef.current;
+      const toIndex = dropIndexRef.current;
+
+      if (isDragging && fromIndex !== null && toIndex !== null) {
+        // Adjust drop index if dropping after the original position
+        const adjustedDropIndex = toIndex > fromIndex ? toIndex - 1 : toIndex;
+        if (adjustedDropIndex !== fromIndex) {
+          reorderTabs(fromIndex, adjustedDropIndex);
+        }
+      }
+
+      // Reset state
+      dragIndexRef.current = null;
+      dropIndexRef.current = null;
+      setDragIndex(null);
+      setDropIndicatorLeft(null);
+
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
+    };
+
+    document.addEventListener("mousemove", handleMouseMove);
+    document.addEventListener("mouseup", handleMouseUp);
   };
 
   if (tabs.length === 0) {
@@ -137,18 +246,34 @@ export function TabBar() {
       {/* Tabs container */}
       <div
         ref={scrollContainerRef}
-        className="flex items-stretch overflow-x-auto scrollbar-none"
+        className="flex items-stretch overflow-x-auto scrollbar-none relative"
         style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
       >
-        {tabs.map((tab) => (
-          <TabItem
+        {tabs.map((tab, index) => (
+          <div
             key={tab.id}
-            tab={tab}
-            isActive={tab.id === activeTabId}
-            onActivate={() => setActiveTab(tab.id)}
-            onClose={(e) => handleClose(e, tab.id)}
-          />
+            ref={(el) => { tabRefs.current[index] = el; }}
+            onMouseDown={(e) => handleMouseDown(e, index)}
+            className={cn(
+              dragIndex === index && "opacity-50"
+            )}
+          >
+            <TabItem
+              tab={tab}
+              isActive={tab.id === activeTabId}
+              onActivate={() => setActiveTab(tab.id)}
+              onClose={(e) => handleClose(e, tab.id)}
+            />
+          </div>
         ))}
+
+        {/* Drop indicator */}
+        {dropIndicatorLeft !== null && (
+          <div
+            className="absolute top-1 bottom-1 w-0.5 bg-[var(--accent)] rounded-full z-20 pointer-events-none"
+            style={{ left: dropIndicatorLeft }}
+          />
+        )}
       </div>
 
       {/* Scroll right button */}

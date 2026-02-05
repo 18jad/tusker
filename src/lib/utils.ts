@@ -6,6 +6,11 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+// Platform detection for keyboard shortcuts
+export const isMac = typeof navigator !== "undefined" && navigator.platform.includes("Mac");
+export const modKey = isMac ? "⌘" : "Ctrl+";
+export const modKeyName = isMac ? "Cmd" : "Ctrl";
+
 export function generateId(): string {
   return Math.random().toString(36).substring(2, 11);
 }

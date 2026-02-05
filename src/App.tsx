@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AppLayout } from "./components/layout";
-import { ProjectModal, StagedChangesModal } from "./components/modals";
-import { CommandPalette, ProjectSpotlight } from "./components/ui";
+import { ProjectModal, StagedChangesModal, DeleteTableModal, TruncateTableModal, ExportTableModal, HelpModal } from "./components/modals";
+import { CommandPalette, ProjectSpotlight, Toast } from "./components/ui";
 import "./index.css";
 
 const queryClient = new QueryClient({
@@ -20,8 +20,13 @@ function App() {
       <AppLayout />
       <ProjectModal />
       <StagedChangesModal />
+      <DeleteTableModal />
+      <TruncateTableModal />
+      <ExportTableModal />
+      <HelpModal />
       <CommandPalette />
       <ProjectSpotlight />
+      <Toast />
     </QueryClientProvider>
   );
 }

@@ -3,6 +3,8 @@ pub mod db;
 pub mod error;
 
 use commands::AppState;
+use tauri::menu::{Menu, MenuItemBuilder, SubmenuBuilder};
+use tauri::Emitter;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -12,6 +14,31 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
+        .setup(|app| {
+            // Create keyboard shortcuts menu item
+            let keyboard_shortcuts = MenuItemBuilder::new("Keyboard Shortcuts")
+                .id("keyboard_shortcuts")
+                .accelerator("CmdOrCtrl+/")
+                .build(app)?;
+
+            // Create Help submenu
+            let help_menu = SubmenuBuilder::new(app, "Help")
+                .item(&keyboard_shortcuts)
+                .build()?;
+
+            // Get the default menu and add our Help submenu to it
+            let menu = Menu::default(app.handle())?;
+            menu.append(&help_menu)?;
+
+            app.set_menu(menu)?;
+
+            Ok(())
+        })
+        .on_menu_event(|app, event| {
+            if event.id() == "keyboard_shortcuts" {
+                let _ = app.emit("show-keyboard-shortcuts", ());
+            }
+        })
         .manage(AppState::default())
         .invoke_handler(tauri::generate_handler![
             // Connection commands

@@ -18,11 +18,12 @@ import {
   Upload,
   FileSpreadsheet,
   FileJson,
+  Terminal,
 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useProjectStore } from "../../stores/projectStore";
 import { useUIStore } from "../../stores/uiStore";
-import { cn, generateId, PROJECT_COLORS } from "../../lib/utils";
+import { cn, generateId, PROJECT_COLORS, modKey } from "../../lib/utils";
 import { exportTable } from "../../lib/exportTable";
 import { ContextMenu } from "../ui";
 import type { Schema, Table } from "../../types";
@@ -359,6 +360,7 @@ export function Sidebar({
 }: SidebarProps) {
   const openProjectModal = useUIStore((state) => state.openProjectModal);
   const addCreateTableTab = useUIStore((state) => state.addCreateTableTab);
+  const addQueryTab = useUIStore((state) => state.addQueryTab);
   const connectionStatus = useProjectStore((state) => state.connectionStatus);
 
   return (
@@ -411,19 +413,42 @@ export function Sidebar({
           {/* Footer buttons */}
           <div className="p-2 border-t border-[var(--border-color)] shrink-0 flex flex-col gap-2">
             {connectionStatus === "connected" && (
-              <button
-                onClick={() => addCreateTableTab()}
-                className={cn(
-                  "w-full flex items-center justify-center gap-2 h-8",
-                  "bg-purple-600/20 hover:bg-purple-600/30",
-                  "rounded text-sm text-purple-400",
-                  "hover:text-purple-300",
-                  "transition-colors duration-150"
-                )}
-              >
-                <Table2 className="w-4 h-4" />
-                <span>New Table</span>
-              </button>
+              <>
+                <button
+                  onClick={() => addQueryTab()}
+                  className={cn(
+                    "w-full flex items-center gap-2 h-8 px-3",
+                    "bg-green-600/20 hover:bg-green-600/30",
+                    "rounded text-sm text-green-400",
+                    "hover:text-green-300",
+                    "transition-colors duration-150"
+                  )}
+                >
+                  <Terminal className="w-4 h-4" />
+                  <span>New Query</span>
+                  <div className="flex items-center gap-0.5 ml-auto">
+                    <kbd className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-green-500/20 text-green-300/80">{modKey.replace('+', '')}</kbd>
+                    <kbd className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-green-500/20 text-green-300/80">T</kbd>
+                  </div>
+                </button>
+                <button
+                  onClick={() => addCreateTableTab()}
+                  className={cn(
+                    "w-full flex items-center gap-2 h-8 px-3",
+                    "bg-purple-600/20 hover:bg-purple-600/30",
+                    "rounded text-sm text-purple-400",
+                    "hover:text-purple-300",
+                    "transition-colors duration-150"
+                  )}
+                >
+                  <Table2 className="w-4 h-4" />
+                  <span>New Table</span>
+                  <div className="flex items-center gap-0.5 ml-auto">
+                    <kbd className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-purple-500/20 text-purple-300/80">{modKey.replace('+', '')}</kbd>
+                    <kbd className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-purple-500/20 text-purple-300/80">N</kbd>
+                  </div>
+                </button>
+              </>
             )}
             <button
               onClick={() => openProjectModal()}

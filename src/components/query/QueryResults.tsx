@@ -12,11 +12,8 @@ import {
   FileJson,
   Loader2,
 } from "lucide-react";
-import { cn, formatCellValue } from "../../lib/utils";
+import { cn, formatCellValue, modKeyName } from "../../lib/utils";
 import type { Row, Column } from "../../types";
-
-const isMac = typeof navigator !== "undefined" && navigator.platform.includes("Mac");
-const modKey = isMac ? "Cmd" : "Ctrl";
 
 interface QueryResult {
   rows: Row[];
@@ -87,7 +84,7 @@ export function QueryResults({
         <div className="flex-1 flex flex-col items-center justify-center text-[var(--text-muted)]">
           <Table2 className="w-10 h-10 mb-3 opacity-20" />
           <p className="text-sm">Run a query to see results</p>
-          <p className="text-xs mt-1 opacity-60">Press {modKey}+Enter to execute</p>
+          <p className="text-xs mt-1 opacity-60">Press {modKeyName}+Enter to execute</p>
         </div>
       </div>
     );

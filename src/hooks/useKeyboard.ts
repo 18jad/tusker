@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { useUIStore } from "../stores/uiStore";
+import { useProjectStore } from "../stores/projectStore";
 
 type KeyHandler = (event: KeyboardEvent) => void;
 
@@ -35,19 +36,17 @@ export function useKeyboard(bindings: KeyBinding[]) {
 
 // Global keyboard shortcuts
 export function useGlobalKeyboardShortcuts() {
-  const { toggleCommandPalette, toggleSidebar, closeTab, activeTabId } = useUIStore();
+  const toggleSidebar = useUIStore((state) => state.toggleSidebar);
+  const closeTab = useUIStore((state) => state.closeTab);
+  const addCreateTableTab = useUIStore((state) => state.addCreateTableTab);
+  const addQueryTab = useUIStore((state) => state.addQueryTab);
+
+  // Get state inside handlers to avoid stale closures
+  const getActiveTabId = () => useUIStore.getState().activeTabId;
+  const getConnectionStatus = () => useProjectStore.getState().connectionStatus;
 
   const bindings: KeyBinding[] = [
-    {
-      key: "k",
-      meta: true,
-      handler: () => toggleCommandPalette(),
-    },
-    {
-      key: "k",
-      ctrl: true,
-      handler: () => toggleCommandPalette(),
-    },
+    // Cmd/Ctrl+B - Toggle sidebar
     {
       key: "b",
       meta: true,
@@ -58,10 +57,12 @@ export function useGlobalKeyboardShortcuts() {
       ctrl: true,
       handler: () => toggleSidebar(),
     },
+    // Cmd/Ctrl+W - Close active tab
     {
       key: "w",
       meta: true,
       handler: () => {
+        const activeTabId = getActiveTabId();
         if (activeTabId) closeTab(activeTabId);
       },
     },
@@ -69,7 +70,46 @@ export function useGlobalKeyboardShortcuts() {
       key: "w",
       ctrl: true,
       handler: () => {
+        const activeTabId = getActiveTabId();
         if (activeTabId) closeTab(activeTabId);
+      },
+    },
+    // Cmd/Ctrl+N - New table tab (only when connected)
+    {
+      key: "n",
+      meta: true,
+      handler: () => {
+        if (getConnectionStatus() === "connected") {
+          addCreateTableTab();
+        }
+      },
+    },
+    {
+      key: "n",
+      ctrl: true,
+      handler: () => {
+        if (getConnectionStatus() === "connected") {
+          addCreateTableTab();
+        }
+      },
+    },
+    // Cmd/Ctrl+T - New query tab (only when connected)
+    {
+      key: "t",
+      meta: true,
+      handler: () => {
+        if (getConnectionStatus() === "connected") {
+          addQueryTab();
+        }
+      },
+    },
+    {
+      key: "t",
+      ctrl: true,
+      handler: () => {
+        if (getConnectionStatus() === "connected") {
+          addQueryTab();
+        }
       },
     },
   ];
