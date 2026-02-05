@@ -56,6 +56,7 @@ import {
 import { generateUpdateSQL, generateDeleteSQL, generateInsertSQL, generateCreateTableSQL, type ColumnDefinition } from "../../lib/sql";
 import { cn } from "../../lib/utils";
 import { ImportDataTab } from "../tabs/ImportDataTab";
+import { QueryTab } from "../tabs/QueryTab";
 import type { CellValue, Row, Column, Tab } from "../../types";
 
 /**
@@ -1977,13 +1978,9 @@ export function TabContent() {
     return <ImportDataTab key={activeTab.id} tab={activeTab} />;
   }
 
-  // Query tab (TODO: implement)
+  // Query tab
   if (activeTab.type === "query") {
-    return (
-      <div className="flex-1 flex items-center justify-center text-[var(--text-muted)]">
-        Query editor coming soon...
-      </div>
-    );
+    return <QueryTab key={activeTab.id} tab={activeTab} />;
   }
 
   return null;

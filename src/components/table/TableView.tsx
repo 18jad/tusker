@@ -1,5 +1,5 @@
 import { useState, useCallback } from "react";
-import { Loader2, AlertCircle, RefreshCw, Eye, Trash2, Columns, Plus } from "lucide-react";
+import { Loader2, AlertCircle, RefreshCw, Eye, Trash2, Columns, Plus, Table2 } from "lucide-react";
 import type { CellValue, TableData } from "../../types";
 import { DataTable } from "./DataTable";
 import { Pagination } from "./Pagination";
@@ -18,6 +18,7 @@ interface TableViewProps {
   onRowDelete?: (rowIndex: number) => void;
   onRefresh?: () => void;
   onAddRow?: () => void;
+  onDeleteTable?: () => void;
   editedCells?: Set<string>;
   deletedRows?: Set<number>;
   readOnly?: boolean;
@@ -96,6 +97,7 @@ export function TableView({
   onRowDelete,
   onRefresh,
   onAddRow,
+  onDeleteTable,
   editedCells,
   deletedRows,
   readOnly = false,
@@ -264,6 +266,21 @@ export function TableView({
             >
               <RefreshCw className={cn("w-3.5 h-3.5 mt-px", isLoading && "animate-spin")} />
               <span>Refresh</span>
+            </button>
+          )}
+
+          {onDeleteTable && !readOnly && (
+            <button
+              onClick={onDeleteTable}
+              className={cn(
+                "flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs",
+                "text-red-400 hover:text-red-300",
+                "hover:bg-red-500/10 transition-colors"
+              )}
+              title="Delete this table"
+            >
+              <Table2 className="w-3.5 h-3.5 mt-px" />
+              <span>Delete Table</span>
             </button>
           )}
         </div>
