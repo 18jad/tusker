@@ -291,6 +291,28 @@ function TableTabContent({ schema, table }: { schema: string; table: string }) {
     });
   };
 
+  // Handle multiple rows delete (stage)
+  const handleRowsDelete = (rowIndices: number[]) => {
+    if (!data) return;
+
+    const columns = data.columns;
+
+    // Stage delete changes for each row
+    rowIndices.forEach((rowIndex) => {
+      const originalRow = data.rows[rowIndex];
+      const sql = generateDeleteSQL(schema, table, originalRow, columns);
+
+      addChange({
+        type: "delete",
+        schema,
+        table,
+        data: originalRow,
+        originalData: originalRow,
+        sql,
+      });
+    });
+  };
+
   // Handle direct save from row detail modal
   const handleRowSave = async (updatedRow: Row) => {
     if (!data || viewingRowIndex === null) return;
@@ -517,6 +539,7 @@ function TableTabContent({ schema, table }: { schema: string; table: string }) {
         onCellEdit={handleCellEdit}
         onRowView={handleRowView}
         onRowDelete={handleRowDelete}
+        onRowsDelete={handleRowsDelete}
         onRefresh={handleRefresh}
         onAddRow={handleAddRowClick}
         onDeleteTable={handleDeleteTable}

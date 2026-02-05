@@ -13,8 +13,8 @@ interface DataTableProps {
   columns: Column[];
   rows: Row[];
   startRowNumber?: number;
-  selectedRowIndex?: number | null;
-  onRowSelect?: (index: number) => void;
+  selectedRowIndices?: Set<number>;
+  onRowSelect?: (index: number, modifiers: { shift: boolean; ctrl: boolean }) => void;
   onCellEdit?: (rowIndex: number, columnName: string, value: CellValue) => void;
   editedCells?: Set<string>;
   deletedRows?: Set<number>;
@@ -656,7 +656,7 @@ export function DataTable({
   columns,
   rows,
   startRowNumber = 1,
-  selectedRowIndex = null,
+  selectedRowIndices = new Set(),
   onRowSelect,
   onCellEdit,
   editedCells = new Set(),
@@ -793,7 +793,7 @@ export function DataTable({
         {/* Body */}
         <tbody>
           {rows.map((row, rowIndex) => {
-            const isSelected = selectedRowIndex === rowIndex;
+            const isSelected = selectedRowIndices.has(rowIndex);
             const isEven = rowIndex % 2 === 0;
             const isDeleted = deletedRows.has(rowIndex);
 
@@ -813,7 +813,7 @@ export function DataTable({
               >
                 {/* Row number cell - sticky on left, handles row selection */}
                 <td
-                  onClick={() => onRowSelect?.(rowIndex)}
+                  onClick={(e) => onRowSelect?.(rowIndex, { shift: e.shiftKey, ctrl: e.metaKey || e.ctrlKey })}
                   className={cn(
                     "text-center border-b border-[var(--border-color)]",
                     "text-xs select-none cursor-pointer",
@@ -876,7 +876,7 @@ export function DataTable({
       {/* Edit hint - outside scroll container */}
       {!readOnly && (
         <div className="shrink-0 px-3 py-1.5 bg-[var(--bg-secondary)] border-t border-[var(--border-color)] text-[10px] text-[var(--text-muted)]">
-          Click row number to select • Double-click cell to edit • Enter to save • Escape to cancel
+          Click row number to select • Shift+click for range • Cmd/Ctrl+click to toggle • Double-click cell to edit
         </div>
       )}
     </div>

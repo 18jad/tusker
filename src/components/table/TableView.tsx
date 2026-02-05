@@ -35,6 +35,7 @@ interface TableViewProps {
   onCellEdit?: (rowIndex: number, columnName: string, value: CellValue) => void;
   onRowView?: (rowIndex: number) => void;
   onRowDelete?: (rowIndex: number) => void;
+  onRowsDelete?: (rowIndices: number[]) => void;
   onRefresh?: () => void;
   onAddRow?: () => void;
   onDeleteTable?: () => void;
@@ -118,6 +119,7 @@ export function TableView({
   onCellEdit,
   onRowView,
   onRowDelete,
+  onRowsDelete,
   onRefresh,
   onAddRow,
   onDeleteTable,
@@ -129,11 +131,45 @@ export function TableView({
   readOnly = false,
 }: TableViewProps) {
   const showToast = useUIStore((state) => state.showToast);
-  const [selectedRowIndex, setSelectedRowIndex] = useState<number | null>(null);
+  const [selectedRowIndices, setSelectedRowIndices] = useState<Set<number>>(new Set());
+  const [lastSelectedIndex, setLastSelectedIndex] = useState<number | null>(null);
 
-  const handleRowSelect = useCallback((index: number) => {
-    setSelectedRowIndex((prev) => (prev === index ? null : index));
-  }, []);
+  const handleRowSelect = useCallback((index: number, modifiers: { shift: boolean; ctrl: boolean }) => {
+    setSelectedRowIndices((prev) => {
+      const next = new Set(prev);
+
+      if (modifiers.shift && lastSelectedIndex !== null && data) {
+        // Range selection: select all rows between last selected and current
+        const start = Math.min(lastSelectedIndex, index);
+        const end = Math.max(lastSelectedIndex, index);
+        for (let i = start; i <= end; i++) {
+          next.add(i);
+        }
+      } else if (modifiers.ctrl) {
+        // Toggle selection: add or remove the clicked row
+        if (next.has(index)) {
+          next.delete(index);
+        } else {
+          next.add(index);
+        }
+      } else {
+        // Simple click: select only this row (or deselect if already selected alone)
+        if (next.size === 1 && next.has(index)) {
+          next.clear();
+        } else {
+          next.clear();
+          next.add(index);
+        }
+      }
+
+      return next;
+    });
+
+    // Update last selected index for shift-click range selection
+    if (!modifiers.shift) {
+      setLastSelectedIndex(index);
+    }
+  }, [lastSelectedIndex, data]);
 
   const handleCellEdit = useCallback(
     (rowIndex: number, columnName: string, value: CellValue) => {
@@ -152,10 +188,26 @@ export function TableView({
   const handleRowDelete = useCallback(
     (rowIndex: number) => {
       onRowDelete?.(rowIndex);
-      setSelectedRowIndex(null);
+      setSelectedRowIndices(new Set());
+      setLastSelectedIndex(null);
     },
     [onRowDelete]
   );
+
+  const handleMultiRowDelete = useCallback(() => {
+    if (selectedRowIndices.size === 0) return;
+
+    // Filter out already deleted rows
+    const indicesToDelete = Array.from(selectedRowIndices).filter(
+      (idx) => !deletedRows?.has(idx)
+    );
+
+    if (indicesToDelete.length === 0) return;
+
+    onRowsDelete?.(indicesToDelete);
+    setSelectedRowIndices(new Set());
+    setLastSelectedIndex(null);
+  }, [selectedRowIndices, deletedRows, onRowsDelete]);
 
   // Loading state - show skeleton
   if (isLoading && !data) {
@@ -204,40 +256,77 @@ export function TableView({
       <div className="flex items-center justify-between px-3 h-10 bg-[var(--bg-secondary)] border-b border-[var(--border-color)] shrink-0">
         {/* Left side - Row actions when selected */}
         <div className="flex items-center gap-1">
-          {selectedRowIndex !== null && !readOnly ? (
-            <>
-              <button
-                onClick={() => handleRowView(selectedRowIndex)}
-                className={cn(
-                  "flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs",
-                  "text-blue-400 hover:text-blue-300",
-                  "hover:bg-blue-500/10 transition-colors"
-                )}
-                title="View/Edit row"
-              >
-                <Eye className="w-3.5 h-3.5" />
-                <span>View</span>
-              </button>
+          {selectedRowIndices.size > 0 && !readOnly ? (
+            selectedRowIndices.size === 1 ? (
+              // Single row selected - show View and Delete
+              (() => {
+                const selectedIndex = Array.from(selectedRowIndices)[0];
+                return (
+                  <>
+                    <button
+                      onClick={() => handleRowView(selectedIndex)}
+                      className={cn(
+                        "flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs",
+                        "text-blue-400 hover:text-blue-300",
+                        "hover:bg-blue-500/10 transition-colors"
+                      )}
+                      title="View/Edit row"
+                    >
+                      <Eye className="w-3.5 h-3.5" />
+                      <span>View</span>
+                    </button>
 
-              {!deletedRows?.has(selectedRowIndex) && (
-                <button
-                  onClick={() => handleRowDelete(selectedRowIndex)}
-                  className={cn(
-                    "flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs",
-                    "text-red-400 hover:text-red-300",
-                    "hover:bg-red-500/10 transition-colors"
-                  )}
-                  title="Delete row"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                  <span>Delete</span>
-                </button>
-              )}
+                    {!deletedRows?.has(selectedIndex) && (
+                      <button
+                        onClick={() => handleRowDelete(selectedIndex)}
+                        className={cn(
+                          "flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs",
+                          "text-red-400 hover:text-red-300",
+                          "hover:bg-red-500/10 transition-colors"
+                        )}
+                        title="Delete row"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>Delete</span>
+                      </button>
+                    )}
 
-              <span className="text-xs text-[var(--text-muted)] ml-1">
-                Row #{(data.page - 1) * data.pageSize + selectedRowIndex + 1}
-              </span>
-            </>
+                    <span className="text-xs text-[var(--text-muted)] ml-1">
+                      Row #{(data.page - 1) * data.pageSize + selectedIndex + 1}
+                    </span>
+                  </>
+                );
+              })()
+            ) : (
+              // Multiple rows selected - show bulk delete
+              (() => {
+                const nonDeletedCount = Array.from(selectedRowIndices).filter(
+                  (idx) => !deletedRows?.has(idx)
+                ).length;
+                return (
+                  <>
+                    {nonDeletedCount > 0 && (
+                      <button
+                        onClick={handleMultiRowDelete}
+                        className={cn(
+                          "flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs",
+                          "text-red-400 hover:text-red-300",
+                          "hover:bg-red-500/10 transition-colors"
+                        )}
+                        title={`Delete ${nonDeletedCount} rows`}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>Delete ({nonDeletedCount} rows)</span>
+                      </button>
+                    )}
+
+                    <span className="text-xs text-[var(--text-muted)] ml-1">
+                      {selectedRowIndices.size} rows selected
+                    </span>
+                  </>
+                );
+              })()
+            )
           ) : (
             <span className="text-xs text-[var(--text-muted)]">
               Click a row to select
@@ -401,7 +490,7 @@ export function TableView({
           columns={data.columns}
           rows={data.rows}
           startRowNumber={(data.page - 1) * data.pageSize + 1}
-          selectedRowIndex={selectedRowIndex}
+          selectedRowIndices={selectedRowIndices}
           onRowSelect={handleRowSelect}
           onCellEdit={handleCellEdit}
           editedCells={editedCells}
