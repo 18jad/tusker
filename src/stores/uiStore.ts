@@ -67,6 +67,7 @@ interface UIState {
   setSidebarWidth: (width: number) => void;
   addTab: (tab: Tab) => void;
   closeTab: (id: string) => void;
+  closeOtherTabs: (id: string) => void;
   closeAllTabs: () => void;
   setActiveTab: (id: string) => void;
   updateTab: (id: string, updates: Partial<Tab>) => void;
@@ -174,6 +175,12 @@ export const useUIStore = create<UIState>((set, get) => ({
     }),
 
   closeAllTabs: () => set({ tabs: [], activeTabId: null }),
+
+  closeOtherTabs: (id) =>
+    set((state) => ({
+      tabs: state.tabs.filter((t) => t.id === id),
+      activeTabId: id,
+    })),
 
   setActiveTab: (id) => set({ activeTabId: id }),
 

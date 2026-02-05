@@ -1,6 +1,7 @@
 import { useRef, useState, useEffect, useCallback } from "react";
-import { X, Table2, FileCode, ChevronLeft, ChevronRight, Database, FileUp } from "lucide-react";
+import { X, Table2, FileCode, ChevronLeft, ChevronRight, Database, FileUp, Pencil, XCircle } from "lucide-react";
 import { useUIStore } from "../../stores/uiStore";
+import { ContextMenu } from "../ui/ContextMenu";
 import { cn } from "../../lib/utils";
 import type { Tab } from "../../types";
 
@@ -22,44 +23,138 @@ function getTabIcon(type: Tab["type"]) {
 interface TabItemProps {
   tab: Tab;
   isActive: boolean;
+  isRenaming: boolean;
+  renameValue: string;
   onActivate: () => void;
   onClose: (e: React.MouseEvent) => void;
+  onRenameStart: () => void;
+  onRenameChange: (value: string) => void;
+  onRenameSubmit: () => void;
+  onRenameCancel: () => void;
+  onCloseOthers: () => void;
+  onCloseAll: () => void;
+  tabCount: number;
 }
 
-function TabItem({ tab, isActive, onActivate, onClose }: TabItemProps) {
+function TabItem({
+  tab,
+  isActive,
+  isRenaming,
+  renameValue,
+  onActivate,
+  onClose,
+  onRenameStart,
+  onRenameChange,
+  onRenameSubmit,
+  onRenameCancel,
+  onCloseOthers,
+  onCloseAll,
+  tabCount,
+}: TabItemProps) {
   const Icon = getTabIcon(tab.type);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (isRenaming && inputRef.current) {
+      inputRef.current.focus();
+      inputRef.current.select();
+    }
+  }, [isRenaming]);
+
+  const handleInputKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      onRenameSubmit();
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      onRenameCancel();
+    }
+  };
+
+  const contextMenuItems = [
+    {
+      label: "Rename",
+      icon: <Pencil className="w-3.5 h-3.5" />,
+      onClick: onRenameStart,
+    },
+    { type: "separator" as const },
+    {
+      label: "Close",
+      icon: <X className="w-3.5 h-3.5" />,
+      onClick: (e?: React.MouseEvent) => {
+        const mouseEvent = e || ({ stopPropagation: () => {} } as React.MouseEvent);
+        onClose(mouseEvent);
+      },
+    },
+    {
+      label: "Close Others",
+      icon: <XCircle className="w-3.5 h-3.5" />,
+      onClick: onCloseOthers,
+      disabled: tabCount <= 1,
+    },
+    {
+      label: "Close All",
+      onClick: onCloseAll,
+      variant: "danger" as const,
+    },
+  ];
 
   return (
-    <div
-      role="tab"
-      tabIndex={0}
-      onClick={onActivate}
-      onKeyDown={(e) => e.key === "Enter" && onActivate()}
-      className={cn(
-        "group flex items-center gap-2 px-3 h-10 min-w-[120px] max-w-[200px]",
-        "border-r border-[var(--border-color)]",
-        "transition-colors duration-150 shrink-0 cursor-grab active:cursor-grabbing",
-        isActive
-          ? "bg-[var(--bg-primary)] text-[var(--text-primary)]"
-          : "bg-[var(--bg-tertiary)] text-[var(--text-secondary)] hover:bg-[var(--bg-secondary)] hover:text-[var(--text-primary)]"
-      )}
-    >
-      <Icon className="w-4 h-4 shrink-0 text-[var(--text-muted)]" />
-      <span className="truncate text-sm select-none">{tab.title}</span>
-      <button
-        onClick={onClose}
-        onMouseDown={(e) => e.stopPropagation()}
+    <ContextMenu items={contextMenuItems}>
+      <div
+        role="tab"
+        tabIndex={0}
+        onClick={onActivate}
+        onDoubleClick={(e) => {
+          e.stopPropagation();
+          onRenameStart();
+        }}
+        onKeyDown={(e) => e.key === "Enter" && onActivate()}
         className={cn(
-          "ml-auto p-0.5 rounded shrink-0",
-          "opacity-0 group-hover:opacity-100",
-          "hover:bg-[var(--border-color)]",
-          "transition-opacity duration-150"
+          "group flex items-center gap-2 px-3 h-10 min-w-[120px] max-w-[200px]",
+          "border-r border-[var(--border-color)]",
+          "transition-colors duration-150 shrink-0 cursor-grab active:cursor-grabbing",
+          isActive
+            ? "bg-[var(--bg-primary)] text-[var(--text-primary)]"
+            : "bg-[var(--bg-tertiary)] text-[var(--text-secondary)] hover:bg-[var(--bg-secondary)] hover:text-[var(--text-primary)]"
         )}
-        aria-label={`Close ${tab.title}`}
       >
-        <X className="w-3.5 h-3.5" />
-      </button>
-    </div>
+        <Icon className="w-4 h-4 shrink-0 text-[var(--text-muted)]" />
+        {isRenaming ? (
+          <input
+            ref={inputRef}
+            type="text"
+            value={renameValue}
+            onChange={(e) => onRenameChange(e.target.value)}
+            onKeyDown={handleInputKeyDown}
+            onBlur={onRenameSubmit}
+            onClick={(e) => e.stopPropagation()}
+            onMouseDown={(e) => e.stopPropagation()}
+            className={cn(
+              "flex-1 min-w-0 px-1 py-0.5 text-sm rounded",
+              "bg-[var(--bg-secondary)] text-[var(--text-primary)]",
+              "border border-[var(--accent)] outline-none",
+              "focus:ring-1 focus:ring-[var(--accent)]"
+            )}
+          />
+        ) : (
+          <span className="truncate text-sm select-none">{tab.title}</span>
+        )}
+        <button
+          onClick={onClose}
+          onMouseDown={(e) => e.stopPropagation()}
+          className={cn(
+            "ml-auto p-0.5 rounded shrink-0",
+            "opacity-0 group-hover:opacity-100",
+            "hover:bg-[var(--border-color)]",
+            "transition-opacity duration-150"
+          )}
+          aria-label={`Close ${tab.title}`}
+        >
+          <X className="w-3.5 h-3.5" />
+        </button>
+      </div>
+    </ContextMenu>
   );
 }
 
@@ -68,6 +163,9 @@ export function TabBar() {
   const activeTabId = useUIStore((state) => state.activeTabId);
   const setActiveTab = useUIStore((state) => state.setActiveTab);
   const closeTab = useUIStore((state) => state.closeTab);
+  const closeOtherTabs = useUIStore((state) => state.closeOtherTabs);
+  const closeAllTabs = useUIStore((state) => state.closeAllTabs);
+  const updateTab = useUIStore((state) => state.updateTab);
   const reorderTabs = useUIStore((state) => state.reorderTabs);
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -75,11 +173,33 @@ export function TabBar() {
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
 
+  // Rename state
+  const [renamingTabId, setRenamingTabId] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState("");
+
   // Drag state - use refs for values needed in event handlers (closure issue)
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [dropIndicatorLeft, setDropIndicatorLeft] = useState<number | null>(null);
   const dragIndexRef = useRef<number | null>(null);
   const dropIndexRef = useRef<number | null>(null);
+
+  const handleRenameStart = useCallback((tab: Tab) => {
+    setRenamingTabId(tab.id);
+    setRenameValue(tab.title);
+  }, []);
+
+  const handleRenameSubmit = useCallback((tabId: string) => {
+    if (renameValue.trim()) {
+      updateTab(tabId, { title: renameValue.trim() });
+    }
+    setRenamingTabId(null);
+    setRenameValue("");
+  }, [renameValue, updateTab]);
+
+  const handleRenameCancel = useCallback(() => {
+    setRenamingTabId(null);
+    setRenameValue("");
+  }, []);
 
   const checkScrollState = useCallback(() => {
     const container = scrollContainerRef.current;
@@ -261,8 +381,17 @@ export function TabBar() {
             <TabItem
               tab={tab}
               isActive={tab.id === activeTabId}
+              isRenaming={renamingTabId === tab.id}
+              renameValue={renameValue}
               onActivate={() => setActiveTab(tab.id)}
               onClose={(e) => handleClose(e, tab.id)}
+              onRenameStart={() => handleRenameStart(tab)}
+              onRenameChange={setRenameValue}
+              onRenameSubmit={() => handleRenameSubmit(tab.id)}
+              onRenameCancel={handleRenameCancel}
+              onCloseOthers={() => closeOtherTabs(tab.id)}
+              onCloseAll={closeAllTabs}
+              tabCount={tabs.length}
             />
           </div>
         ))}
