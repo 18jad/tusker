@@ -109,7 +109,8 @@ function getInputType(dataType: string): "text" | "number" | "boolean" | "date" 
   if (type === "date") return "date";
   if (type === "time" || type === "time without time zone") return "time";
   if (type.includes("timestamp") || type === "timestamptz") return "datetime";
-  if (type.endsWith("[]") || type.startsWith("_")) return "array";
+  // PostgreSQL returns "ARRAY" as data_type, or types ending with [] or starting with _
+  if (type === "array" || type.endsWith("[]") || type.startsWith("_")) return "array";
   return "text";
 }
 

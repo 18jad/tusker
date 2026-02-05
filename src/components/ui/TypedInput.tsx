@@ -27,7 +27,7 @@ interface TypedInputProps {
  * Determines the input type based on PostgreSQL data type
  */
 function getInputConfig(dataType: string): {
-  type: "text" | "number" | "date" | "time" | "datetime" | "boolean" | "textarea";
+  type: "text" | "number" | "date" | "time" | "datetime" | "boolean" | "textarea" | "array";
   step?: string;
   inputMode?: "numeric" | "decimal" | "text";
 } {
@@ -80,13 +80,103 @@ function getInputConfig(dataType: string): {
     return { type: "textarea" };
   }
 
+  // Array types - PostgreSQL returns "ARRAY" or types ending with [] or starting with _
+  if (type === "array" || type.endsWith("[]") || type.startsWith("_")) {
+    return { type: "array" };
+  }
+
   // Text/large text types - use textarea
-  if (type === "text" || type.includes("[]")) {
+  if (type === "text") {
     return { type: "textarea" };
   }
 
   // Default to text input
   return { type: "text" };
+}
+
+/**
+ * Parse PostgreSQL array literal to JavaScript array
+ */
+function parseArrayValue(value: string): string[] {
+  const str = value.trim();
+  if (!str || str === "NULL" || str === "null") return [];
+
+  // PostgreSQL array format: {item1,item2,"item with spaces"}
+  if (str.startsWith("{") && str.endsWith("}")) {
+    const inner = str.slice(1, -1);
+    if (!inner) return [];
+
+    const items: string[] = [];
+    let current = "";
+    let inQuotes = false;
+    let escaped = false;
+
+    for (let i = 0; i < inner.length; i++) {
+      const char = inner[i];
+
+      if (escaped) {
+        current += char;
+        escaped = false;
+        continue;
+      }
+
+      if (char === "\\") {
+        escaped = true;
+        continue;
+      }
+
+      if (char === '"') {
+        inQuotes = !inQuotes;
+        continue;
+      }
+
+      if (char === "," && !inQuotes) {
+        items.push(current);
+        current = "";
+        continue;
+      }
+
+      current += char;
+    }
+
+    if (current || inner.endsWith(",")) {
+      items.push(current);
+    }
+
+    return items.map(item => item === "NULL" ? "" : item);
+  }
+
+  // JSON array format: ["item1", "item2"]
+  try {
+    const parsed = JSON.parse(str);
+    if (Array.isArray(parsed)) {
+      return parsed.map(v => String(v ?? ""));
+    }
+  } catch {
+    // Not JSON
+  }
+
+  // Single value or empty
+  return str ? [str] : [];
+}
+
+/**
+ * Format JavaScript array to PostgreSQL array literal
+ */
+function formatArrayValue(items: string[]): string {
+  if (items.length === 0) return "{}";
+
+  const formatted = items.map(item => {
+    // Check if item needs quoting (contains comma, quote, backslash, or whitespace)
+    if (/[,"\\\s]/.test(item) || item === "") {
+      // Escape backslashes and quotes
+      const escaped = item.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+      return `"${escaped}"`;
+    }
+    return item;
+  });
+
+  return `{${formatted.join(",")}}`;
 }
 
 /**
@@ -229,6 +319,120 @@ export function TypedInput({
         <option value="true">true</option>
         <option value="false">false</option>
       </select>
+    );
+  }
+
+  // Array type - render as tag-based input
+  if (config.type === "array") {
+    const items = parseArrayValue(localValue);
+    const [newItem, setNewItem] = useState("");
+
+    const handleAddItem = () => {
+      const trimmed = newItem.trim();
+      if (trimmed) {
+        const updated = [...items, trimmed];
+        handleChange(formatArrayValue(updated));
+        setNewItem("");
+      }
+    };
+
+    const handleRemoveItem = (index: number) => {
+      const updated = items.filter((_, i) => i !== index);
+      handleChange(formatArrayValue(updated));
+    };
+
+    const handleInputKeyDown = (e: React.KeyboardEvent) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        handleAddItem();
+      }
+    };
+
+    return (
+      <div
+        className={cn(
+          "w-full rounded-md p-2",
+          "bg-[var(--bg-secondary)]",
+          "border",
+          hasError
+            ? "border-red-500"
+            : isModified
+              ? "border-[var(--warning)]"
+              : "border-[var(--border-color)]",
+          disabled && "opacity-50 cursor-not-allowed",
+          className
+        )}
+      >
+        {/* Items as tags */}
+        {items.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 mb-2">
+            {items.map((item, index) => (
+              <div
+                key={index}
+                className={cn(
+                  "flex items-center gap-1 px-2 py-0.5 rounded",
+                  "bg-[var(--bg-tertiary)] text-[var(--text-primary)]",
+                  "text-sm"
+                )}
+              >
+                <span className="max-w-[200px] truncate" title={item}>
+                  {item || <span className="text-[var(--text-muted)] italic">empty</span>}
+                </span>
+                {!disabled && (
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveItem(index)}
+                    className="p-0.5 text-[var(--text-muted)] hover:text-red-400 transition-colors"
+                  >
+                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Add new item input */}
+        {!disabled && (
+          <div className="flex items-center gap-1.5">
+            <input
+              type="text"
+              value={newItem}
+              onChange={(e) => setNewItem(e.target.value)}
+              onKeyDown={handleInputKeyDown}
+              placeholder="Add item and press Enter..."
+              autoFocus={autoFocus}
+              className={cn(
+                "flex-1 px-2 py-1 text-sm rounded",
+                "bg-[var(--bg-primary)] text-[var(--text-primary)]",
+                "border border-[var(--border-color)]",
+                "outline-none focus:border-[var(--accent)]",
+                "placeholder:text-[var(--text-muted)]"
+              )}
+            />
+            <button
+              type="button"
+              onClick={handleAddItem}
+              disabled={!newItem.trim()}
+              className={cn(
+                "px-2 py-1 text-xs rounded",
+                "bg-[var(--accent)] text-white",
+                "hover:opacity-90 transition-opacity",
+                "disabled:opacity-50 disabled:cursor-not-allowed"
+              )}
+            >
+              Add
+            </button>
+          </div>
+        )}
+
+        {/* Empty state */}
+        {items.length === 0 && disabled && (
+          <span className="text-sm text-[var(--text-muted)]">Empty array</span>
+        )}
+      </div>
     );
   }
 
