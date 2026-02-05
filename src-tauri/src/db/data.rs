@@ -440,12 +440,27 @@ fn pg_value_to_json(row: &PgRow, idx: usize, type_name: &str) -> JsonValue {
             .unwrap_or(JsonValue::Null),
 
         _ => {
-            // Default: try to get as string
-            row.try_get::<Option<String>, _>(idx)
-                .ok()
-                .flatten()
-                .map(JsonValue::String)
-                .unwrap_or(JsonValue::Null)
+            // Try to get as string first
+            if let Ok(Some(s)) = row.try_get::<Option<String>, _>(idx) {
+                return JsonValue::String(s);
+            }
+
+            // For enum types and other USER-DEFINED types, try to get raw value
+            // PostgreSQL enum values are stored as strings but SQLx might not decode them directly
+            use sqlx::Row as _;
+            if let Ok(value_ref) = row.try_get_raw(idx) {
+                use sqlx::ValueRef;
+                if value_ref.is_null() {
+                    return JsonValue::Null;
+                }
+                // Try to decode as string from the raw bytes
+                use sqlx::Decode;
+                if let Ok(s) = <String as Decode<sqlx::Postgres>>::decode(value_ref) {
+                    return JsonValue::String(s);
+                }
+            }
+
+            JsonValue::Null
         }
     }
 }

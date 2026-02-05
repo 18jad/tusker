@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import {
   Upload,
   FileSpreadsheet,
@@ -12,6 +12,7 @@ import {
   Table,
   Trash2,
   RefreshCw,
+  Pencil,
 } from "lucide-react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { readTextFile } from "@tauri-apps/plugin-fs";
@@ -71,6 +72,15 @@ export function ImportDataTab({ tab }: ImportDataTabProps) {
   const [importProgress, setImportProgress] = useState(0);
   const [importSuccess, setImportSuccess] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
+
+  // Editing state
+  const [editingCell, setEditingCell] = useState<{ rowIdx: number; column: string } | null>(null);
+  const [editValue, setEditValue] = useState<string>("");
+  const [modifiedCells, setModifiedCells] = useState<Set<string>>(new Set());
+  const editInputRef = useRef<HTMLInputElement>(null);
+
+  // Track all edits in a ref (survives React batching)
+  const editsRef = useRef<Map<string, CellValue>>(new Map());
 
   // Fetch table columns on mount
   useEffect(() => {
@@ -437,13 +447,37 @@ export function ImportDataTab({ tab }: ImportDataTabProps) {
       const connectionId = getCurrentConnectionId();
       if (!connectionId) throw new Error("Not connected to database");
 
+      // Start with the original parsed data
+      const dataToImport = rawData.map((row) => ({ ...row }));
+
+      // Apply any currently editing cell
+      if (editingCell) {
+        const { rowIdx, column } = editingCell;
+        const newValue = editValue === "" ? null : editValue;
+        dataToImport[rowIdx][column] = newValue;
+        const cellKey = `${rowIdx}:${column}`;
+        editsRef.current.set(cellKey, newValue);
+        setEditingCell(null);
+        setEditValue("");
+      }
+
+      // Apply all saved edits from the ref (handles React batching)
+      editsRef.current.forEach((value, cellKey) => {
+        const separatorIdx = cellKey.indexOf(":");
+        const rowIdx = parseInt(cellKey.slice(0, separatorIdx), 10);
+        const column = cellKey.slice(separatorIdx + 1);
+        if (rowIdx < dataToImport.length) {
+          dataToImport[rowIdx][column] = value;
+        }
+      });
+
       // Get matched columns only
       const matchedColumns = columnMatches
         .filter((m) => m.status === "matched")
         .map((m) => m.tableColumn!);
 
       // Prepare rows for import (only matched columns)
-      const rowsToImport: Row[] = rawData.map((row) => {
+      const rowsToImport: Row[] = dataToImport.map((row) => {
         const importRow: Row = {};
         matchedColumns.forEach((col) => {
           const importKey = importColumns.find(
@@ -527,6 +561,87 @@ export function ImportDataTab({ tab }: ImportDataTabProps) {
   // Preview rows (limit to 100)
   const previewRows = rawData.slice(0, 100);
   const hasMoreRows = rawData.length > 100;
+
+  // Editing handlers
+  const startEditing = useCallback((rowIdx: number, column: string, currentValue: CellValue) => {
+    setEditingCell({ rowIdx, column });
+    setEditValue(currentValue === null || currentValue === undefined ? "" : String(currentValue));
+    // Focus input after render
+    setTimeout(() => editInputRef.current?.focus(), 0);
+  }, []);
+
+  const saveEdit = useCallback(() => {
+    if (!editingCell) return;
+
+    const { rowIdx, column } = editingCell;
+    const newValue = editValue === "" ? null : editValue;
+    const oldValue = rawData[rowIdx][column];
+
+    // Only update if value actually changed
+    if (newValue !== oldValue) {
+      const newData = [...rawData];
+      newData[rowIdx] = { ...newData[rowIdx], [column]: newValue };
+      setRawData(newData);
+
+      // Store edit in ref (survives React batching)
+      const cellKey = `${rowIdx}:${column}`;
+      editsRef.current.set(cellKey, newValue);
+
+      // Mark cell as modified for UI
+      setModifiedCells(prev => new Set(prev).add(cellKey));
+    }
+
+    setEditingCell(null);
+    setEditValue("");
+  }, [editingCell, editValue, rawData]);
+
+  const cancelEdit = useCallback(() => {
+    setEditingCell(null);
+    setEditValue("");
+  }, []);
+
+  const handleEditKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      saveEdit();
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      cancelEdit();
+    } else if (e.key === "Tab") {
+      e.preventDefault();
+      saveEdit();
+      // Move to next cell
+      if (editingCell) {
+        const currentColIdx = importColumns.indexOf(editingCell.column);
+        if (e.shiftKey) {
+          // Move to previous cell
+          if (currentColIdx > 0) {
+            const prevCol = importColumns[currentColIdx - 1];
+            startEditing(editingCell.rowIdx, prevCol, rawData[editingCell.rowIdx][prevCol]);
+          } else if (editingCell.rowIdx > 0) {
+            const lastCol = importColumns[importColumns.length - 1];
+            startEditing(editingCell.rowIdx - 1, lastCol, rawData[editingCell.rowIdx - 1][lastCol]);
+          }
+        } else {
+          // Move to next cell
+          if (currentColIdx < importColumns.length - 1) {
+            const nextCol = importColumns[currentColIdx + 1];
+            startEditing(editingCell.rowIdx, nextCol, rawData[editingCell.rowIdx][nextCol]);
+          } else if (editingCell.rowIdx < previewRows.length - 1) {
+            const firstCol = importColumns[0];
+            startEditing(editingCell.rowIdx + 1, firstCol, rawData[editingCell.rowIdx + 1][firstCol]);
+          }
+        }
+      }
+    }
+  }, [saveEdit, cancelEdit, editingCell, importColumns, rawData, startEditing, previewRows.length]);
+
+  // Reset edits when file changes
+  useEffect(() => {
+    setModifiedCells(new Set());
+    setEditingCell(null);
+    editsRef.current.clear();
+  }, [filePath]);
 
   return (
     <div className="h-full flex flex-col bg-[var(--bg-primary)]">
@@ -842,15 +957,26 @@ export function ImportDataTab({ tab }: ImportDataTabProps) {
           {/* Data Preview */}
           {rawData.length > 0 && (
             <div className="rounded-lg border border-[var(--border-color)] overflow-hidden">
-              <div className="px-4 py-3 bg-[var(--bg-secondary)] border-b border-[var(--border-color)]">
-                <h3 className="text-sm font-medium text-[var(--text-secondary)]">
-                  Data Preview
-                  {hasMoreRows && (
-                    <span className="text-xs text-[var(--text-muted)] ml-2">
-                      (showing first 100 of {rawData.length.toLocaleString()} rows)
-                    </span>
-                  )}
-                </h3>
+              <div className="px-4 py-3 bg-[var(--bg-secondary)] border-b border-[var(--border-color)] flex items-center justify-between">
+                <div>
+                  <h3 className="text-sm font-medium text-[var(--text-secondary)]">
+                    Data Preview
+                    {hasMoreRows && (
+                      <span className="text-xs text-[var(--text-muted)] ml-2">
+                        (showing first 100 of {rawData.length.toLocaleString()} rows)
+                      </span>
+                    )}
+                  </h3>
+                  <p className="text-xs text-[var(--text-muted)] mt-0.5">
+                    Double-click a cell to edit · Tab to move between cells · Empty = NULL
+                  </p>
+                </div>
+                {modifiedCells.size > 0 && (
+                  <div className="flex items-center gap-2 text-xs text-amber-400">
+                    <Pencil className="w-3 h-3" />
+                    {modifiedCells.size} cell{modifiedCells.size !== 1 ? "s" : ""} modified
+                  </div>
+                )}
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
@@ -885,18 +1011,48 @@ export function ImportDataTab({ tab }: ImportDataTabProps) {
                         {importColumns.map((col) => {
                           const value = row[col];
                           const isNull = value === null || value === undefined;
+                          const isEditing = editingCell?.rowIdx === rowIdx && editingCell?.column === col;
+                          const cellKey = `${rowIdx}:${col}`;
+                          const isModified = modifiedCells.has(cellKey);
+
                           return (
                             <td
                               key={col}
                               className={cn(
-                                "px-3 py-2 text-sm max-w-[250px]",
-                                isNull ? "text-[var(--text-muted)] italic" : "text-[var(--text-primary)]"
+                                "px-3 py-2 text-sm relative",
+                                isEditing ? "min-w-[200px]" : "max-w-[250px]",
+                                isNull && !isEditing && "text-[var(--text-muted)] italic",
+                                !isNull && !isEditing && "text-[var(--text-primary)]",
+                                isModified && !isEditing && "bg-amber-500/10",
+                                !isEditing && "cursor-pointer hover:bg-[var(--accent)]/10"
                               )}
-                              title={isNull ? "NULL" : String(value)}
+                              title={isEditing ? undefined : (isNull ? "NULL (double-click to edit)" : `${String(value)} (double-click to edit)`)}
+                              onDoubleClick={() => !isEditing && startEditing(rowIdx, col, value)}
                             >
-                              <div className="truncate">
-                                {formatCellValue(value)}
-                              </div>
+                              {isEditing ? (
+                                <input
+                                  ref={editInputRef}
+                                  type="text"
+                                  value={editValue}
+                                  onChange={(e) => setEditValue(e.target.value)}
+                                  onBlur={saveEdit}
+                                  onKeyDown={handleEditKeyDown}
+                                  className={cn(
+                                    "w-full min-w-[180px] px-2 py-1",
+                                    "bg-[var(--bg-primary)] border-2 border-[var(--accent)]",
+                                    "text-[var(--text-primary)] text-sm",
+                                    "rounded outline-none"
+                                  )}
+                                  placeholder="NULL (empty)"
+                                />
+                              ) : (
+                                <div className="truncate flex items-center gap-1">
+                                  {formatCellValue(value)}
+                                  {isModified && (
+                                    <span className="text-amber-400 text-[10px]">•</span>
+                                  )}
+                                </div>
+                              )}
                             </td>
                           );
                         })}
