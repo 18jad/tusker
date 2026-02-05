@@ -103,6 +103,16 @@ function TableTabContent({ schema, table }: { schema: string; table: string }) {
   const readOnly = activeProject?.settings.readOnly ?? false;
   const instantCommit = activeProject?.settings.instantCommit ?? false;
   const openDeleteTableModal = useUIStore((state) => state.openDeleteTableModal);
+  const openTruncateTableModal = useUIStore((state) => state.openTruncateTableModal);
+  const addImportDataTab = useUIStore((state) => state.addImportDataTab);
+  const schemas = useProjectStore((state) => state.schemas);
+
+  // Get row count for the current table
+  const tableRowCount = useMemo(() => {
+    const schemaObj = schemas.find((s) => s.name === schema);
+    const tableObj = schemaObj?.tables.find((t) => t.name === table);
+    return tableObj?.rowCount ?? 0;
+  }, [schemas, schema, table]);
 
   const { data, isLoading, error, refetch } = useTableData(schema, table, page);
   const commitChanges = useCommitChanges();
@@ -498,6 +508,7 @@ function TableTabContent({ schema, table }: { schema: string; table: string }) {
     <>
       <TableView
         tableKey={`${schema}.${table}`}
+        schemaName={schema}
         tableName={table}
         data={mergedData}
         isLoading={isLoading}
@@ -509,6 +520,9 @@ function TableTabContent({ schema, table }: { schema: string; table: string }) {
         onRefresh={handleRefresh}
         onAddRow={handleAddRowClick}
         onDeleteTable={handleDeleteTable}
+        onImportCSV={() => addImportDataTab(schema, table, "csv")}
+        onImportJSON={() => addImportDataTab(schema, table, "json")}
+        onTruncateTable={() => openTruncateTableModal(schema, table, tableRowCount)}
         editedCells={editedCells}
         deletedRows={deletedRows}
         readOnly={readOnly}

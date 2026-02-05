@@ -1,13 +1,32 @@
 import { useState, useCallback } from "react";
-import { Loader2, AlertCircle, RefreshCw, Eye, Trash2, Columns, Plus, Table2 } from "lucide-react";
+import {
+  Loader2,
+  AlertCircle,
+  RefreshCw,
+  Eye,
+  Trash2,
+  Columns,
+  Plus,
+  Table2,
+  MoreVertical,
+  Copy,
+  Code,
+  FileSpreadsheet,
+  FileJson,
+  Upload,
+  Eraser,
+} from "lucide-react";
+import { Popover } from "../ui/Popover";
 import type { CellValue, TableData } from "../../types";
 import { DataTable } from "./DataTable";
 import { Pagination } from "./Pagination";
 import { cn } from "../../lib/utils";
 import { useUIStore } from "../../stores/uiStore";
+import { exportTable } from "../../lib/exportTable";
 
 interface TableViewProps {
   tableKey: string;
+  schemaName: string;
   tableName: string;
   data: TableData | null;
   isLoading: boolean;
@@ -19,6 +38,9 @@ interface TableViewProps {
   onRefresh?: () => void;
   onAddRow?: () => void;
   onDeleteTable?: () => void;
+  onImportCSV?: () => void;
+  onImportJSON?: () => void;
+  onTruncateTable?: () => void;
   editedCells?: Set<string>;
   deletedRows?: Set<number>;
   readOnly?: boolean;
@@ -87,6 +109,7 @@ function SkeletonTable() {
 
 export function TableView({
   tableKey,
+  schemaName,
   tableName,
   data,
   isLoading,
@@ -98,10 +121,14 @@ export function TableView({
   onRefresh,
   onAddRow,
   onDeleteTable,
+  onImportCSV,
+  onImportJSON,
+  onTruncateTable,
   editedCells,
   deletedRows,
   readOnly = false,
 }: TableViewProps) {
+  const showToast = useUIStore((state) => state.showToast);
   const [selectedRowIndex, setSelectedRowIndex] = useState<number | null>(null);
 
   const handleRowSelect = useCallback((index: number) => {
@@ -219,7 +246,7 @@ export function TableView({
         </div>
 
         {/* Right side - Refresh & info */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
           <span className="text-xs text-[var(--text-muted)]">
             {data.totalRows.toLocaleString()} rows
           </span>
@@ -239,19 +266,6 @@ export function TableView({
             </button>
           )}
 
-          <button
-            onClick={() => useUIStore.getState().resetColumnWidths(tableKey)}
-            className={cn(
-              "flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs",
-              "text-[var(--text-secondary)] hover:text-[var(--text-primary)]",
-              "hover:bg-[var(--bg-tertiary)] transition-colors"
-            )}
-            title="Reset column widths to default"
-          >
-            <Columns className="w-3.5 h-3.5 mt-px" />
-            <span>Reset Layout</span>
-          </button>
-
           {onRefresh && (
             <button
               onClick={onRefresh}
@@ -269,20 +283,114 @@ export function TableView({
             </button>
           )}
 
-          {onDeleteTable && !readOnly && (
-            <button
-              onClick={onDeleteTable}
-              className={cn(
-                "flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs",
-                "text-red-400 hover:text-red-300",
-                "hover:bg-red-500/10 transition-colors"
-              )}
-              title="Delete this table"
-            >
-              <Table2 className="w-3.5 h-3.5 mt-px" />
-              <span>Delete Table</span>
-            </button>
-          )}
+          <Popover
+            align="end"
+            trigger={
+              <div
+                className={cn(
+                  "flex items-center px-1.5 py-1.5 rounded-md",
+                  "text-[var(--text-secondary)] hover:text-[var(--text-primary)]",
+                  "hover:bg-[var(--bg-tertiary)] transition-colors"
+                )}
+                title="More options"
+              >
+                <MoreVertical className="w-4 h-4" />
+              </div>
+            }
+            items={[
+              {
+                label: "Copy Name",
+                icon: <Copy className="w-3.5 h-3.5" />,
+                onClick: () => {
+                  navigator.clipboard.writeText(`${schemaName}.${tableName}`);
+                  showToast("Table name copied to clipboard");
+                },
+              },
+              {
+                label: "Copy SELECT",
+                icon: <Code className="w-3.5 h-3.5" />,
+                onClick: () => {
+                  navigator.clipboard.writeText(`SELECT * FROM "${schemaName}"."${tableName}"`);
+                  showToast("SELECT query copied to clipboard");
+                },
+              },
+              {
+                label: "Reset Layout",
+                icon: <Columns className="w-3.5 h-3.5" />,
+                onClick: () => useUIStore.getState().resetColumnWidths(tableKey),
+              },
+              { type: "separator" as const },
+              {
+                label: "Export as CSV",
+                icon: <FileSpreadsheet className="w-3.5 h-3.5" />,
+                onClick: () => {
+                  exportTable(
+                    schemaName,
+                    tableName,
+                    "csv",
+                    (message) => showToast(message),
+                    (message) => showToast(message, "error")
+                  );
+                },
+              },
+              {
+                label: "Export as JSON",
+                icon: <FileJson className="w-3.5 h-3.5" />,
+                onClick: () => {
+                  exportTable(
+                    schemaName,
+                    tableName,
+                    "json",
+                    (message) => showToast(message),
+                    (message) => showToast(message, "error")
+                  );
+                },
+              },
+              ...(onImportCSV && !readOnly
+                ? [
+                    {
+                      label: "Import from CSV",
+                      icon: <Upload className="w-3.5 h-3.5" />,
+                      onClick: onImportCSV,
+                    },
+                  ]
+                : []),
+              ...(onImportJSON && !readOnly
+                ? [
+                    {
+                      label: "Import from JSON",
+                      icon: <Upload className="w-3.5 h-3.5" />,
+                      onClick: onImportJSON,
+                    },
+                  ]
+                : []),
+              ...(!readOnly
+                ? [
+                    { type: "separator" as const },
+                    ...(onTruncateTable
+                      ? [
+                          {
+                            label: "Truncate Table",
+                            icon: <Eraser className="w-3.5 h-3.5" />,
+                            onClick: onTruncateTable,
+                            variant: "danger" as const,
+                          },
+                        ]
+                      : []),
+                    ...(onDeleteTable
+                      ? [
+                          {
+                            label: "Delete Table",
+                            icon: <Table2 className="w-3.5 h-3.5" />,
+                            onClick: onDeleteTable,
+                            variant: "danger" as const,
+                          },
+                        ]
+                      : []),
+                  ]
+                : []),
+            ]}
+          />
         </div>
       </div>
 
