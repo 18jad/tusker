@@ -230,6 +230,43 @@ interface ColumnInfo {
   enum_values: string[] | null;
 }
 
+// Full column info from backend (richer than the ColumnInfo used inside useTableData)
+export interface FullColumnInfo {
+  name: string;
+  data_type: string;
+  udt_name: string;
+  is_nullable: boolean;
+  is_primary_key: boolean;
+  is_unique: boolean;
+  is_foreign_key: boolean;
+  foreign_key_info: ForeignKeyInfoRaw | null;
+  default_value: string | null;
+  character_maximum_length: number | null;
+  numeric_precision: number | null;
+  numeric_scale: number | null;
+  ordinal_position: number;
+  description: string | null;
+  enum_values: string[] | null;
+}
+
+// Fetch column metadata for a table (for Edit Table)
+export function useTableColumns(schema: string, table: string) {
+  const { connectionStatus } = useProjectStore();
+
+  return useQuery({
+    queryKey: ["tableColumns", schema, table],
+    queryFn: async () => {
+      if (!currentConnectionId) throw new Error("Not connected");
+      return invoke<FullColumnInfo[]>("get_columns", {
+        connectionId: currentConnectionId,
+        schema,
+        table,
+      });
+    },
+    enabled: connectionStatus === "connected" && !!schema && !!table && !!currentConnectionId,
+  });
+}
+
 // Fetch table data with pagination and sorting
 export function useTableData(
   schema: string,
@@ -449,6 +486,98 @@ export function useCommitChanges() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["tableData"] });
+    },
+  });
+}
+
+// Migration types
+export interface StatementError {
+  code?: string;
+  message: string;
+  detail?: string;
+  hint?: string;
+}
+
+export interface StatementResult {
+  sql: string;
+  ok: boolean;
+  duration_ms: number;
+  rows_affected?: number;
+  error?: StatementError;
+}
+
+export interface MigrationResult {
+  ok: boolean;
+  dry_run: boolean;
+  committed: boolean;
+  duration_ms: number;
+  statements: StatementResult[];
+  lock_timeout_ms: number;
+  statement_timeout_ms: number;
+}
+
+// Execute migration (dry-run or apply) with transactional safety
+export function useMigration() {
+  const queryClient = useQueryClient();
+  const { setSchemas, setSchemasLoading } = useProjectStore.getState();
+
+  return useMutation({
+    mutationFn: async (params: {
+      statements: string[];
+      dry_run: boolean;
+      lock_timeout_ms?: number;
+      statement_timeout_ms?: number;
+    }) => {
+      if (!currentConnectionId) throw new Error("Not connected");
+      return invoke<MigrationResult>("execute_migration", {
+        request: {
+          connection_id: currentConnectionId,
+          statements: params.statements,
+          dry_run: params.dry_run,
+          lock_timeout_ms: params.lock_timeout_ms,
+          statement_timeout_ms: params.statement_timeout_ms,
+        },
+      });
+    },
+    onSuccess: async (result) => {
+      // Only refresh schemas if we actually committed changes
+      if (result.committed) {
+        queryClient.invalidateQueries({ queryKey: ["tableData"] });
+        queryClient.invalidateQueries({ queryKey: ["tableColumns"] });
+
+        if (currentConnectionId) {
+          setSchemasLoading(true);
+          try {
+            const schemaInfos = await invoke<SchemaInfo[]>("get_schemas", {
+              connectionId: currentConnectionId,
+            });
+
+            const schemasWithTables: Schema[] = await Promise.all(
+              schemaInfos
+                .filter((s) => !s.name.startsWith("pg_") && s.name !== "information_schema")
+                .map(async (schemaInfo) => {
+                  const tables = await invoke<TableInfo[]>("get_tables", {
+                    connectionId: currentConnectionId,
+                    schema: schemaInfo.name,
+                  });
+
+                  return {
+                    name: schemaInfo.name,
+                    tables: tables.map((t) => ({
+                      name: t.name,
+                      schema: t.schema,
+                      rowCount: t.row_count,
+                    })),
+                  };
+                })
+            );
+
+            setSchemas(schemasWithTables);
+          } finally {
+            setSchemasLoading(false);
+          }
+        }
+      }
     },
   });
 }
