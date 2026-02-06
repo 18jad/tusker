@@ -69,22 +69,34 @@ impl DataOperations {
         table: &str,
         page: i64,
         page_size: Option<i64>,
-        order_by: Option<&str>,
-        order_direction: Option<&str>,
+        order_by: Option<&Vec<String>>,
+        order_direction: Option<&Vec<String>>,
     ) -> Result<PaginatedResult> {
         let page_size = page_size.unwrap_or(DEFAULT_PAGE_SIZE);
         let offset = (page - 1) * page_size;
 
-        let order_clause = match (order_by, order_direction) {
-            (Some(col), Some(dir)) => {
-                let dir = if dir.to_uppercase() == "DESC" {
-                    "DESC"
-                } else {
-                    "ASC"
-                };
-                format!("ORDER BY {} {}", quote_identifier(col), dir)
+        let order_clause = match order_by {
+            Some(columns) if !columns.is_empty() => {
+                let directions = order_direction.cloned().unwrap_or_default();
+                let parts: Vec<String> = columns
+                    .iter()
+                    .enumerate()
+                    .map(|(i, col)| {
+                        let dir = directions
+                            .get(i)
+                            .map(|d| {
+                                if d.to_uppercase() == "DESC" {
+                                    "DESC"
+                                } else {
+                                    "ASC"
+                                }
+                            })
+                            .unwrap_or("ASC");
+                        format!("{} {}", quote_identifier(col), dir)
+                    })
+                    .collect();
+                format!("ORDER BY {}", parts.join(", "))
             }
-            (Some(col), None) => format!("ORDER BY {} ASC", quote_identifier(col)),
             _ => String::new(),
         };
 

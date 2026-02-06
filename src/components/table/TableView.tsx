@@ -17,9 +17,10 @@ import {
   Eraser,
 } from "lucide-react";
 import { Popover } from "../ui/Popover";
-import type { CellValue, TableData } from "../../types";
+import type { CellValue, TableData, SortColumn } from "../../types";
 import { DataTable } from "./DataTable";
 import { Pagination } from "./Pagination";
+import { SortPopover } from "./SortPopover";
 import { cn } from "../../lib/utils";
 import { useUIStore } from "../../stores/uiStore";
 import { exportTable } from "../../lib/exportTable";
@@ -30,6 +31,7 @@ interface TableViewProps {
   tableName: string;
   data: TableData | null;
   isLoading: boolean;
+  isFetching?: boolean;
   error: string | null;
   onPageChange: (page: number) => void;
   onCellEdit?: (rowIndex: number, columnName: string, value: CellValue) => void;
@@ -45,6 +47,9 @@ interface TableViewProps {
   editedCells?: Set<string>;
   deletedRows?: Set<number>;
   readOnly?: boolean;
+  sorts?: SortColumn[];
+  onSort?: (columnName: string, addToSort: boolean) => void;
+  onSortsChange?: (sorts: SortColumn[]) => void;
 }
 
 function SkeletonRow({ columns, rowNum }: { columns: number; rowNum: number }) {
@@ -114,6 +119,7 @@ export function TableView({
   tableName,
   data,
   isLoading,
+  isFetching = false,
   error,
   onPageChange,
   onCellEdit,
@@ -129,6 +135,9 @@ export function TableView({
   editedCells,
   deletedRows,
   readOnly = false,
+  sorts = [],
+  onSort,
+  onSortsChange,
 }: TableViewProps) {
   const showToast = useUIStore((state) => state.showToast);
   const [selectedRowIndices, setSelectedRowIndices] = useState<Set<number>>(new Set());
@@ -251,7 +260,7 @@ export function TableView({
   const totalPages = Math.max(1, Math.ceil(data.totalRows / data.pageSize));
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full relative">
       {/* Table toolbar */}
       <div className="flex items-center justify-between px-3 h-10 bg-[var(--bg-secondary)] border-b border-[var(--border-color)] shrink-0">
         {/* Left side - Row actions when selected */}
@@ -340,6 +349,14 @@ export function TableView({
             {data.totalRows.toLocaleString()} rows
           </span>
 
+          {onSortsChange && data && (
+            <SortPopover
+              columns={data.columns}
+              sorts={sorts}
+              onSortsChange={onSortsChange}
+            />
+          )}
+
           {onAddRow && !readOnly && (
             <button
               onClick={onAddRow}
@@ -358,7 +375,7 @@ export function TableView({
           {onRefresh && (
             <button
               onClick={onRefresh}
-              disabled={isLoading}
+              disabled={isFetching}
               className={cn(
                 "flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs",
                 "text-[var(--text-secondary)] hover:text-[var(--text-primary)]",
@@ -367,7 +384,7 @@ export function TableView({
               )}
               title="Refresh table data (reload from database)"
             >
-              <RefreshCw className={cn("w-3.5 h-3.5 mt-px", isLoading && "animate-spin")} />
+              <RefreshCw className={cn("w-3.5 h-3.5 mt-px", isFetching && "animate-spin")} />
               <span>Refresh</span>
             </button>
           )}
@@ -483,8 +500,15 @@ export function TableView({
         </div>
       </div>
 
+      {/* Shimmer loading line — absolutely positioned, no layout shift */}
+      {isFetching && (
+        <div className="absolute top-10 left-0 right-0 h-[1.5px] z-30 overflow-hidden bg-[var(--accent)]/10">
+          <div className="h-full w-full animate-[shimmer_1.8s_linear_infinite] bg-[length:200%_100%] bg-gradient-to-r from-transparent via-[var(--accent)] to-transparent" />
+        </div>
+      )}
+
       {/* Data table */}
-      <div className="flex-1 min-h-0 relative">
+      <div className="flex-1 min-h-0">
         <DataTable
           tableKey={tableKey}
           columns={data.columns}
@@ -496,17 +520,9 @@ export function TableView({
           editedCells={editedCells}
           deletedRows={deletedRows}
           readOnly={readOnly}
+          sorts={sorts}
+          onSort={onSort}
         />
-
-        {/* Loading overlay for page changes */}
-        {isLoading && (
-          <div className="absolute inset-0 bg-[var(--bg-primary)]/70 backdrop-blur-[1px] flex items-center justify-center z-20">
-            <div className="flex items-center gap-3 px-4 py-2 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border-color)] shadow-lg">
-              <Loader2 className="w-4 h-4 animate-spin text-[var(--accent)]" />
-              <span className="text-sm text-[var(--text-secondary)]">Loading...</span>
-            </div>
-          </div>
-        )}
       </div>
 
       {/* Pagination */}

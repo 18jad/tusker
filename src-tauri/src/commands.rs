@@ -266,8 +266,8 @@ pub struct FetchDataRequest {
     pub table: String,
     pub page: Option<i64>,
     pub page_size: Option<i64>,
-    pub order_by: Option<String>,
-    pub order_direction: Option<String>,
+    pub order_by: Option<Vec<String>>,
+    pub order_direction: Option<Vec<String>>,
 }
 
 #[tauri::command]
@@ -284,8 +284,8 @@ pub async fn fetch_table_data(
         &request.table,
         request.page.unwrap_or(1),
         request.page_size,
-        request.order_by.as_deref(),
-        request.order_direction.as_deref(),
+        request.order_by.as_ref(),
+        request.order_direction.as_ref(),
     )
     .await
 }

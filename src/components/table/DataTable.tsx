@@ -4,8 +4,8 @@ import { cn } from "../../lib/utils";
 import { useUIStore } from "../../stores/uiStore";
 import { RelationSelect } from "../ui/RelationSelect";
 import { EnumSelect } from "../ui/EnumSelect";
-import type { Column, Row, CellValue } from "../../types";
-import { Key, Hash, Type, Calendar, ToggleLeft, Braces } from "lucide-react";
+import type { Column, Row, CellValue, SortColumn } from "../../types";
+import { Key, Hash, Type, Calendar, ToggleLeft, Braces, ArrowUp, ArrowDown } from "lucide-react";
 import "react-datepicker/dist/react-datepicker.css";
 
 interface DataTableProps {
@@ -19,6 +19,8 @@ interface DataTableProps {
   editedCells?: Set<string>;
   deletedRows?: Set<number>;
   readOnly?: boolean;
+  sorts?: SortColumn[];
+  onSort?: (columnName: string, addToSort: boolean) => void;
 }
 
 /**
@@ -960,6 +962,8 @@ export function DataTable({
   editedCells = new Set(),
   deletedRows = new Set(),
   readOnly = false,
+  sorts = [],
+  onSort,
 }: DataTableProps) {
   const allColumnWidths = useUIStore((state) => state.columnWidths);
   const setColumnWidth = useUIStore((state) => state.setColumnWidth);
@@ -1054,38 +1058,79 @@ export function DataTable({
             >
               <span className="text-[10px] text-[var(--text-muted)]">#</span>
             </th>
-            {columns.map((column) => (
-              <th
-                key={column.name}
-                className="relative text-left border-b border-r border-[var(--border-color)] last:border-r-0"
-                style={{ width: getColumnWidth(column.name), minWidth: getColumnWidth(column.name) }}
-              >
-                <div className="flex flex-col px-3 py-1.5">
-                  <div className="flex items-center gap-2">
-                    {column.isPrimaryKey ? (
-                      <Key className="w-3 h-3 flex-shrink-0 text-[var(--warning)]" />
-                    ) : (
-                      <span className="flex-shrink-0 text-[var(--text-muted)]">{getTypeIcon(column.dataType)}</span>
+            {columns.map((column) => {
+              const sortIndex = sorts.findIndex((s) => s.column === column.name);
+              const isSorted = sortIndex !== -1;
+              const sortEntry = isSorted ? sorts[sortIndex] : null;
+              const isAsc = sortEntry?.direction === "ASC";
+              const isMultiSort = sorts.length > 1;
+
+              return (
+                <th
+                  key={column.name}
+                  className="relative text-left border-b border-r border-[var(--border-color)] last:border-r-0"
+                  style={{ width: getColumnWidth(column.name), minWidth: getColumnWidth(column.name) }}
+                  aria-sort={isSorted ? (isAsc ? "ascending" : "descending") : "none"}
+                >
+                  <div
+                    className={cn(
+                      "flex flex-col px-3 py-1.5 transition-colors",
+                      onSort && "cursor-pointer select-none hover:bg-[var(--bg-tertiary)]/50",
+                      isSorted && "bg-[var(--bg-tertiary)]/30"
                     )}
-                    <span className="text-xs font-medium text-[var(--text-primary)] truncate">
-                      {column.name}
+                    onClick={(e) => onSort?.(column.name, e.shiftKey)}
+                    onKeyDown={(e) => {
+                      if (onSort && (e.key === "Enter" || e.key === " ")) {
+                        e.preventDefault();
+                        onSort(column.name, e.shiftKey);
+                      }
+                    }}
+                    tabIndex={onSort ? 0 : undefined}
+                    role={onSort ? "button" : undefined}
+                    aria-label={onSort ? `Sort by ${column.name}${isSorted ? (isAsc ? ", currently ascending" : ", currently descending") : ""}. Hold Shift to add to multi-sort.` : undefined}
+                  >
+                    <div className="flex items-center gap-2">
+                      {column.isPrimaryKey ? (
+                        <Key className="w-3 h-3 flex-shrink-0 text-[var(--warning)]" />
+                      ) : (
+                        <span className="flex-shrink-0 text-[var(--text-muted)]">{getTypeIcon(column.dataType)}</span>
+                      )}
+                      <span className={cn(
+                        "text-xs font-medium truncate",
+                        isSorted ? "text-[var(--accent)]" : "text-[var(--text-primary)]"
+                      )}>
+                        {column.name}
+                      </span>
+                      {isSorted && (
+                        <span className="flex items-center gap-0.5 flex-shrink-0">
+                          {isMultiSort && (
+                            <span className="text-[9px] font-semibold text-[var(--accent)] min-w-[12px] h-[14px] flex items-center justify-center rounded bg-[var(--accent)]/15">
+                              {sortIndex + 1}
+                            </span>
+                          )}
+                          {isAsc
+                            ? <ArrowUp className="w-3 h-3 text-[var(--accent)]" />
+                            : <ArrowDown className="w-3 h-3 text-[var(--accent)]" />
+                          }
+                        </span>
+                      )}
+                    </div>
+                    <span className="text-[10px] text-[var(--text-muted)] truncate">
+                      {column.dataType}
                     </span>
                   </div>
-                  <span className="text-[10px] text-[var(--text-muted)] truncate">
-                    {column.dataType}
-                  </span>
-                </div>
-                {/* Resize handle */}
-                <div
-                  className={cn(
-                    "absolute top-0 right-0 w-1 h-full cursor-col-resize",
-                    "hover:bg-[var(--accent)] transition-colors",
-                    resizing === column.name && "bg-[var(--accent)]"
-                  )}
-                  onMouseDown={(e) => handleResizeStart(column.name, e)}
-                />
-              </th>
-            ))}
+                  {/* Resize handle */}
+                  <div
+                    className={cn(
+                      "absolute top-0 right-0 w-1 h-full cursor-col-resize",
+                      "hover:bg-[var(--accent)] transition-colors",
+                      resizing === column.name && "bg-[var(--accent)]"
+                    )}
+                    onMouseDown={(e) => handleResizeStart(column.name, e)}
+                  />
+                </th>
+              );
+            })}
           </tr>
         </thead>
 

@@ -256,6 +256,16 @@ button:not(:disabled) {
   animation: spotlight-out 150ms ease-in forwards;
 }
 
+/* Shimmer loading line */
+@keyframes shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
 /* React DatePicker Dark Theme */
 .react-datepicker {
   background-color: var(--bg-secondary) !important;

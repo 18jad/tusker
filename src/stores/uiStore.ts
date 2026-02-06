@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { Tab } from "../types";
+import type { Tab, SortColumn } from "../types";
 
 interface Toast {
   id: string;
@@ -18,6 +18,9 @@ interface UIState {
 
   // Column widths per table (key: "schema.table")
   columnWidths: Record<string, Record<string, number>>;
+
+  // Sort state per table (key: "schema.table") - array for multi-column sort
+  tableSortState: Record<string, SortColumn[]>;
 
   // Expanded schemas in sidebar (persists across schema refresh)
   expandedSchemas: Set<string>;
@@ -97,6 +100,8 @@ interface UIState {
   getColumnWidths: (tableKey: string) => Record<string, number>;
   setColumnWidth: (tableKey: string, columnName: string, width: number) => void;
   resetColumnWidths: (tableKey: string) => void;
+  setTableSort: (tableKey: string, sorts: SortColumn[]) => void;
+  getTableSort: (tableKey: string) => SortColumn[];
   toggleSchemaExpanded: (schemaName: string) => void;
   isSchemaExpanded: (schemaName: string) => boolean;
 }
@@ -107,6 +112,7 @@ export const useUIStore = create<UIState>((set, get) => ({
   tabs: [],
   activeTabId: null,
   columnWidths: {},
+  tableSortState: {},
   expandedSchemas: new Set<string>(),
   commandPaletteOpen: false,
   projectSpotlightOpen: false,
@@ -406,4 +412,20 @@ export const useUIStore = create<UIState>((set, get) => ({
     }),
 
   isSchemaExpanded: (schemaName) => get().expandedSchemas.has(schemaName),
+
+  setTableSort: (tableKey, sorts) =>
+    set((state) => {
+      if (sorts.length === 0) {
+        const { [tableKey]: _, ...rest } = state.tableSortState;
+        return { tableSortState: rest };
+      }
+      return {
+        tableSortState: {
+          ...state.tableSortState,
+          [tableKey]: sorts,
+        },
+      };
+    }),
+
+  getTableSort: (tableKey) => get().tableSortState[tableKey] || [],
 }));

@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import type { Schema, TableData, Row, ConnectionConfig } from "../types";
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from "@tanstack/react-query";
+import type { Schema, TableData, Row, ConnectionConfig, SortColumn } from "../types";
 import { useProjectStore } from "../stores/projectStore";
 
 // Store the current connection ID
@@ -230,13 +230,20 @@ interface ColumnInfo {
   enum_values: string[] | null;
 }
 
-// Fetch table data with pagination
-export function useTableData(schema: string, table: string, page: number = 1) {
+// Fetch table data with pagination and sorting
+export function useTableData(
+  schema: string,
+  table: string,
+  page: number = 1,
+  sorts: SortColumn[] = [],
+) {
   const { connectionStatus } = useProjectStore();
   const pageSize = 50;
+  // Stable key for React Query cache
+  const sortKey = JSON.stringify(sorts);
 
   return useQuery({
-    queryKey: ["tableData", schema, table, page],
+    queryKey: ["tableData", schema, table, page, sortKey],
     queryFn: async () => {
       if (!currentConnectionId) throw new Error("Not connected");
 
@@ -247,9 +254,19 @@ export function useTableData(schema: string, table: string, page: number = 1) {
         table,
       });
 
-      // Find primary key column(s) for consistent ordering after edits
-      const primaryKeyColumn = columnsResult.find((col) => col.is_primary_key);
-      const orderBy = primaryKeyColumn?.name ?? columnsResult[0]?.name;
+      // Build order arrays: use custom sorts if provided, otherwise fall back to PK ordering
+      let orderByColumns: string[];
+      let orderDirections: string[];
+
+      if (sorts.length > 0) {
+        orderByColumns = sorts.map((s) => s.column);
+        orderDirections = sorts.map((s) => s.direction);
+      } else {
+        const primaryKeyColumn = columnsResult.find((col) => col.is_primary_key);
+        const fallbackCol = primaryKeyColumn?.name || columnsResult[0]?.name;
+        orderByColumns = fallbackCol ? [fallbackCol] : [];
+        orderDirections = fallbackCol ? ["ASC"] : [];
+      }
 
       // Fetch data with ORDER BY to ensure consistent row ordering
       const dataResult = await invoke<PaginatedResult>("fetch_table_data", {
@@ -259,8 +276,8 @@ export function useTableData(schema: string, table: string, page: number = 1) {
           table,
           page,
           page_size: pageSize,
-          order_by: orderBy,
-          order_direction: "ASC",
+          order_by: orderByColumns.length > 0 ? orderByColumns : undefined,
+          order_direction: orderDirections.length > 0 ? orderDirections : undefined,
         },
       });
 
@@ -290,6 +307,7 @@ export function useTableData(schema: string, table: string, page: number = 1) {
     },
     enabled: connectionStatus === "connected" && !!schema && !!table && !!currentConnectionId,
     staleTime: 30000, // 30 seconds
+    placeholderData: keepPreviousData, // Show old data while sort/page change fetches
   });
 }
 

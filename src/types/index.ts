@@ -81,6 +81,12 @@ export interface StagedChange {
   sql: string;
 }
 
+// Sort
+export interface SortColumn {
+  column: string;
+  direction: "ASC" | "DESC";
+}
+
 // Tab types
 export interface Tab {
   id: string;
