@@ -999,6 +999,7 @@ function ColumnEditorRow({
   onToggleExpanded,
   onBeforeEdit,
   canRemove,
+  isDraggable = true,
   schemas,
   onFetchColumns,
   availableColumns,
@@ -1011,6 +1012,7 @@ function ColumnEditorRow({
   onToggleExpanded: () => void;
   onBeforeEdit?: () => void;
   canRemove: boolean;
+  isDraggable?: boolean;
   schemas: { name: string; tables: { name: string; schema: string }[] }[];
   onFetchColumns: (schema: string, table: string) => void;
   availableColumns: { name: string; dataType: string; isPrimaryKey: boolean; isUnique: boolean }[];
@@ -1026,7 +1028,7 @@ function ColumnEditorRow({
     transform,
     transition,
     isDragging,
-  } = useSortable({ id: column.id });
+  } = useSortable({ id: column.id, disabled: !isDraggable });
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -1058,15 +1060,17 @@ function ColumnEditorRow({
         )}
         onClick={onToggleExpanded}
       >
-        <button
-          type="button"
-          className="!cursor-grab active:!cursor-grabbing p-0.5 -m-0.5 rounded hover:bg-[var(--bg-tertiary)] touch-none"
-          {...attributes}
-          {...listeners}
-          onClick={(e) => e.stopPropagation()}
-        >
-          <GripVertical className="w-4 h-4 text-[var(--text-muted)]" />
-        </button>
+        {isDraggable && (
+          <button
+            type="button"
+            className="!cursor-grab active:!cursor-grabbing p-0.5 -m-0.5 rounded hover:bg-[var(--bg-tertiary)] touch-none"
+            {...attributes}
+            {...listeners}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <GripVertical className="w-4 h-4 text-[var(--text-muted)]" />
+          </button>
+        )}
         {column.isExpanded ? (
           <ChevronDown className="w-4 h-4 text-[var(--text-muted)]" />
         ) : (
@@ -2698,52 +2702,95 @@ function EditTableTabContent({ tab }: { tab: Tab }) {
               </span>
             </div>
 
-            <DndContext
-              sensors={sensors}
-              collisionDetection={closestCenter}
-              onDragStart={handleDragStart}
-              onDragEnd={handleDragEnd}
-            >
-              <SortableContext
-                items={columns.map((c) => c.id)}
-                strategy={verticalListSortingStrategy}
-              >
-                <div className="space-y-2">
-                  {columns.map((column, index) => (
-                    <ColumnEditorRow
-                      key={column.id}
-                      column={column}
-                      index={index}
-                      onUpdate={(updates) => updateColumn(column.id, updates)}
-                      onRemove={() => removeColumn(column.id)}
-                      onToggleExpanded={() => toggleColumnExpanded(column.id)}
-                      onBeforeEdit={saveSnapshot}
-                      canRemove={columns.length > 1}
-                      schemas={schemas}
-                      onFetchColumns={fetchFkColumns}
-                      availableColumns={
-                        column.foreignKeySchema && column.foreignKeyTable
-                          ? fkColumnsCache[`${column.foreignKeySchema}.${column.foreignKeyTable}`] || []
-                          : []
-                      }
-                      isLoadingColumns={
-                        column.foreignKeySchema && column.foreignKeyTable
-                          ? fkColumnsLoading.has(`${column.foreignKeySchema}.${column.foreignKeyTable}`)
-                          : false
-                      }
-                    />
-                  ))}
-                </div>
-              </SortableContext>
-              <DragOverlay>
-                {activeId ? (
-                  <ColumnDragOverlay
-                    column={columns.find((c) => c.id === activeId)!}
-                    index={columns.findIndex((c) => c.id === activeId)}
-                  />
-                ) : null}
-              </DragOverlay>
-            </DndContext>
+            {/* Existing columns (not draggable) */}
+            {(() => {
+              const originalIds = new Set(originalColumns.map((c) => c.id));
+              const existingCols = columns.filter((c) => originalIds.has(c.id));
+              const newCols = columns.filter((c) => !originalIds.has(c.id));
+
+              return (
+                <>
+                  <div className="space-y-2">
+                    {existingCols.map((column, index) => (
+                      <ColumnEditorRow
+                        key={column.id}
+                        column={column}
+                        index={index}
+                        onUpdate={(updates) => updateColumn(column.id, updates)}
+                        onRemove={() => removeColumn(column.id)}
+                        onToggleExpanded={() => toggleColumnExpanded(column.id)}
+                        onBeforeEdit={saveSnapshot}
+                        canRemove={columns.length > 1}
+                        isDraggable={false}
+                        schemas={schemas}
+                        onFetchColumns={fetchFkColumns}
+                        availableColumns={
+                          column.foreignKeySchema && column.foreignKeyTable
+                            ? fkColumnsCache[`${column.foreignKeySchema}.${column.foreignKeyTable}`] || []
+                            : []
+                        }
+                        isLoadingColumns={
+                          column.foreignKeySchema && column.foreignKeyTable
+                            ? fkColumnsLoading.has(`${column.foreignKeySchema}.${column.foreignKeyTable}`)
+                            : false
+                        }
+                      />
+                    ))}
+                  </div>
+
+                  {/* New columns (draggable) */}
+                  {newCols.length > 0 && (
+                    <DndContext
+                      sensors={sensors}
+                      collisionDetection={closestCenter}
+                      onDragStart={handleDragStart}
+                      onDragEnd={handleDragEnd}
+                    >
+                      <SortableContext
+                        items={newCols.map((c) => c.id)}
+                        strategy={verticalListSortingStrategy}
+                      >
+                        <div className="space-y-2 mt-2">
+                          {newCols.map((column) => (
+                            <ColumnEditorRow
+                              key={column.id}
+                              column={column}
+                              index={existingCols.length + newCols.indexOf(column)}
+                              onUpdate={(updates) => updateColumn(column.id, updates)}
+                              onRemove={() => removeColumn(column.id)}
+                              onToggleExpanded={() => toggleColumnExpanded(column.id)}
+                              onBeforeEdit={saveSnapshot}
+                              canRemove={columns.length > 1}
+                              isDraggable={true}
+                              schemas={schemas}
+                              onFetchColumns={fetchFkColumns}
+                              availableColumns={
+                                column.foreignKeySchema && column.foreignKeyTable
+                                  ? fkColumnsCache[`${column.foreignKeySchema}.${column.foreignKeyTable}`] || []
+                                  : []
+                              }
+                              isLoadingColumns={
+                                column.foreignKeySchema && column.foreignKeyTable
+                                  ? fkColumnsLoading.has(`${column.foreignKeySchema}.${column.foreignKeyTable}`)
+                                  : false
+                              }
+                            />
+                          ))}
+                        </div>
+                      </SortableContext>
+                      <DragOverlay>
+                        {activeId ? (
+                          <ColumnDragOverlay
+                            column={columns.find((c) => c.id === activeId)!}
+                            index={columns.findIndex((c) => c.id === activeId)}
+                          />
+                        ) : null}
+                      </DragOverlay>
+                    </DndContext>
+                  )}
+                </>
+              );
+            })()}
 
             <button
               onClick={addColumn}
