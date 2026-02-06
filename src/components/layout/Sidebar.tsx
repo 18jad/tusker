@@ -19,6 +19,7 @@ import {
   FileSpreadsheet,
   FileJson,
   Terminal,
+  Settings,
 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useProjectStore } from "../../stores/projectStore";
@@ -108,6 +109,7 @@ function SchemaTree({ schema, level }: SchemaTreeProps) {
   const activeTabId = useUIStore((state) => state.activeTabId);
   const tabs = useUIStore((state) => state.tabs);
   const addCreateTableTab = useUIStore((state) => state.addCreateTableTab);
+  const addEditTableTab = useUIStore((state) => state.addEditTableTab);
   const openDeleteTableModal = useUIStore((state) => state.openDeleteTableModal);
   const openTruncateTableModal = useUIStore((state) => state.openTruncateTableModal);
   const addImportDataTab = useUIStore((state) => state.addImportDataTab);
@@ -250,6 +252,14 @@ function SchemaTree({ schema, level }: SchemaTreeProps) {
                   },
                 },
               ],
+            },
+            {
+              type: "separator" as const,
+            },
+            {
+              label: "Edit Table",
+              icon: <Settings className="w-4 h-4" />,
+              onClick: () => addEditTableTab(schema.name, table.name),
             },
             {
               type: "separator" as const,

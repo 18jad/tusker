@@ -83,6 +83,7 @@ interface UIState {
   openCreateTableModal: (schema?: string) => void;
   closeCreateTableModal: () => void;
   addCreateTableTab: (schema?: string) => void;
+  addEditTableTab: (schema: string, table: string) => void;
   openDeleteTableModal: (schema: string, table: string, rowCount?: number) => void;
   closeDeleteTableModal: () => void;
   openTruncateTableModal: (schema: string, table: string, rowCount?: number) => void;
@@ -372,6 +373,28 @@ export const useUIStore = create<UIState>((set, get) => ({
         type: "create-table",
         title: "New Table",
         createTableSchema: schema,
+      };
+      return {
+        tabs: [...state.tabs, newTab],
+        activeTabId: newTab.id,
+      };
+    }),
+
+  addEditTableTab: (schema, table) =>
+    set((state) => {
+      // Check if an edit-table tab already exists for this table
+      const existing = state.tabs.find(
+        (t) => t.type === "edit-table" && t.schema === schema && t.table === table
+      );
+      if (existing) {
+        return { activeTabId: existing.id };
+      }
+      const newTab: Tab = {
+        id: `edit-table-${schema}-${table}-${Date.now()}`,
+        type: "edit-table",
+        title: `Edit: ${table}`,
+        schema,
+        table,
       };
       return {
         tabs: [...state.tabs, newTab],

@@ -90,7 +90,7 @@ export interface SortColumn {
 // Tab types
 export interface Tab {
   id: string;
-  type: "table" | "query" | "create-table" | "import-data";
+  type: "table" | "query" | "create-table" | "edit-table" | "import-data";
   title: string;
   schema?: string;
   table?: string;
