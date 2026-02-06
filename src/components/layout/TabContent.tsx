@@ -31,16 +31,24 @@ import {
   Loader2,
   GripVertical,
   CheckCircle,
+  CheckCircle2,
+  XCircle,
   Copy,
   Check,
   Search,
   Link,
+  Play,
+  Rocket,
+  Settings,
+  Undo2,
+  Redo2,
+  Zap,
 } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import { useUIStore } from "../../stores/uiStore";
 import { useProjectStore } from "../../stores/projectStore";
 import { useChangesStore } from "../../stores/changesStore";
-import { useTableData, useCommitChanges, useExecuteSQL, getCurrentConnectionId } from "../../hooks/useDatabase";
+import { useTableData, useCommitChanges, useMigration, useTableColumns, getCurrentConnectionId, type MigrationResult, type FullColumnInfo } from "../../hooks/useDatabase";
 import { TableView } from "../table/TableView";
 import { RowDetailModal } from "../table/RowDetailModal";
 import {
@@ -53,7 +61,7 @@ import {
   SelectValue,
   Toggle,
 } from "../ui";
-import { generateUpdateSQL, generateDeleteSQL, generateInsertSQL, generateCreateTableSQL, type ColumnDefinition } from "../../lib/sql";
+import { generateUpdateSQL, generateDeleteSQL, generateInsertSQL, generateCreateTableSQL, generateAlterTableSQL, type ColumnDefinition, type AlterColumnDef } from "../../lib/sql";
 import { cn } from "../../lib/utils";
 import { ImportDataTab } from "../tabs/ImportDataTab";
 import { QueryTab } from "../tabs/QueryTab";
@@ -698,6 +706,54 @@ const POSTGRES_TYPES = {
   ],
 };
 
+const AUTO_GENERATE_OPTIONS: Record<string, { label: string; value: string; description: string }[]> = {
+  "UUID": [
+    { label: "gen_random_uuid()", value: "gen_random_uuid()", description: "Random UUID v4" },
+  ],
+  "TIMESTAMP": [
+    { label: "NOW()", value: "NOW()", description: "Current date & time" },
+    { label: "CURRENT_TIMESTAMP", value: "CURRENT_TIMESTAMP", description: "Transaction start time" },
+  ],
+  "TIMESTAMPTZ": [
+    { label: "NOW()", value: "NOW()", description: "Current date & time with timezone" },
+    { label: "CURRENT_TIMESTAMP", value: "CURRENT_TIMESTAMP", description: "Transaction start time" },
+  ],
+  "DATE": [
+    { label: "CURRENT_DATE", value: "CURRENT_DATE", description: "Today's date" },
+  ],
+  "TIME": [
+    { label: "CURRENT_TIME", value: "CURRENT_TIME", description: "Current time" },
+  ],
+  "TIMETZ": [
+    { label: "CURRENT_TIME", value: "CURRENT_TIME", description: "Current time with timezone" },
+  ],
+  "BOOLEAN": [
+    { label: "TRUE", value: "TRUE", description: "Default true" },
+    { label: "FALSE", value: "FALSE", description: "Default false" },
+  ],
+  "TEXT": [
+    { label: "Empty ''", value: "''", description: "Empty string" },
+  ],
+  "JSONB": [
+    { label: "Empty {}", value: "'{}'::jsonb", description: "Empty JSON object" },
+    { label: "Empty []", value: "'[]'::jsonb", description: "Empty JSON array" },
+  ],
+  "JSON": [
+    { label: "Empty {}", value: "'{}'", description: "Empty JSON object" },
+    { label: "Empty []", value: "'[]'", description: "Empty JSON array" },
+  ],
+};
+
+function getAutoGenerateOptions(dataType: string, customType: string) {
+  const type = (dataType === "CUSTOM" ? customType : dataType).toUpperCase().trim();
+  if (AUTO_GENERATE_OPTIONS[type]) return AUTO_GENERATE_OPTIONS[type];
+  if (type.startsWith("VARCHAR") || type.startsWith("CHAR")) return AUTO_GENERATE_OPTIONS["TEXT"] || [];
+  if (type.startsWith("TIMESTAMP")) {
+    return AUTO_GENERATE_OPTIONS[type.includes("TZ") ? "TIMESTAMPTZ" : "TIMESTAMP"] || [];
+  }
+  return [];
+}
+
 type ForeignKeyAction = "NO ACTION" | "RESTRICT" | "CASCADE" | "SET NULL" | "SET DEFAULT";
 
 const FK_ACTIONS: { value: ForeignKeyAction; label: string; description: string }[] = [
@@ -722,6 +778,7 @@ interface ColumnFormState {
   foreignKeyColumn: string;
   foreignKeyOnDelete: ForeignKeyAction;
   foreignKeyOnUpdate: ForeignKeyAction;
+  foreignKeyConstraintName: string;
   defaultValue: string;
   isExpanded: boolean;
 }
@@ -740,6 +797,7 @@ const createEmptyColumn = (): ColumnFormState => ({
   foreignKeyColumn: "",
   foreignKeyOnDelete: "NO ACTION",
   foreignKeyOnUpdate: "NO ACTION",
+  foreignKeyConstraintName: "",
   defaultValue: "",
   isExpanded: true,
 });
@@ -939,6 +997,7 @@ function ColumnEditorRow({
   onUpdate,
   onRemove,
   onToggleExpanded,
+  onBeforeEdit,
   canRemove,
   schemas,
   onFetchColumns,
@@ -950,6 +1009,7 @@ function ColumnEditorRow({
   onUpdate: (updates: Partial<ColumnFormState>) => void;
   onRemove: () => void;
   onToggleExpanded: () => void;
+  onBeforeEdit?: () => void;
   canRemove: boolean;
   schemas: { name: string; tables: { name: string; schema: string }[] }[];
   onFetchColumns: (schema: string, table: string) => void;
@@ -985,7 +1045,7 @@ function ColumnEditorRow({
       ref={setNodeRef}
       style={style}
       className={cn(
-        "border border-[var(--border-color)] rounded-lg overflow-hidden",
+        "border border-[var(--border-color)] rounded-lg overflow-hidden select-none",
         "bg-[var(--bg-secondary)]",
         isDragging && "opacity-50 shadow-lg"
       )}
@@ -1050,6 +1110,7 @@ function ColumnEditorRow({
               <input
                 type="text"
                 value={column.name}
+                onFocus={onBeforeEdit}
                 onChange={(e) => onUpdate({ name: e.target.value })}
                 placeholder="column_name"
                 autoCorrect="off"
@@ -1089,6 +1150,7 @@ function ColumnEditorRow({
                 <TypeDropdown
                   value={column.dataType}
                   onSelect={(type) => {
+                    onBeforeEdit?.();
                     onUpdate({ dataType: type });
                     setShowTypeDropdown(false);
                   }}
@@ -1108,6 +1170,7 @@ function ColumnEditorRow({
               <input
                 type="text"
                 value={column.customType}
+                onFocus={onBeforeEdit}
                 onChange={(e) => onUpdate({ customType: e.target.value })}
                 placeholder="e.g., VARCHAR(100), NUMERIC(10,2)"
                 autoCorrect="off"
@@ -1133,8 +1196,9 @@ function ColumnEditorRow({
             <input
               type="text"
               value={column.defaultValue}
+              onFocus={onBeforeEdit}
               onChange={(e) => onUpdate({ defaultValue: e.target.value })}
-              placeholder="e.g., 0, 'text', NOW(), uuid_generate_v4()"
+              placeholder="e.g., 0, 'text', NOW(), gen_random_uuid()"
               autoCorrect="off"
               autoCapitalize="off"
               autoComplete="off"
@@ -1147,6 +1211,38 @@ function ColumnEditorRow({
                 "placeholder:text-[var(--text-muted)]"
               )}
             />
+            {(() => {
+              const options = getAutoGenerateOptions(column.dataType, column.customType);
+              if (options.length === 0) return null;
+              return (
+                <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                  <Zap className="w-3 h-3 text-amber-400 shrink-0" />
+                  {options.map((opt) => {
+                    const isActive = column.defaultValue === opt.value;
+                    return (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        title={opt.description}
+                        onClick={() => {
+                          onBeforeEdit?.();
+                          onUpdate({ defaultValue: isActive ? "" : opt.value });
+                        }}
+                        className={cn(
+                          "px-2 py-0.5 rounded-full text-xs font-mono transition-colors",
+                          isActive
+                            ? "bg-amber-500/20 text-amber-300 border border-amber-500/40"
+                            : "bg-[var(--bg-tertiary)] text-[var(--text-muted)] border border-transparent",
+                          !isActive && "hover:text-[var(--text-primary)] hover:bg-[var(--bg-primary)]"
+                        )}
+                      >
+                        {opt.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              );
+            })()}
           </div>
 
           {/* Constraints Row */}
@@ -1154,6 +1250,7 @@ function ColumnEditorRow({
             <Checkbox
               checked={column.isPrimaryKey}
               onChange={(checked) => {
+                onBeforeEdit?.();
                 onUpdate({
                   isPrimaryKey: checked,
                   isNullable: checked ? false : column.isNullable,
@@ -1165,14 +1262,20 @@ function ColumnEditorRow({
             <Checkbox
               checked={!column.isNullable}
               disabled={column.isPrimaryKey}
-              onChange={(checked) => onUpdate({ isNullable: !checked })}
+              onChange={(checked) => {
+                onBeforeEdit?.();
+                onUpdate({ isNullable: !checked });
+              }}
               label="Not Null"
             />
 
             <Checkbox
               checked={column.isUnique}
               disabled={column.isPrimaryKey}
-              onChange={(checked) => onUpdate({ isUnique: checked })}
+              onChange={(checked) => {
+                onBeforeEdit?.();
+                onUpdate({ isUnique: checked });
+              }}
               label="Unique"
             />
           </div>
@@ -1189,6 +1292,7 @@ function ColumnEditorRow({
               <Toggle
                 checked={column.isForeignKey}
                 onChange={(checked) => {
+                  onBeforeEdit?.();
                   if (checked) {
                     const defaultSchema = schemas[0]?.name || "";
                     onUpdate({
@@ -1225,6 +1329,7 @@ function ColumnEditorRow({
                     <Select
                       value={column.foreignKeySchema || undefined}
                       onValueChange={(value) => {
+                        onBeforeEdit?.();
                         onUpdate({
                           foreignKeySchema: value,
                           foreignKeyTable: "",
@@ -1253,6 +1358,7 @@ function ColumnEditorRow({
                     <Select
                       value={column.foreignKeyTable || undefined}
                       onValueChange={(value) => {
+                        onBeforeEdit?.();
                         onUpdate({
                           foreignKeyTable: value,
                           foreignKeyColumn: "",
@@ -1285,7 +1391,10 @@ function ColumnEditorRow({
                     </label>
                     <Select
                       value={column.foreignKeyColumn || undefined}
-                      onValueChange={(value) => onUpdate({ foreignKeyColumn: value })}
+                      onValueChange={(value) => {
+                        onBeforeEdit?.();
+                        onUpdate({ foreignKeyColumn: value });
+                      }}
                       disabled={!column.foreignKeyTable || isLoadingColumns || availableColumns.length === 0}
                     >
                       <SelectTrigger>
@@ -1349,7 +1458,10 @@ function ColumnEditorRow({
                       </label>
                       <Select
                         value={column.foreignKeyOnDelete}
-                        onValueChange={(value) => onUpdate({ foreignKeyOnDelete: value as ForeignKeyAction })}
+                        onValueChange={(value) => {
+                          onBeforeEdit?.();
+                          onUpdate({ foreignKeyOnDelete: value as ForeignKeyAction });
+                        }}
                       >
                         <SelectTrigger>
                           <SelectValue />
@@ -1375,7 +1487,10 @@ function ColumnEditorRow({
                       </label>
                       <Select
                         value={column.foreignKeyOnUpdate}
-                        onValueChange={(value) => onUpdate({ foreignKeyOnUpdate: value as ForeignKeyAction })}
+                        onValueChange={(value) => {
+                          onBeforeEdit?.();
+                          onUpdate({ foreignKeyOnUpdate: value as ForeignKeyAction });
+                        }}
                       >
                         <SelectTrigger>
                           <SelectValue />
@@ -1498,7 +1613,7 @@ function ColumnDragOverlay({
 function CreateTableTabContent({ tab }: { tab: Tab }) {
   const { schemas } = useProjectStore();
   const { closeTab, addTab } = useUIStore();
-  const executeSQL = useExecuteSQL();
+  const migration = useMigration();
 
   const [tableName, setTableName] = useState("");
   const [selectedSchema, setSelectedSchema] = useState(tab.createTableSchema || "");
@@ -1508,6 +1623,7 @@ function CreateTableTabContent({ tab }: { tab: Tab }) {
   const [success, setSuccess] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [migrationResult, setMigrationResult] = useState<MigrationResult | null>(null);
   // FK column cache includes constraint info to filter valid FK targets
   // Key = "schema.table", value = columns (empty array means fetched but no valid targets)
   const [fkColumnsCache, setFkColumnsCache] = useState<Record<string, {
@@ -1526,26 +1642,33 @@ function CreateTableTabContent({ tab }: { tab: Tab }) {
     }
   }, [schemas, selectedSchema, tab.createTableSchema]);
 
+  const clearResult = useCallback(() => {
+    setMigrationResult(null);
+    setError(null);
+  }, []);
+
   const updateColumn = useCallback((id: string, updates: Partial<ColumnFormState>) => {
     setColumns((prev) =>
       prev.map((col) => (col.id === id ? { ...col, ...updates } : col))
     );
-    setError(null);
-  }, []);
+    clearResult();
+  }, [clearResult]);
 
   const addColumn = useCallback(() => {
     setColumns((prev) => [
       ...prev.map((col) => ({ ...col, isExpanded: false })),
       createEmptyColumn(),
     ]);
-  }, []);
+    clearResult();
+  }, [clearResult]);
 
   const removeColumn = useCallback((id: string) => {
     setColumns((prev) => {
       if (prev.length <= 1) return prev;
       return prev.filter((col) => col.id !== id);
     });
-  }, []);
+    clearResult();
+  }, [clearResult]);
 
   const toggleColumnExpanded = useCallback((id: string) => {
     setColumns((prev) =>
@@ -1697,28 +1820,27 @@ function CreateTableTabContent({ tab }: { tab: Tab }) {
     return `CREATE TABLE "${schemaName}"."${tblName}" (\n${columnLines.join(",\n")}\n)`;
   };
 
-  const handleCreate = async () => {
+  const validate = (): boolean => {
     setError(null);
-    setSuccess(false);
 
     if (!tableName.trim()) {
       setError("Table name is required");
-      return;
+      return false;
     }
 
     if (!selectedSchema) {
       setError("Please select a schema");
-      return;
+      return false;
     }
 
     for (const col of columns) {
       if (!col.name.trim()) {
         setError("All columns must have a name");
-        return;
+        return false;
       }
       if (col.dataType === "CUSTOM" && !col.customType.trim()) {
         setError(`Please specify a custom type for column "${col.name}"`);
-        return;
+        return false;
       }
     }
 
@@ -1726,49 +1848,63 @@ function CreateTableTabContent({ tab }: { tab: Tab }) {
     const duplicates = names.filter((name, index) => names.indexOf(name) !== index);
     if (duplicates.length > 0) {
       setError(`Duplicate column name: "${duplicates[0]}"`);
-      return;
+      return false;
     }
+
+    return true;
+  };
+
+  const handleDryRun = async () => {
+    if (!validate()) return;
+    setMigrationResult(null);
 
     try {
       const sql = generateCreateTableSQL(selectedSchema, tableName.trim(), getColumnDefinitions());
-      await executeSQL.mutateAsync({ sql });
-      setSuccess(true);
-
-      // Open the new table in a tab and close this create tab after a brief delay
-      setTimeout(() => {
-        addTab({
-          id: `table-${selectedSchema}-${tableName.trim()}-${Date.now()}`,
-          type: "table",
-          title: tableName.trim(),
-          schema: selectedSchema,
-          table: tableName.trim(),
-        });
-        closeTab(tab.id);
-      }, 1000);
+      const result = await migration.mutateAsync({
+        statements: [sql],
+        dry_run: true,
+      });
+      setMigrationResult(result);
     } catch (err) {
-      // Extract detailed error message from various error formats
-      let errorMessage: string;
-      if (err instanceof Error) {
-        errorMessage = err.message;
-      } else if (typeof err === "string") {
-        errorMessage = err;
-      } else if (typeof err === "object" && err !== null) {
-        // Handle Tauri error objects which may have message, error, or other properties
-        const errObj = err as Record<string, unknown>;
-        errorMessage = (
-          errObj.message ||
-          errObj.error ||
-          errObj.description ||
-          JSON.stringify(err)
-        ) as string;
-      } else {
-        errorMessage = "Failed to create table";
+      setError(err instanceof Error ? err.message : "Dry run failed");
+    }
+  };
+
+  const handleApply = async () => {
+    if (!validate()) return;
+    setMigrationResult(null);
+    setSuccess(false);
+
+    try {
+      const sql = generateCreateTableSQL(selectedSchema, tableName.trim(), getColumnDefinitions());
+      const result = await migration.mutateAsync({
+        statements: [sql],
+        dry_run: false,
+      });
+      setMigrationResult(result);
+
+      if (result.ok && result.committed) {
+        setSuccess(true);
+        // Open the new table in a tab and close this create tab after a brief delay
+        setTimeout(() => {
+          addTab({
+            id: `table-${selectedSchema}-${tableName.trim()}-${Date.now()}`,
+            type: "table",
+            title: tableName.trim(),
+            schema: selectedSchema,
+            table: tableName.trim(),
+          });
+          closeTab(tab.id);
+        }, 1000);
       }
-      setError(errorMessage);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to create table");
     }
   };
 
   const previewSQL = generateSQL();
+  const isDryRunning = migration.isPending && migration.variables?.dry_run === true;
+  const isApplying = migration.isPending && migration.variables?.dry_run === false;
 
   return (
     <div className="h-full flex flex-col bg-[var(--bg-primary)]">
@@ -1788,35 +1924,60 @@ function CreateTableTabContent({ tab }: { tab: Tab }) {
           </div>
         </div>
 
-        <button
-          onClick={handleCreate}
-          disabled={executeSQL.isPending || !tableName.trim() || success}
-          className={cn(
-            "flex items-center gap-2 px-4 py-2 text-sm rounded-lg",
-            success
-              ? "bg-green-500 text-white"
-              : "bg-purple-500 text-white hover:bg-purple-600",
-            "transition-colors",
-            "disabled:opacity-50 disabled:cursor-not-allowed"
-          )}
-        >
-          {executeSQL.isPending ? (
-            <>
-              <Loader2 className="w-4 h-4 animate-spin" />
-              Creating...
-            </>
-          ) : success ? (
-            <>
-              <CheckCircle className="w-4 h-4" />
-              Created!
-            </>
-          ) : (
-            <>
-              <Plus className="w-4 h-4" />
-              Create Table
-            </>
-          )}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleDryRun}
+            disabled={isDryRunning || isApplying || !tableName.trim() || success}
+            className={cn(
+              "flex items-center gap-2 px-4 py-2 text-sm rounded-lg",
+              "bg-[var(--bg-tertiary)] text-[var(--text-primary)]",
+              "border border-[var(--border-color)]",
+              "hover:bg-[var(--bg-secondary)] transition-colors",
+              "disabled:opacity-50 disabled:cursor-not-allowed"
+            )}
+          >
+            {isDryRunning ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Validating...
+              </>
+            ) : (
+              <>
+                <Play className="w-4 h-4" />
+                Dry Run
+              </>
+            )}
+          </button>
+          <button
+            onClick={handleApply}
+            disabled={isDryRunning || isApplying || !tableName.trim() || success}
+            className={cn(
+              "flex items-center gap-2 px-4 py-2 text-sm rounded-lg",
+              success
+                ? "bg-green-500 text-white"
+                : "bg-purple-500 text-white hover:bg-purple-600",
+              "transition-colors",
+              "disabled:opacity-50 disabled:cursor-not-allowed"
+            )}
+          >
+            {isApplying ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Applying...
+              </>
+            ) : success ? (
+              <>
+                <CheckCircle className="w-4 h-4" />
+                Created!
+              </>
+            ) : (
+              <>
+                <Rocket className="w-4 h-4" />
+                Apply
+              </>
+            )}
+          </button>
+        </div>
       </div>
 
       {/* Content */}
@@ -1845,6 +2006,11 @@ function CreateTableTabContent({ tab }: { tab: Tab }) {
             </div>
           )}
 
+          {/* Migration Results */}
+          {migrationResult && (
+            <MigrationResultPanel result={migrationResult} />
+          )}
+
           {/* Table Name and Schema */}
           <div className="grid grid-cols-2 gap-4">
             <div>
@@ -1853,7 +2019,7 @@ function CreateTableTabContent({ tab }: { tab: Tab }) {
               </label>
               <Select
                 value={selectedSchema || undefined}
-                onValueChange={setSelectedSchema}
+                onValueChange={(v) => { setSelectedSchema(v); clearResult(); }}
                 disabled={success}
               >
                 <SelectTrigger className="h-10 rounded-lg bg-[var(--bg-secondary)]">
@@ -1877,7 +2043,7 @@ function CreateTableTabContent({ tab }: { tab: Tab }) {
                 value={tableName}
                 onChange={(e) => {
                   setTableName(e.target.value);
-                  setError(null);
+                  clearResult();
                 }}
                 disabled={success}
                 placeholder="users"
@@ -2028,6 +2194,720 @@ function CreateTableTabContent({ tab }: { tab: Tab }) {
 }
 
 /**
+ * Convert backend ColumnInfo to ColumnFormState for the editor
+ */
+function columnInfoToFormState(col: FullColumnInfo): ColumnFormState {
+  return {
+    id: `col-${col.ordinal_position}-${col.name}`,
+    name: col.name,
+    dataType: col.data_type,
+    customType: "",
+    isNullable: col.is_nullable,
+    isPrimaryKey: col.is_primary_key,
+    isUnique: col.is_unique,
+    isForeignKey: col.is_foreign_key,
+    foreignKeySchema: col.foreign_key_info?.referenced_schema || "",
+    foreignKeyTable: col.foreign_key_info?.referenced_table || "",
+    foreignKeyColumn: col.foreign_key_info?.referenced_column || "",
+    foreignKeyOnDelete: "NO ACTION",
+    foreignKeyOnUpdate: "NO ACTION",
+    foreignKeyConstraintName: col.foreign_key_info?.constraint_name || "",
+    defaultValue: col.default_value || "",
+    isExpanded: false,
+  };
+}
+
+function formStateToAlterDef(col: ColumnFormState): AlterColumnDef {
+  return {
+    id: col.id,
+    name: col.name.trim(),
+    dataType: col.dataType === "CUSTOM" ? col.customType.trim() : col.dataType,
+    isNullable: col.isNullable,
+    isPrimaryKey: col.isPrimaryKey,
+    isUnique: col.isUnique,
+    defaultValue: col.defaultValue.trim(),
+    isForeignKey: col.isForeignKey,
+    foreignKeySchema: col.foreignKeySchema,
+    foreignKeyTable: col.foreignKeyTable,
+    foreignKeyColumn: col.foreignKeyColumn,
+    foreignKeyOnDelete: col.foreignKeyOnDelete,
+    foreignKeyOnUpdate: col.foreignKeyOnUpdate,
+    foreignKeyConstraintName: col.foreignKeyConstraintName,
+  };
+}
+
+/**
+ * Edit Table Tab Content - Modify an existing table's structure
+ */
+function EditTableTabContent({ tab }: { tab: Tab }) {
+  const { schemas } = useProjectStore();
+  const { closeTab, addTab } = useUIStore();
+  const migration = useMigration();
+
+  const schemaName = tab.schema || "";
+  const originalTableName = tab.table || "";
+
+  const { data: columnData, isLoading, dataUpdatedAt } = useTableColumns(schemaName, originalTableName);
+
+  const [tableName, setTableName] = useState(originalTableName);
+  const [columns, setColumns] = useState<ColumnFormState[]>([]);
+  const [originalColumns, setOriginalColumns] = useState<ColumnFormState[]>([]);
+  const [initialized, setInitialized] = useState(false);
+  const [lastDataUpdatedAt, setLastDataUpdatedAt] = useState(0);
+  const [error, setError] = useState<string | null>(null);
+  const [migrationResult, setMigrationResult] = useState<MigrationResult | null>(null);
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  // FK column cache
+  const [fkColumnsCache, setFkColumnsCache] = useState<Record<string, {
+    name: string;
+    dataType: string;
+    isPrimaryKey: boolean;
+    isUnique: boolean;
+  }[]>>({});
+  const [fkColumnsLoading, setFkColumnsLoading] = useState<Set<string>>(new Set());
+
+  // Undo/redo history
+  const undoStack = useRef<{ tableName: string; columns: ColumnFormState[] }[]>([]);
+  const redoStack = useRef<{ tableName: string; columns: ColumnFormState[] }[]>([]);
+  const [undoCount, setUndoCount] = useState(0); // triggers re-render when stacks change
+  const [redoCount, setRedoCount] = useState(0);
+
+  const pushUndo = useCallback((snapshot: { tableName: string; columns: ColumnFormState[] }) => {
+    undoStack.current.push(snapshot);
+    redoStack.current = [];
+    setUndoCount(undoStack.current.length);
+    setRedoCount(0);
+  }, []);
+
+  const undo = useCallback(() => {
+    const snapshot = undoStack.current.pop();
+    if (!snapshot) return;
+    // Push current state to redo stack
+    redoStack.current.push({ tableName, columns });
+    setTableName(snapshot.tableName);
+    setColumns(snapshot.columns);
+    setMigrationResult(null);
+    setError(null);
+    setUndoCount(undoStack.current.length);
+    setRedoCount(redoStack.current.length);
+  }, [tableName, columns]);
+
+  const redo = useCallback(() => {
+    const snapshot = redoStack.current.pop();
+    if (!snapshot) return;
+    // Push current state to undo stack
+    undoStack.current.push({ tableName, columns });
+    setTableName(snapshot.tableName);
+    setColumns(snapshot.columns);
+    setMigrationResult(null);
+    setError(null);
+    setUndoCount(undoStack.current.length);
+    setRedoCount(redoStack.current.length);
+  }, [tableName, columns]);
+
+  // Keyboard shortcuts: Cmd+Z / Ctrl+Z for undo, Cmd+Shift+Z / Ctrl+Shift+Z for redo
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "z") {
+        e.preventDefault();
+        if (e.shiftKey) {
+          redo();
+        } else {
+          undo();
+        }
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [undo, redo]);
+
+  // Initialize columns from fetched data, and re-sync when backend data changes (e.g. after apply)
+  useEffect(() => {
+    if (columnData && dataUpdatedAt > lastDataUpdatedAt) {
+      const formCols = columnData.map(columnInfoToFormState);
+      setOriginalColumns(formCols);
+      setColumns(formCols);
+      setInitialized(true);
+      setLastDataUpdatedAt(dataUpdatedAt);
+      setMigrationResult(null);
+      setError(null);
+      undoStack.current = [];
+      redoStack.current = [];
+      setUndoCount(0);
+      setRedoCount(0);
+    }
+  }, [columnData, dataUpdatedAt, lastDataUpdatedAt]);
+
+  const clearResult = useCallback(() => {
+    setMigrationResult(null);
+    setError(null);
+  }, []);
+
+  const saveSnapshot = useCallback(() => {
+    pushUndo({ tableName, columns });
+  }, [pushUndo, tableName, columns]);
+
+  const updateColumn = useCallback((id: string, updates: Partial<ColumnFormState>) => {
+    setColumns((prev) =>
+      prev.map((col) => (col.id === id ? { ...col, ...updates } : col))
+    );
+    clearResult();
+  }, [clearResult]);
+
+  const addColumn = useCallback(() => {
+    pushUndo({ tableName, columns });
+    setColumns((prev) => [
+      ...prev.map((col) => ({ ...col, isExpanded: false })),
+      createEmptyColumn(),
+    ]);
+    clearResult();
+  }, [clearResult, pushUndo, tableName, columns]);
+
+  const removeColumn = useCallback((id: string) => {
+    pushUndo({ tableName, columns });
+    setColumns((prev) => {
+      if (prev.length <= 1) return prev;
+      return prev.filter((col) => col.id !== id);
+    });
+    clearResult();
+  }, [clearResult, pushUndo, tableName, columns]);
+
+  const toggleColumnExpanded = useCallback((id: string) => {
+    setColumns((prev) =>
+      prev.map((col) => (col.id === id ? { ...col, isExpanded: !col.isExpanded } : col))
+    );
+  }, []);
+
+  // Drag and drop
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
+
+  const handleDragStart = useCallback((event: DragStartEvent) => {
+    setActiveId(event.active.id as string);
+  }, []);
+
+  const handleDragEnd = useCallback((event: DragEndEvent) => {
+    const { active, over } = event;
+    if (over && active.id !== over.id) {
+      pushUndo({ tableName, columns });
+      setColumns((prev) => {
+        const oldIndex = prev.findIndex((col) => col.id === active.id);
+        const newIndex = prev.findIndex((col) => col.id === over.id);
+        return arrayMove(prev, oldIndex, newIndex);
+      });
+    }
+    setActiveId(null);
+  }, [pushUndo, tableName, columns]);
+
+  // Fetch FK columns
+  const fetchFkColumns = useCallback(async (fkSchema: string, fkTable: string) => {
+    const cacheKey = `${fkSchema}.${fkTable}`;
+    if (fkColumnsCache[cacheKey] !== undefined) return;
+    if (fkColumnsLoading.has(cacheKey)) return;
+
+    const connectionId = getCurrentConnectionId();
+    if (!connectionId) return;
+
+    setFkColumnsLoading((prev) => new Set(prev).add(cacheKey));
+
+    try {
+      const cols = await invoke<{
+        name: string;
+        data_type: string;
+        is_primary_key: boolean;
+        is_unique: boolean;
+      }[]>("get_columns", { connectionId, schema: fkSchema, table: fkTable });
+
+      const validFkTargets = cols
+        .filter((c) => c.is_primary_key || c.is_unique)
+        .map((c) => ({
+          name: c.name,
+          dataType: c.data_type,
+          isPrimaryKey: c.is_primary_key,
+          isUnique: c.is_unique,
+        }));
+      setFkColumnsCache((prev) => ({ ...prev, [cacheKey]: validFkTargets }));
+    } catch {
+      setFkColumnsCache((prev) => ({ ...prev, [cacheKey]: [] }));
+    } finally {
+      setFkColumnsLoading((prev) => {
+        const next = new Set(prev);
+        next.delete(cacheKey);
+        return next;
+      });
+    }
+  }, [fkColumnsCache, fkColumnsLoading]);
+
+  // Generate ALTER SQL from diff
+  const generateSQL = (): string[] => {
+    return generateAlterTableSQL(
+      schemaName,
+      originalTableName,
+      originalColumns.map(formStateToAlterDef),
+      columns.map(formStateToAlterDef),
+      tableName !== originalTableName ? tableName.trim() : undefined
+    );
+  };
+
+  const validate = (): boolean => {
+    for (const col of columns) {
+      if (!col.name.trim()) {
+        setError("All columns must have a name");
+        return false;
+      }
+      if (col.dataType === "CUSTOM" && !col.customType.trim()) {
+        setError(`Please specify a custom type for column "${col.name}"`);
+        return false;
+      }
+    }
+
+    const names = columns.map((c) => c.name.trim().toLowerCase());
+    const duplicates = names.filter((name, index) => names.indexOf(name) !== index);
+    if (duplicates.length > 0) {
+      setError(`Duplicate column name: "${duplicates[0]}"`);
+      return false;
+    }
+
+    const stmts = generateSQL();
+    if (stmts.length === 0) {
+      setError("No changes to apply");
+      return false;
+    }
+
+    return true;
+  };
+
+  const handleDryRun = async () => {
+    setError(null);
+    setMigrationResult(null);
+    if (!validate()) return;
+
+    try {
+      const result = await migration.mutateAsync({
+        statements: generateSQL(),
+        dry_run: true,
+      });
+      setMigrationResult(result);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Dry run failed");
+    }
+  };
+
+  const handleApply = async () => {
+    setError(null);
+    setMigrationResult(null);
+    if (!validate()) return;
+
+    try {
+      const result = await migration.mutateAsync({
+        statements: generateSQL(),
+        dry_run: false,
+      });
+      setMigrationResult(result);
+
+      if (result.ok && result.committed) {
+        // If table was renamed, open the new table; otherwise just close
+        const finalTableName = tableName.trim() || originalTableName;
+        setTimeout(() => {
+          addTab({
+            id: `table-${schemaName}-${finalTableName}-${Date.now()}`,
+            type: "table",
+            title: finalTableName,
+            schema: schemaName,
+            table: finalTableName,
+          });
+          closeTab(tab.id);
+        }, 1000);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to apply changes");
+    }
+  };
+
+  const alterStatements = initialized ? generateSQL() : [];
+  const hasChanges = alterStatements.length > 0;
+  const isDryRunning = migration.isPending && migration.variables?.dry_run === true;
+  const isApplying = migration.isPending && migration.variables?.dry_run === false;
+
+  if (isLoading || !initialized) {
+    return (
+      <div className="h-full flex items-center justify-center">
+        <div className="flex items-center gap-3 text-[var(--text-muted)]">
+          <Loader2 className="w-5 h-5 animate-spin" />
+          <span className="text-sm">Loading table structure...</span>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="h-full flex flex-col bg-[var(--bg-primary)]">
+      {/* Header */}
+      <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--border-color)] shrink-0">
+        <div className="flex items-center gap-3">
+          <div className="p-2 rounded-lg bg-blue-500/10">
+            <Settings className="w-5 h-5 text-blue-400" />
+          </div>
+          <div>
+            <h2 className="text-base font-semibold text-[var(--text-primary)]">
+              Edit Table
+            </h2>
+            <p className="text-xs text-[var(--text-muted)]">
+              {schemaName}.{originalTableName}
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 mr-2">
+            <button
+              onClick={undo}
+              disabled={undoCount === 0}
+              title="Undo (Cmd+Z)"
+              className={cn(
+                "p-2 rounded-lg text-[var(--text-muted)]",
+                "hover:bg-[var(--bg-tertiary)] hover:text-[var(--text-primary)]",
+                "transition-colors",
+                "disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-[var(--text-muted)]"
+              )}
+            >
+              <Undo2 className="w-4 h-4" />
+            </button>
+            <button
+              onClick={redo}
+              disabled={redoCount === 0}
+              title="Redo (Cmd+Shift+Z)"
+              className={cn(
+                "p-2 rounded-lg text-[var(--text-muted)]",
+                "hover:bg-[var(--bg-tertiary)] hover:text-[var(--text-primary)]",
+                "transition-colors",
+                "disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-[var(--text-muted)]"
+              )}
+            >
+              <Redo2 className="w-4 h-4" />
+            </button>
+          </div>
+          <button
+            onClick={handleDryRun}
+            disabled={isDryRunning || isApplying || !hasChanges}
+            className={cn(
+              "flex items-center gap-2 px-4 py-2 text-sm rounded-lg",
+              "bg-[var(--bg-tertiary)] text-[var(--text-primary)]",
+              "border border-[var(--border-color)]",
+              "hover:bg-[var(--bg-secondary)] transition-colors",
+              "disabled:opacity-50 disabled:cursor-not-allowed"
+            )}
+          >
+            {isDryRunning ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Validating...
+              </>
+            ) : (
+              <>
+                <Play className="w-4 h-4" />
+                Dry Run
+              </>
+            )}
+          </button>
+          <button
+            onClick={handleApply}
+            disabled={isDryRunning || isApplying || !hasChanges}
+            className={cn(
+              "flex items-center gap-2 px-4 py-2 text-sm rounded-lg",
+              "bg-blue-500 text-white hover:bg-blue-600",
+              "transition-colors",
+              "disabled:opacity-50 disabled:cursor-not-allowed"
+            )}
+          >
+            {isApplying ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Applying...
+              </>
+            ) : (
+              <>
+                <Rocket className="w-4 h-4" />
+                Apply
+              </>
+            )}
+          </button>
+        </div>
+      </div>
+
+      {/* Content */}
+      <div className="flex-1 overflow-y-auto">
+        <div className="max-w-3xl mx-auto p-6 space-y-6">
+          {/* Error Display */}
+          {error && (
+            <div className="flex items-start gap-3 p-4 rounded-lg bg-red-500/10 border border-red-500/20">
+              <AlertCircle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
+              <p className="text-sm text-red-400">{error}</p>
+            </div>
+          )}
+
+          {/* Migration Results */}
+          {migrationResult && (
+            <MigrationResultPanel result={migrationResult} />
+          )}
+
+          {/* Table Name */}
+          <div className="max-w-sm">
+            <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
+              Table Name
+            </label>
+            <input
+              type="text"
+              value={tableName}
+              onFocus={() => {
+                pushUndo({ tableName, columns });
+              }}
+              onChange={(e) => {
+                setTableName(e.target.value);
+                clearResult();
+              }}
+              autoCorrect="off"
+              autoCapitalize="off"
+              autoComplete="off"
+              spellCheck={false}
+              className={cn(
+                "w-full h-10 px-3 rounded-lg text-sm",
+                "bg-[var(--bg-secondary)] text-[var(--text-primary)]",
+                "border border-[var(--border-color)]",
+                "focus:border-[var(--accent)] focus:outline-none"
+              )}
+            />
+            {tableName !== originalTableName && tableName.trim() && (
+              <p className="text-xs text-blue-400 mt-1">
+                Will rename table from "{originalTableName}" to "{tableName.trim()}"
+              </p>
+            )}
+          </div>
+
+          {/* Columns Section */}
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <label className="text-sm font-medium text-[var(--text-secondary)]">
+                Columns
+              </label>
+              <span className="text-xs text-[var(--text-muted)]">
+                {columns.length} column{columns.length !== 1 ? "s" : ""}
+              </span>
+            </div>
+
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragStart={handleDragStart}
+              onDragEnd={handleDragEnd}
+            >
+              <SortableContext
+                items={columns.map((c) => c.id)}
+                strategy={verticalListSortingStrategy}
+              >
+                <div className="space-y-2">
+                  {columns.map((column, index) => (
+                    <ColumnEditorRow
+                      key={column.id}
+                      column={column}
+                      index={index}
+                      onUpdate={(updates) => updateColumn(column.id, updates)}
+                      onRemove={() => removeColumn(column.id)}
+                      onToggleExpanded={() => toggleColumnExpanded(column.id)}
+                      onBeforeEdit={saveSnapshot}
+                      canRemove={columns.length > 1}
+                      schemas={schemas}
+                      onFetchColumns={fetchFkColumns}
+                      availableColumns={
+                        column.foreignKeySchema && column.foreignKeyTable
+                          ? fkColumnsCache[`${column.foreignKeySchema}.${column.foreignKeyTable}`] || []
+                          : []
+                      }
+                      isLoadingColumns={
+                        column.foreignKeySchema && column.foreignKeyTable
+                          ? fkColumnsLoading.has(`${column.foreignKeySchema}.${column.foreignKeyTable}`)
+                          : false
+                      }
+                    />
+                  ))}
+                </div>
+              </SortableContext>
+              <DragOverlay>
+                {activeId ? (
+                  <ColumnDragOverlay
+                    column={columns.find((c) => c.id === activeId)!}
+                    index={columns.findIndex((c) => c.id === activeId)}
+                  />
+                ) : null}
+              </DragOverlay>
+            </DndContext>
+
+            <button
+              onClick={addColumn}
+              className={cn(
+                "w-full mt-3 flex items-center justify-center gap-2 px-4 py-3 rounded-lg",
+                "border border-dashed border-[var(--border-color)]",
+                "text-sm text-[var(--text-muted)]",
+                "hover:border-blue-500/50 hover:text-blue-400",
+                "transition-colors"
+              )}
+            >
+              <Plus className="w-4 h-4" />
+              Add Column
+            </button>
+          </div>
+
+          {/* SQL Preview */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2 text-sm font-medium text-[var(--text-secondary)]">
+                <Code className="w-4 h-4" />
+                ALTER Statements
+                {hasChanges && (
+                  <span className="text-xs font-normal text-[var(--text-muted)]">
+                    ({alterStatements.length} statement{alterStatements.length !== 1 ? "s" : ""})
+                  </span>
+                )}
+              </div>
+              {hasChanges && (
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(alterStatements.join(";\n") + ";");
+                    setCopied(true);
+                    setTimeout(() => setCopied(false), 2000);
+                  }}
+                  className={cn(
+                    "flex items-center gap-1.5 px-2 py-1 text-xs rounded",
+                    "transition-colors",
+                    copied
+                      ? "text-green-400 bg-green-500/10"
+                      : "text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)]"
+                  )}
+                >
+                  {copied ? (
+                    <>
+                      <Check className="w-3.5 h-3.5" />
+                      Copied!
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-3.5 h-3.5" />
+                      Copy
+                    </>
+                  )}
+                </button>
+              )}
+            </div>
+            {hasChanges ? (
+              <CodeBlock code={alterStatements.join(";\n") + ";"} language="sql" />
+            ) : (
+              <div className="p-4 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border-color)] text-center">
+                <p className="text-sm text-[var(--text-muted)]">
+                  No changes detected. Modify columns above to generate ALTER statements.
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Migration Result Panel - shows per-statement results from dry run / apply
+ */
+function MigrationResultPanel({ result }: { result: MigrationResult }) {
+  return (
+    <div
+      className={cn(
+        "rounded-lg border overflow-hidden",
+        result.ok
+          ? "border-green-500/30 bg-green-500/5"
+          : "border-red-500/30 bg-red-500/5"
+      )}
+    >
+      {/* Header */}
+      <div className={cn(
+        "flex items-center justify-between px-3 py-2",
+        result.ok ? "bg-green-500/10" : "bg-red-500/10"
+      )}>
+        <div className="flex items-center gap-2">
+          {result.ok ? (
+            <CheckCircle2 className="w-4 h-4 text-green-400" />
+          ) : (
+            <XCircle className="w-4 h-4 text-red-400" />
+          )}
+          <span className={cn(
+            "text-sm font-medium",
+            result.ok ? "text-green-400" : "text-red-400"
+          )}>
+            {result.dry_run ? "Dry Run" : "Migration"}{" "}
+            {result.ok ? "Passed" : "Failed"}
+          </span>
+        </div>
+        <div className="flex items-center gap-3 text-xs text-[var(--text-muted)]">
+          <span>{result.duration_ms.toFixed(1)}ms</span>
+          {result.committed && (
+            <span className="text-green-400 font-medium">Committed</span>
+          )}
+          {result.dry_run && (
+            <span className="text-blue-400 font-medium">Not persisted</span>
+          )}
+        </div>
+      </div>
+
+      {/* Statement Results */}
+      <div className="divide-y divide-[var(--border-color)]">
+        {result.statements.map((stmt, i) => (
+          <div key={i} className="px-3 py-2">
+            <div className="flex items-start gap-2">
+              {result.statements.length > 1 && (
+                stmt.ok ? (
+                  <CheckCircle2 className="w-3.5 h-3.5 text-green-400 mt-0.5 shrink-0" />
+                ) : (
+                  <XCircle className="w-3.5 h-3.5 text-red-400 mt-0.5 shrink-0" />
+                )
+              )}
+              <div className="flex-1 min-w-0">
+                <pre className="text-xs font-mono text-[var(--text-secondary)] whitespace-pre-wrap break-all">
+                  {stmt.sql}
+                </pre>
+                <div className="flex items-center gap-3 mt-1 text-xs text-[var(--text-muted)]">
+                  <span>{stmt.duration_ms.toFixed(1)}ms</span>
+                  {stmt.rows_affected != null && (
+                    <span>{stmt.rows_affected} rows affected</span>
+                  )}
+                </div>
+                {stmt.error && (
+                  <div className="mt-1.5 p-2 rounded bg-red-500/10 text-xs">
+                    <p className="text-red-400 font-medium">
+                      {stmt.error.code && (
+                        <span className="font-mono mr-1.5">[{stmt.error.code}]</span>
+                      )}
+                      {stmt.error.message}
+                    </p>
+                    {stmt.error.detail && (
+                      <p className="text-red-400/80 mt-0.5">{stmt.error.detail}</p>
+                    )}
+                    {stmt.error.hint && (
+                      <p className="text-yellow-400/80 mt-0.5">Hint: {stmt.error.hint}</p>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/**
  * Renders content based on the active tab
  */
 export function TabContent() {
@@ -2035,43 +2915,46 @@ export function TabContent() {
   const activeTabId = useUIStore((state) => state.activeTabId);
   const connectionStatus = useProjectStore((state) => state.connectionStatus);
 
-  const activeTab = tabs.find((t) => t.id === activeTabId);
-
-  // No active tab
-  if (!activeTab) {
+  if (connectionStatus !== "connected" || tabs.length === 0) {
     return null;
   }
 
-  // Not connected
-  if (connectionStatus !== "connected") {
-    return null;
-  }
+  return (
+    <>
+      {tabs.map((tab) => {
+        const isActive = tab.id === activeTabId;
 
-  // Render based on tab type
-  if (activeTab.type === "table" && activeTab.schema && activeTab.table) {
-    return (
-      <TableTabContent
-        key={`${activeTab.schema}.${activeTab.table}`}
-        schema={activeTab.schema}
-        table={activeTab.table}
-      />
-    );
-  }
+        let content: React.ReactNode = null;
+        if (tab.type === "table" && tab.schema && tab.table) {
+          content = (
+            <TableTabContent
+              key={`${tab.schema}.${tab.table}`}
+              schema={tab.schema}
+              table={tab.table}
+            />
+          );
+        } else if (tab.type === "create-table") {
+          content = <CreateTableTabContent key={tab.id} tab={tab} />;
+        } else if (tab.type === "edit-table" && tab.schema && tab.table) {
+          content = <EditTableTabContent key={tab.id} tab={tab} />;
+        } else if (tab.type === "import-data" && tab.schema && tab.table) {
+          content = <ImportDataTab key={tab.id} tab={tab} />;
+        } else if (tab.type === "query") {
+          content = <QueryTab key={tab.id} tab={tab} />;
+        }
 
-  // Create table tab
-  if (activeTab.type === "create-table") {
-    return <CreateTableTabContent key={activeTab.id} tab={activeTab} />;
-  }
+        if (!content) return null;
 
-  // Import data tab
-  if (activeTab.type === "import-data" && activeTab.schema && activeTab.table) {
-    return <ImportDataTab key={activeTab.id} tab={activeTab} />;
-  }
-
-  // Query tab
-  if (activeTab.type === "query") {
-    return <QueryTab key={activeTab.id} tab={activeTab} />;
-  }
-
-  return null;
+        return (
+          <div
+            key={tab.id}
+            className="h-full"
+            style={{ display: isActive ? "contents" : "none" }}
+          >
+            {content}
+          </div>
+        );
+      })}
+    </>
+  );
 }
