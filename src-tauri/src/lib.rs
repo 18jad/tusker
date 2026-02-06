@@ -74,6 +74,7 @@ pub fn run() {
             commands::update_row,
             commands::delete_row,
             commands::execute_query,
+            commands::execute_migration,
             // Utility commands
             commands::get_database_info,
         ])

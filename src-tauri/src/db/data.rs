@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
 use sqlx::postgres::PgRow;
 use sqlx::{Column, Executor, PgPool, Row, TypeInfo};
+use std::time::Instant;
 
 const DEFAULT_PAGE_SIZE: i64 = 50;
 
@@ -322,6 +323,239 @@ impl DataOperations {
                 execution_time_ms: start_time.elapsed().as_millis(),
             })
         }
+    }
+}
+
+// ============================================================================
+// Migration Operations
+// ============================================================================
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MigrationRequest {
+    pub connection_id: String,
+    pub statements: Vec<String>,
+    pub dry_run: bool,
+    pub lock_timeout_ms: Option<u32>,
+    pub statement_timeout_ms: Option<u32>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StatementError {
+    pub code: Option<String>,
+    pub message: String,
+    pub detail: Option<String>,
+    pub hint: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StatementResult {
+    pub sql: String,
+    pub ok: bool,
+    pub duration_ms: f64,
+    pub rows_affected: Option<u64>,
+    pub error: Option<StatementError>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MigrationResult {
+    pub ok: bool,
+    pub dry_run: bool,
+    pub committed: bool,
+    pub duration_ms: f64,
+    pub statements: Vec<StatementResult>,
+    pub lock_timeout_ms: u32,
+    pub statement_timeout_ms: u32,
+}
+
+pub struct MigrationOperations;
+
+impl MigrationOperations {
+    pub async fn execute_migration(
+        pool: &PgPool,
+        statements: &[String],
+        dry_run: bool,
+        lock_timeout_ms: Option<u32>,
+        statement_timeout_ms: Option<u32>,
+    ) -> Result<MigrationResult> {
+        let lock_timeout = lock_timeout_ms.unwrap_or(5000);
+        let stmt_timeout = statement_timeout_ms.unwrap_or(30000);
+        let total_start = Instant::now();
+
+        // Acquire a connection and begin transaction
+        let mut tx = pool.begin().await?;
+
+        // Set session-local timeouts
+        let setup_sqls = [
+            format!("SET LOCAL lock_timeout = '{lock_timeout}ms'"),
+            format!("SET LOCAL statement_timeout = '{stmt_timeout}ms'"),
+            format!("SET LOCAL idle_in_transaction_session_timeout = '60s'"),
+            "SET LOCAL application_name = 'tusker-migration'".to_string(),
+        ];
+
+        for sql in &setup_sqls {
+            if let Err(e) = sqlx::query(sql).execute(&mut *tx).await {
+                return Ok(MigrationResult {
+                    ok: false,
+                    dry_run,
+                    committed: false,
+                    duration_ms: total_start.elapsed().as_secs_f64() * 1000.0,
+                    statements: vec![StatementResult {
+                        sql: sql.clone(),
+                        ok: false,
+                        duration_ms: 0.0,
+                        rows_affected: None,
+                        error: Some(extract_pg_error(&e)),
+                    }],
+                    lock_timeout_ms: lock_timeout,
+                    statement_timeout_ms: stmt_timeout,
+                });
+            }
+        }
+
+        let mut results: Vec<StatementResult> = Vec::new();
+        let mut all_ok = true;
+
+        for (i, stmt) in statements.iter().enumerate() {
+            let trimmed = stmt.trim();
+            if trimmed.is_empty() {
+                continue;
+            }
+
+            let stmt_start = Instant::now();
+
+            if dry_run {
+                // Use savepoints so we can recover from errors and continue
+                // validating subsequent statements. Don't roll back on success —
+                // let effects accumulate so later statements see prior changes
+                // (e.g. RENAME TABLE followed by ALTER on the new name).
+                // The entire transaction is rolled back at the end.
+                let sp_name = format!("s{i}");
+                let _ = sqlx::query(&format!("SAVEPOINT {sp_name}"))
+                    .execute(&mut *tx)
+                    .await;
+
+                match sqlx::query(trimmed).execute(&mut *tx).await {
+                    Ok(r) => {
+                        let duration = stmt_start.elapsed().as_secs_f64() * 1000.0;
+                        results.push(StatementResult {
+                            sql: trimmed.to_string(),
+                            ok: true,
+                            duration_ms: duration,
+                            rows_affected: Some(r.rows_affected()),
+                            error: None,
+                        });
+                    }
+                    Err(e) => {
+                        let duration = stmt_start.elapsed().as_secs_f64() * 1000.0;
+                        all_ok = false;
+                        results.push(StatementResult {
+                            sql: trimmed.to_string(),
+                            ok: false,
+                            duration_ms: duration,
+                            rows_affected: None,
+                            error: Some(extract_pg_error(&e)),
+                        });
+                        // Roll back only on error so the transaction stays usable
+                        let _ = sqlx::query(&format!("ROLLBACK TO SAVEPOINT {sp_name}"))
+                            .execute(&mut *tx)
+                            .await;
+                    }
+                }
+            } else {
+                // Apply mode: execute directly, abort on first error
+                match sqlx::query(trimmed).execute(&mut *tx).await {
+                    Ok(r) => {
+                        let duration = stmt_start.elapsed().as_secs_f64() * 1000.0;
+                        results.push(StatementResult {
+                            sql: trimmed.to_string(),
+                            ok: true,
+                            duration_ms: duration,
+                            rows_affected: Some(r.rows_affected()),
+                            error: None,
+                        });
+                    }
+                    Err(e) => {
+                        let duration = stmt_start.elapsed().as_secs_f64() * 1000.0;
+                        results.push(StatementResult {
+                            sql: trimmed.to_string(),
+                            ok: false,
+                            duration_ms: duration,
+                            rows_affected: None,
+                            error: Some(extract_pg_error(&e)),
+                        });
+                        // Transaction is aborted — drop it (auto-rollback)
+                        return Ok(MigrationResult {
+                            ok: false,
+                            dry_run,
+                            committed: false,
+                            duration_ms: total_start.elapsed().as_secs_f64() * 1000.0,
+                            statements: results,
+                            lock_timeout_ms: lock_timeout,
+                            statement_timeout_ms: stmt_timeout,
+                        });
+                    }
+                }
+            }
+        }
+
+        // Finalize: rollback for dry-run, commit for apply
+        let committed = if dry_run {
+            tx.rollback().await.ok();
+            false
+        } else {
+            match tx.commit().await {
+                Ok(_) => true,
+                Err(e) => {
+                    results.push(StatementResult {
+                        sql: "COMMIT".to_string(),
+                        ok: false,
+                        duration_ms: 0.0,
+                        rows_affected: None,
+                        error: Some(extract_pg_error(&e)),
+                    });
+                    all_ok = false;
+                    false
+                }
+            }
+        };
+
+        Ok(MigrationResult {
+            ok: all_ok,
+            dry_run,
+            committed,
+            duration_ms: total_start.elapsed().as_secs_f64() * 1000.0,
+            statements: results,
+            lock_timeout_ms: lock_timeout,
+            statement_timeout_ms: stmt_timeout,
+        })
+    }
+}
+
+/// Extract structured error info from a sqlx::Error
+fn extract_pg_error(err: &sqlx::Error) -> StatementError {
+    match err {
+        sqlx::Error::Database(db_err) => {
+            let pg_code = db_err.code().map(|c| c.to_string());
+            let detail = db_err
+                .try_downcast_ref::<sqlx::postgres::PgDatabaseError>()
+                .and_then(|pg| pg.detail().map(|s| s.to_string()));
+            let hint = db_err
+                .try_downcast_ref::<sqlx::postgres::PgDatabaseError>()
+                .and_then(|pg| pg.hint().map(|s| s.to_string()));
+
+            StatementError {
+                code: pg_code,
+                message: db_err.message().to_string(),
+                detail,
+                hint,
+            }
+        }
+        _ => StatementError {
+            code: None,
+            message: err.to_string(),
+            detail: None,
+            hint: None,
+        },
     }
 }
 

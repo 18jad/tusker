@@ -7,8 +7,9 @@ pub use connection::{
     SslMode,
 };
 pub use data::{
-    BulkInsertRequest, ColumnMeta, DataOperations, DeleteRequest, InsertRequest, PaginatedResult,
-    QueryResult, UpdateRequest,
+    BulkInsertRequest, ColumnMeta, DataOperations, DeleteRequest, InsertRequest,
+    MigrationOperations, MigrationRequest, MigrationResult, PaginatedResult, QueryResult,
+    UpdateRequest,
 };
 pub use schema::{
     ColumnInfo, ConstraintInfo, ConstraintType, ForeignKeyInfo, IndexInfo, SchemaInfo,

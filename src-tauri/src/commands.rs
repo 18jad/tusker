@@ -1,7 +1,8 @@
 use crate::db::{
     BulkInsertRequest, ColumnInfo, ConnectionConfig, ConnectionInfo, ConnectionManager,
     ConstraintInfo, CredentialStorage, DataOperations, DeleteRequest, IndexInfo, InsertRequest,
-    PaginatedResult, QueryResult, SchemaInfo, SchemaIntrospector, SslMode, TableInfo, UpdateRequest,
+    MigrationOperations, MigrationRequest, MigrationResult, PaginatedResult, QueryResult,
+    SchemaInfo, SchemaIntrospector, SslMode, TableInfo, UpdateRequest,
 };
 use crate::error::Result;
 use serde::{Deserialize, Serialize};
@@ -382,6 +383,24 @@ pub async fn execute_query(
     let pool = connection_manager.get_pool(&connection_id).await?;
 
     DataOperations::execute_raw_query(&pool, &sql).await
+}
+
+#[tauri::command]
+pub async fn execute_migration(
+    state: State<'_, AppState>,
+    request: MigrationRequest,
+) -> Result<MigrationResult> {
+    let connection_manager = state.connection_manager.read().await;
+    let pool = connection_manager.get_pool(&request.connection_id).await?;
+
+    MigrationOperations::execute_migration(
+        &pool,
+        &request.statements,
+        request.dry_run,
+        request.lock_timeout_ms,
+        request.statement_timeout_ms,
+    )
+    .await
 }
 
 // ============================================================================
