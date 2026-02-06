@@ -204,6 +204,179 @@ export function generateCreateTableSQL(
 }
 
 /**
+ * Column with a stable id for diffing in ALTER TABLE generation
+ */
+export interface AlterColumnDef {
+  id: string;
+  name: string;
+  dataType: string;
+  isNullable: boolean;
+  isPrimaryKey: boolean;
+  isUnique: boolean;
+  defaultValue: string;
+  isForeignKey: boolean;
+  foreignKeySchema: string;
+  foreignKeyTable: string;
+  foreignKeyColumn: string;
+  foreignKeyOnDelete: ForeignKeyAction;
+  foreignKeyOnUpdate: ForeignKeyAction;
+  foreignKeyConstraintName: string; // original constraint name for dropping
+}
+
+function buildReferencesClause(col: AlterColumnDef): string {
+  let ref = `REFERENCES "${col.foreignKeySchema}"."${col.foreignKeyTable}"("${col.foreignKeyColumn}")`;
+  if (col.foreignKeyOnDelete && col.foreignKeyOnDelete !== "NO ACTION") {
+    ref += ` ON DELETE ${col.foreignKeyOnDelete}`;
+  }
+  if (col.foreignKeyOnUpdate && col.foreignKeyOnUpdate !== "NO ACTION") {
+    ref += ` ON UPDATE ${col.foreignKeyOnUpdate}`;
+  }
+  return ref;
+}
+
+/**
+ * Generate ALTER TABLE SQL statements by diffing original vs edited columns
+ */
+export function generateAlterTableSQL(
+  schema: string,
+  tableName: string,
+  originalColumns: AlterColumnDef[],
+  editedColumns: AlterColumnDef[],
+  newTableName?: string
+): string[] {
+  const stmts: string[] = [];
+  const effTableName = newTableName || tableName;
+  const tbl = `"${schema}"."${effTableName}"`;
+
+  // Table rename (must come first — subsequent statements use the new name)
+  if (newTableName && newTableName !== tableName) {
+    stmts.push(`ALTER TABLE "${schema}"."${tableName}" RENAME TO "${newTableName}"`);
+  }
+
+  const originalById = new Map(originalColumns.map((c) => [c.id, c]));
+  const editedById = new Map(editedColumns.map((c) => [c.id, c]));
+
+  // Dropped columns: in original but not in edited
+  for (const orig of originalColumns) {
+    if (!editedById.has(orig.id)) {
+      stmts.push(`ALTER TABLE ${tbl} DROP COLUMN "${orig.name}"`);
+    }
+  }
+
+  // Modified columns: in both original and edited
+  for (const edited of editedColumns) {
+    const orig = originalById.get(edited.id);
+    if (!orig) continue; // new column, handled below
+
+    // Rename
+    if (edited.name !== orig.name) {
+      stmts.push(`ALTER TABLE ${tbl} RENAME COLUMN "${orig.name}" TO "${edited.name}"`);
+    }
+
+    // Use the current column name (after potential rename) for subsequent ALTER COLUMN
+    const colName = edited.name;
+
+    // Type change
+    if (edited.dataType !== orig.dataType) {
+      stmts.push(
+        `ALTER TABLE ${tbl} ALTER COLUMN "${colName}" TYPE ${edited.dataType} USING "${colName}"::${edited.dataType}`
+      );
+    }
+
+    // Nullable change
+    if (edited.isNullable !== orig.isNullable) {
+      stmts.push(
+        edited.isNullable
+          ? `ALTER TABLE ${tbl} ALTER COLUMN "${colName}" DROP NOT NULL`
+          : `ALTER TABLE ${tbl} ALTER COLUMN "${colName}" SET NOT NULL`
+      );
+    }
+
+    // Default change
+    if (edited.defaultValue !== orig.defaultValue) {
+      if (edited.defaultValue.trim()) {
+        stmts.push(
+          `ALTER TABLE ${tbl} ALTER COLUMN "${colName}" SET DEFAULT ${edited.defaultValue}`
+        );
+      } else {
+        stmts.push(`ALTER TABLE ${tbl} ALTER COLUMN "${colName}" DROP DEFAULT`);
+      }
+    }
+
+    // Primary key change
+    if (edited.isPrimaryKey !== orig.isPrimaryKey) {
+      if (edited.isPrimaryKey) {
+        stmts.push(`ALTER TABLE ${tbl} ADD PRIMARY KEY ("${colName}")`);
+      } else {
+        stmts.push(`ALTER TABLE ${tbl} DROP CONSTRAINT "${effTableName}_pkey"`);
+      }
+    }
+
+    // Unique change
+    if (edited.isUnique !== orig.isUnique) {
+      if (edited.isUnique) {
+        stmts.push(`ALTER TABLE ${tbl} ADD UNIQUE ("${colName}")`);
+      } else {
+        stmts.push(`ALTER TABLE ${tbl} DROP CONSTRAINT "${effTableName}_${colName}_key"`);
+      }
+    }
+
+    // Foreign key change
+    const origHasFK = orig.isForeignKey && orig.foreignKeySchema && orig.foreignKeyTable && orig.foreignKeyColumn;
+    const editedHasFK = edited.isForeignKey && edited.foreignKeySchema && edited.foreignKeyTable && edited.foreignKeyColumn;
+
+    if (origHasFK && !editedHasFK) {
+      // FK removed
+      const constraintName = orig.foreignKeyConstraintName || `${effTableName}_${orig.name}_fkey`;
+      stmts.push(`ALTER TABLE ${tbl} DROP CONSTRAINT "${constraintName}"`);
+    } else if (!origHasFK && editedHasFK) {
+      // FK added
+      stmts.push(`ALTER TABLE ${tbl} ADD FOREIGN KEY ("${colName}") ${buildReferencesClause(edited)}`);
+    } else if (origHasFK && editedHasFK) {
+      // FK changed (different target or different actions)
+      const changed =
+        orig.foreignKeySchema !== edited.foreignKeySchema ||
+        orig.foreignKeyTable !== edited.foreignKeyTable ||
+        orig.foreignKeyColumn !== edited.foreignKeyColumn ||
+        orig.foreignKeyOnDelete !== edited.foreignKeyOnDelete ||
+        orig.foreignKeyOnUpdate !== edited.foreignKeyOnUpdate;
+      if (changed) {
+        const constraintName = orig.foreignKeyConstraintName || `${effTableName}_${orig.name}_fkey`;
+        stmts.push(`ALTER TABLE ${tbl} DROP CONSTRAINT "${constraintName}"`);
+        stmts.push(`ALTER TABLE ${tbl} ADD FOREIGN KEY ("${colName}") ${buildReferencesClause(edited)}`);
+      }
+    }
+  }
+
+  // Added columns: in edited but not in original
+  for (const edited of editedColumns) {
+    if (originalById.has(edited.id)) continue;
+    if (!edited.name.trim()) continue;
+
+    const parts = [`ADD COLUMN "${edited.name}" ${edited.dataType}`];
+    if (edited.isPrimaryKey) {
+      parts.push("PRIMARY KEY");
+    } else {
+      if (!edited.isNullable) {
+        parts.push("NOT NULL");
+      }
+      if (edited.isUnique) {
+        parts.push("UNIQUE");
+      }
+    }
+    if (edited.defaultValue.trim()) {
+      parts.push(`DEFAULT ${edited.defaultValue}`);
+    }
+    if (edited.isForeignKey && edited.foreignKeySchema && edited.foreignKeyTable && edited.foreignKeyColumn) {
+      parts.push(buildReferencesClause(edited));
+    }
+    stmts.push(`ALTER TABLE ${tbl} ${parts.join(" ")}`);
+  }
+
+  return stmts;
+}
+
+/**
  * Validate SQL to prevent obvious injection (basic check)
  */
 export function validateSQL(sql: string): { valid: boolean; error?: string } {
