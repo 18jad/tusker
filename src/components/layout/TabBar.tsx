@@ -177,11 +177,14 @@ export function TabBar() {
   const [renamingTabId, setRenamingTabId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
 
-  // Drag state - use refs for values needed in event handlers (closure issue)
+  // Drag state
   const [dragIndex, setDragIndex] = useState<number | null>(null);
-  const [dropIndicatorLeft, setDropIndicatorLeft] = useState<number | null>(null);
+  const [dropIndex, setDropIndex] = useState<number | null>(null);
+  const [ghostStyle, setGhostStyle] = useState<React.CSSProperties | null>(null);
   const dragIndexRef = useRef<number | null>(null);
   const dropIndexRef = useRef<number | null>(null);
+  const dragOffsetRef = useRef<number>(0);
+  const dragWidthRef = useRef<number>(0);
 
   const handleRenameStart = useCallback((tab: Tab) => {
     setRenamingTabId(tab.id);
@@ -259,8 +262,14 @@ export function TabBar() {
     const startY = e.clientY;
     let isDragging = false;
 
+    const tabEl = tabRefs.current[index];
+    if (!tabEl) return;
+    const tabRect = tabEl.getBoundingClientRect();
+
     // Store in ref for access in mouseup handler
     dragIndexRef.current = index;
+    dragOffsetRef.current = e.clientX - tabRect.left;
+    dragWidthRef.current = tabRect.width;
 
     const handleMouseMove = (moveEvent: MouseEvent) => {
       // Start drag only after moving a few pixels (to allow clicks)
@@ -270,43 +279,48 @@ export function TabBar() {
         if (dx > 5 || dy > 5) {
           isDragging = true;
           setDragIndex(index);
+          document.body.style.cursor = "grabbing";
+          document.body.style.userSelect = "none";
         }
       }
 
-      if (isDragging && scrollContainerRef.current) {
-        const container = scrollContainerRef.current;
-        const containerRect = container.getBoundingClientRect();
-        const mouseX = moveEvent.clientX - containerRect.left + container.scrollLeft;
+      if (!isDragging) return;
 
-        // Find drop position
-        let newDropIndex = tabs.length;
-        let indicatorLeft = 0;
+      // Position the ghost to follow the cursor
+      setGhostStyle({
+        position: "fixed",
+        left: moveEvent.clientX - dragOffsetRef.current,
+        top: tabRect.top,
+        width: tabRect.width,
+        height: tabRect.height,
+      });
 
-        for (let i = 0; i < tabRefs.current.length; i++) {
-          const tabEl = tabRefs.current[i];
-          if (!tabEl) continue;
+      if (!scrollContainerRef.current) return;
+      const container = scrollContainerRef.current;
+      const containerRect = container.getBoundingClientRect();
+      const mouseX = moveEvent.clientX - containerRect.left + container.scrollLeft;
 
-          const tabRect = tabEl.getBoundingClientRect();
-          const tabLeft = tabRect.left - containerRect.left + container.scrollLeft;
-          const tabCenter = tabLeft + tabRect.width / 2;
-
-          if (mouseX < tabCenter) {
-            newDropIndex = i;
-            indicatorLeft = tabLeft;
-            break;
-          } else {
-            indicatorLeft = tabLeft + tabRect.width;
-          }
+      // Find drop position based on centers of other tabs (skip dragged tab)
+      let newDropIndex = tabs.length;
+      for (let i = 0; i < tabRefs.current.length; i++) {
+        const el = tabRefs.current[i];
+        if (!el) continue;
+        const r = el.getBoundingClientRect();
+        const elLeft = r.left - containerRect.left + container.scrollLeft;
+        const elCenter = elLeft + r.width / 2;
+        if (mouseX < elCenter) {
+          newDropIndex = i;
+          break;
         }
+      }
 
-        // Don't show indicator at the original position or right next to it
-        if (newDropIndex === index || newDropIndex === index + 1) {
-          dropIndexRef.current = null;
-          setDropIndicatorLeft(null);
-        } else {
-          dropIndexRef.current = newDropIndex;
-          setDropIndicatorLeft(indicatorLeft);
-        }
+      // Normalize: dropping at index or index+1 means no move
+      if (newDropIndex === index || newDropIndex === index + 1) {
+        dropIndexRef.current = null;
+        setDropIndex(null);
+      } else {
+        dropIndexRef.current = newDropIndex;
+        setDropIndex(newDropIndex);
       }
     };
 
@@ -315,7 +329,6 @@ export function TabBar() {
       const toIndex = dropIndexRef.current;
 
       if (isDragging && fromIndex !== null && toIndex !== null) {
-        // Adjust drop index if dropping after the original position
         const adjustedDropIndex = toIndex > fromIndex ? toIndex - 1 : toIndex;
         if (adjustedDropIndex !== fromIndex) {
           reorderTabs(fromIndex, adjustedDropIndex);
@@ -326,7 +339,10 @@ export function TabBar() {
       dragIndexRef.current = null;
       dropIndexRef.current = null;
       setDragIndex(null);
-      setDropIndicatorLeft(null);
+      setDropIndex(null);
+      setGhostStyle(null);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
 
       document.removeEventListener("mousemove", handleMouseMove);
       document.removeEventListener("mouseup", handleMouseUp);
@@ -334,6 +350,23 @@ export function TabBar() {
 
     document.addEventListener("mousemove", handleMouseMove);
     document.addEventListener("mouseup", handleMouseUp);
+  };
+
+  /** Compute translateX for each tab to shift around the dragged tab */
+  const getTabTransform = (index: number): React.CSSProperties => {
+    if (dragIndex === null || dropIndex === null) return {};
+    const w = dragWidthRef.current;
+    // Effective drop target (where the gap appears)
+    const target = dropIndex > dragIndex ? dropIndex - 1 : dropIndex;
+    if (index === dragIndex) return {};
+    if (target > dragIndex) {
+      // Dragging right: shift tabs between (dragIndex+1..target) left
+      if (index > dragIndex && index <= target) return { transform: `translateX(-${w}px)`, transition: "transform 200ms ease" };
+    } else {
+      // Dragging left: shift tabs between (target..dragIndex-1) right
+      if (index >= target && index < dragIndex) return { transform: `translateX(${w}px)`, transition: "transform 200ms ease" };
+    }
+    return { transition: "transform 200ms ease" };
   };
 
   if (tabs.length === 0) {
@@ -385,8 +418,9 @@ export function TabBar() {
             key={tab.id}
             ref={(el) => { tabRefs.current[index] = el; }}
             onMouseDown={(e) => handleMouseDown(e, index)}
+            style={getTabTransform(index)}
             className={cn(
-              dragIndex === index && "opacity-50"
+              dragIndex === index && "opacity-30 pointer-events-none"
             )}
           >
             <TabItem
@@ -406,14 +440,6 @@ export function TabBar() {
             />
           </div>
         ))}
-
-        {/* Drop indicator */}
-        {dropIndicatorLeft !== null && (
-          <div
-            className="absolute top-1 bottom-1 w-0.5 bg-[var(--accent)] rounded-full z-20 pointer-events-none"
-            style={{ left: dropIndicatorLeft }}
-          />
-        )}
       </div>
 
       {/* Scroll right button */}
@@ -430,6 +456,34 @@ export function TabBar() {
         >
           <ChevronRight className="w-4 h-4 text-[var(--text-secondary)]" />
         </button>
+      )}
+
+      {/* Floating ghost while dragging */}
+      {dragIndex !== null && ghostStyle && (
+        <div
+          className={cn(
+            "z-50 pointer-events-none",
+            "rounded-md shadow-xl shadow-black/50 overflow-hidden",
+            "opacity-85"
+          )}
+          style={ghostStyle}
+        >
+          <TabItem
+            tab={tabs[dragIndex]}
+            isActive={true}
+            isRenaming={false}
+            renameValue=""
+            onActivate={() => {}}
+            onClose={() => {}}
+            onRenameStart={() => {}}
+            onRenameChange={() => {}}
+            onRenameSubmit={() => {}}
+            onRenameCancel={() => {}}
+            onCloseOthers={() => {}}
+            onCloseAll={() => {}}
+            tabCount={0}
+          />
+        </div>
       )}
     </div>
   );
