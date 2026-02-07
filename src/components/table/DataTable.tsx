@@ -4,8 +4,9 @@ import { cn } from "../../lib/utils";
 import { useUIStore } from "../../stores/uiStore";
 import { RelationSelect } from "../ui/RelationSelect";
 import { EnumSelect } from "../ui/EnumSelect";
+import { ContextMenu } from "../ui/ContextMenu";
 import type { Column, Row, CellValue, SortColumn } from "../../types";
-import { Key, Hash, Type, Calendar, ToggleLeft, Braces, ArrowUp, ArrowDown } from "lucide-react";
+import { Key, Hash, Type, Calendar, ToggleLeft, Braces, ArrowUp, ArrowDown, Copy, Columns, RotateCcw } from "lucide-react";
 import "react-datepicker/dist/react-datepicker.css";
 
 interface DataTableProps {
@@ -967,6 +968,7 @@ export function DataTable({
 }: DataTableProps) {
   const allColumnWidths = useUIStore((state) => state.columnWidths);
   const setColumnWidth = useUIStore((state) => state.setColumnWidth);
+  const setTableSort = useUIStore((state) => state.setTableSort);
   const [resizing, setResizing] = useState<string | null>(null);
   const [editingCell, setEditingCell] = useState<{ row: number; col: string } | null>(null);
   const [hoveringRowNumber, setHoveringRowNumber] = useState<number | null>(null);
@@ -1035,6 +1037,29 @@ export function DataTable({
     setEditingCell(null);
   };
 
+  // Context menu handlers for column headers
+  const handleSortAscending = useCallback((columnName: string) => {
+    // Set sort to ASC for this column (replace any existing sorts with single column ASC)
+    setTableSort(tableKey, [{ column: columnName, direction: "ASC" }]);
+  }, [tableKey, setTableSort]);
+
+  const handleSortDescending = useCallback((columnName: string) => {
+    // Set sort to DESC for this column (replace any existing sorts with single column DESC)
+    setTableSort(tableKey, [{ column: columnName, direction: "DESC" }]);
+  }, [tableKey, setTableSort]);
+
+  const handleResetSort = useCallback(() => {
+    // Clear all sorts
+    setTableSort(tableKey, []);
+  }, [tableKey, setTableSort]);
+
+  const handleCopyColumnName = useCallback((columnName: string) => {
+    navigator.clipboard.writeText(columnName);
+  }, []);
+
+  const handleResetLayout = useCallback(() => {
+    useUIStore.getState().resetColumnWidths(tableKey);
+  }, [tableKey]);
 
   if (columns.length === 0) {
     return (
@@ -1072,53 +1097,88 @@ export function DataTable({
                   style={{ width: getColumnWidth(column.name), minWidth: getColumnWidth(column.name) }}
                   aria-sort={isSorted ? (isAsc ? "ascending" : "descending") : "none"}
                 >
-                  <div
-                    className={cn(
-                      "flex flex-col px-3 py-1.5 transition-colors",
-                      onSort && "cursor-pointer select-none hover:bg-[var(--bg-tertiary)]/50",
-                      isSorted && "bg-[var(--bg-tertiary)]/30"
-                    )}
-                    onClick={(e) => onSort?.(column.name, e.shiftKey)}
-                    onKeyDown={(e) => {
-                      if (onSort && (e.key === "Enter" || e.key === " ")) {
-                        e.preventDefault();
-                        onSort(column.name, e.shiftKey);
-                      }
-                    }}
-                    tabIndex={onSort ? 0 : undefined}
-                    role={onSort ? "button" : undefined}
-                    aria-label={onSort ? `Sort by ${column.name}${isSorted ? (isAsc ? ", currently ascending" : ", currently descending") : ""}. Hold Shift to add to multi-sort.` : undefined}
+                  <ContextMenu
+                    items={[
+                      {
+                        label: "Sort Ascending",
+                        icon: <ArrowUp className="w-3.5 h-3.5" />,
+                        onClick: () => handleSortAscending(column.name),
+                        disabled: !onSort,
+                      },
+                      {
+                        label: "Sort Descending",
+                        icon: <ArrowDown className="w-3.5 h-3.5" />,
+                        onClick: () => handleSortDescending(column.name),
+                        disabled: !onSort,
+                      },
+                      {
+                        label: "Reset Sort",
+                        icon: <RotateCcw className="w-3.5 h-3.5" />,
+                        onClick: handleResetSort,
+                        disabled: !onSort || sorts.length === 0,
+                      },
+                      { type: "separator" },
+                      {
+                        label: "Copy Column Name",
+                        icon: <Copy className="w-3.5 h-3.5" />,
+                        onClick: () => handleCopyColumnName(column.name),
+                      },
+                      { type: "separator" },
+                      {
+                        label: "Reset Layout",
+                        icon: <Columns className="w-3.5 h-3.5" />,
+                        onClick: handleResetLayout,
+                      },
+                    ]}
                   >
-                    <div className="flex items-center gap-2">
-                      {column.isPrimaryKey ? (
-                        <Key className="w-3 h-3 flex-shrink-0 text-[var(--warning)]" />
-                      ) : (
-                        <span className="flex-shrink-0 text-[var(--text-muted)]">{getTypeIcon(column.dataType)}</span>
+                    <div
+                      className={cn(
+                        "flex flex-col px-3 py-1.5 transition-colors",
+                        onSort && "cursor-pointer select-none hover:bg-[var(--bg-tertiary)]/50",
+                        isSorted && "bg-[var(--bg-tertiary)]/30"
                       )}
-                      <span className={cn(
-                        "text-xs font-medium truncate",
-                        isSorted ? "text-[var(--accent)]" : "text-[var(--text-primary)]"
-                      )}>
-                        {column.name}
-                      </span>
-                      {isSorted && (
-                        <span className="flex items-center gap-0.5 flex-shrink-0">
-                          {isMultiSort && (
-                            <span className="text-[9px] font-semibold text-[var(--accent)] min-w-[12px] h-[14px] flex items-center justify-center rounded bg-[var(--accent)]/15">
-                              {sortIndex + 1}
-                            </span>
-                          )}
-                          {isAsc
-                            ? <ArrowUp className="w-3 h-3 text-[var(--accent)]" />
-                            : <ArrowDown className="w-3 h-3 text-[var(--accent)]" />
-                          }
+                      onClick={(e) => onSort?.(column.name, e.shiftKey)}
+                      onKeyDown={(e) => {
+                        if (onSort && (e.key === "Enter" || e.key === " ")) {
+                          e.preventDefault();
+                          onSort(column.name, e.shiftKey);
+                        }
+                      }}
+                      tabIndex={onSort ? 0 : undefined}
+                      role={onSort ? "button" : undefined}
+                      aria-label={onSort ? `Sort by ${column.name}${isSorted ? (isAsc ? ", currently ascending" : ", currently descending") : ""}. Hold Shift to add to multi-sort.` : undefined}
+                    >
+                      <div className="flex items-center gap-2">
+                        {column.isPrimaryKey ? (
+                          <Key className="w-3 h-3 flex-shrink-0 text-[var(--warning)]" />
+                        ) : (
+                          <span className="flex-shrink-0 text-[var(--text-muted)]">{getTypeIcon(column.dataType)}</span>
+                        )}
+                        <span className={cn(
+                          "text-xs font-medium truncate",
+                          isSorted ? "text-[var(--accent)]" : "text-[var(--text-primary)]"
+                        )}>
+                          {column.name}
                         </span>
-                      )}
+                        {isSorted && (
+                          <span className="flex items-center gap-0.5 flex-shrink-0">
+                            {isMultiSort && (
+                              <span className="text-[9px] font-semibold text-[var(--accent)] min-w-[12px] h-[14px] flex items-center justify-center rounded bg-[var(--accent)]/15">
+                                {sortIndex + 1}
+                              </span>
+                            )}
+                            {isAsc
+                              ? <ArrowUp className="w-3 h-3 text-[var(--accent)]" />
+                              : <ArrowDown className="w-3 h-3 text-[var(--accent)]" />
+                            }
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-[10px] text-[var(--text-muted)] truncate">
+                        {column.dataType}
+                      </span>
                     </div>
-                    <span className="text-[10px] text-[var(--text-muted)] truncate">
-                      {column.dataType}
-                    </span>
-                  </div>
+                  </ContextMenu>
                   {/* Resize handle */}
                   <div
                     className={cn(
