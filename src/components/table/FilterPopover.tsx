@@ -382,9 +382,6 @@ export function FilterPanel({ columns, filters, onFiltersChange, onClose }: Filt
                 )
               )}
 
-              {/* Spacer when no value input needed */}
-              {(!needsValue || !draft.column) && <div className="flex-1" />}
-
               {/* Remove */}
               <button
                 onClick={() => removeFilterRule(index)}
