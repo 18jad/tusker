@@ -20,6 +20,9 @@ import {
   FileJson,
   Terminal,
   Settings,
+  Plug,
+  Unplug,
+  ArrowLeftRight,
 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useProjectStore } from "../../stores/projectStore";
@@ -27,6 +30,7 @@ import { useUIStore } from "../../stores/uiStore";
 import { cn, generateId, PROJECT_COLORS, modKey } from "../../lib/utils";
 import { exportTable } from "../../lib/exportTable";
 import { ContextMenu } from "../ui";
+import { useConnect, useDisconnect } from "../../hooks/useDatabase";
 import type { Schema, Table } from "../../types";
 
 interface TreeItemProps {
@@ -342,7 +346,14 @@ function ProjectTree() {
   const schemas = useProjectStore((state) => state.schemas);
   const connectionStatus = useProjectStore((state) => state.connectionStatus);
   const schemasLoading = useProjectStore((state) => state.schemasLoading);
+  const openProjectModal = useUIStore((state) => state.openProjectModal);
+  const toggleProjectSpotlight = useUIStore((state) => state.toggleProjectSpotlight);
+  const showToast = useUIStore((state) => state.showToast);
+  const queryClient = useQueryClient();
   const [isExpanded, setIsExpanded] = useState(true);
+
+  const connect = useConnect();
+  const disconnect = useDisconnect();
 
   if (!activeProject) {
     return (
@@ -354,41 +365,118 @@ function ProjectTree() {
 
   const colorConfig = PROJECT_COLORS[activeProject.color];
 
+  const handleConnect = () => {
+    connect.mutate(activeProject.connection);
+  };
+
+  const handleDisconnect = () => {
+    disconnect.mutate();
+  };
+
+  const connectionMenuItems = connectionStatus === "disconnected" || connectionStatus === "error"
+    ? [
+        {
+          label: "Connect",
+          icon: <Plug className="w-4 h-4" />,
+          onClick: handleConnect,
+        },
+      ]
+    : connectionStatus === "connected"
+    ? [
+        {
+          label: "Disconnect",
+          icon: <Unplug className="w-4 h-4" />,
+          variant: "danger" as const,
+          onClick: handleDisconnect,
+        },
+      ]
+    : [];
+
   return (
     <div className="py-2">
-      <TreeItem
-        label={activeProject.name}
-        icon={
-          <Database className={cn("w-4 h-4", colorConfig.text)} />
-        }
-        level={0}
-        isExpanded={isExpanded}
-        onToggle={() => setIsExpanded(!isExpanded)}
+      <ContextMenu
+        items={[
+          ...connectionMenuItems,
+          ...(connectionMenuItems.length > 0 ? [{ type: "separator" as const }] : []),
+          {
+            label: "Copy Connection Name",
+            icon: <Copy className="w-4 h-4" />,
+            onClick: () => {
+              navigator.clipboard.writeText(activeProject.name);
+              showToast(`Copied "${activeProject.name}" to clipboard`);
+            },
+          },
+          {
+            label: "Copy Database Name",
+            icon: <Database className="w-4 h-4" />,
+            onClick: () => {
+              navigator.clipboard.writeText(activeProject.connection.database);
+              showToast(`Copied "${activeProject.connection.database}" to clipboard`);
+            },
+          },
+          {
+            label: "Refresh All Schemas",
+            icon: <RefreshCw className="w-4 h-4" />,
+            onClick: () => {
+              queryClient.invalidateQueries({
+                queryKey: ["schemas"],
+              });
+              showToast("Refreshed all schemas");
+            },
+          },
+          {
+            type: "separator" as const,
+          },
+          {
+            label: "Switch Project",
+            icon: <ArrowLeftRight className="w-4 h-4" />,
+            onClick: () => {
+              toggleProjectSpotlight();
+            },
+          },
+          {
+            label: "Project Settings",
+            icon: <Settings className="w-4 h-4" />,
+            onClick: () => {
+              openProjectModal(activeProject.id);
+            },
+          },
+        ]}
       >
-        {connectionStatus === "connecting" ? (
-          <div className="text-xs text-[var(--text-muted)] py-1 pl-12">
-            Connecting...
-          </div>
-        ) : connectionStatus === "connected" ? (
-          schemasLoading ? (
+        <TreeItem
+          label={activeProject.name}
+          icon={
+            <Database className={cn("w-4 h-4", colorConfig.text)} />
+          }
+          level={0}
+          isExpanded={isExpanded}
+          onToggle={() => setIsExpanded(!isExpanded)}
+        >
+          {connectionStatus === "connecting" ? (
             <div className="text-xs text-[var(--text-muted)] py-1 pl-12">
-              Loading schemas...
+              Connecting...
             </div>
-          ) : schemas.length > 0 ? (
-            schemas.map((schema) => (
-              <SchemaTree key={schema.name} schema={schema} level={1} />
-            ))
+          ) : connectionStatus === "connected" ? (
+            schemasLoading ? (
+              <div className="text-xs text-[var(--text-muted)] py-1 pl-12">
+                Loading schemas...
+              </div>
+            ) : schemas.length > 0 ? (
+              schemas.map((schema) => (
+                <SchemaTree key={schema.name} schema={schema} level={1} />
+              ))
+            ) : (
+              <div className="text-xs text-[var(--text-muted)] py-1 pl-12">
+                No schemas found
+              </div>
+            )
           ) : (
             <div className="text-xs text-[var(--text-muted)] py-1 pl-12">
-              No schemas found
+              Not connected
             </div>
-          )
-        ) : (
-          <div className="text-xs text-[var(--text-muted)] py-1 pl-12">
-            Not connected
-          </div>
-        )}
-      </TreeItem>
+          )}
+        </TreeItem>
+      </ContextMenu>
     </div>
   );
 }
