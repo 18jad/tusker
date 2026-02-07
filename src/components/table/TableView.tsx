@@ -21,7 +21,7 @@ import type { CellValue, TableData, SortColumn, FilterCondition } from "../../ty
 import { DataTable } from "./DataTable";
 import { Pagination } from "./Pagination";
 import { SortPopover } from "./SortPopover";
-import { FilterPopover } from "./FilterPopover";
+import { FilterButton, FilterPanel } from "./FilterPopover";
 import { cn } from "../../lib/utils";
 import { useUIStore } from "../../stores/uiStore";
 import { exportTable } from "../../lib/exportTable";
@@ -149,6 +149,16 @@ export function TableView({
   const showToast = useUIStore((state) => state.showToast);
   const [selectedRowIndices, setSelectedRowIndices] = useState<Set<number>>(new Set());
   const [lastSelectedIndex, setLastSelectedIndex] = useState<number | null>(null);
+  const [isFilterPanelOpen, setIsFilterPanelOpen] = useState(false);
+
+  const handleRemoveFilter = useCallback(
+    (index: number) => {
+      if (!onFiltersChange) return;
+      const next = filters.filter((_, i) => i !== index);
+      onFiltersChange(next);
+    },
+    [filters, onFiltersChange],
+  );
 
   const handleRowSelect = useCallback((index: number, modifiers: { shift: boolean; ctrl: boolean }) => {
     setSelectedRowIndices((prev) => {
@@ -317,7 +327,7 @@ export function TableView({
   const totalPages = Math.max(1, Math.ceil(data.totalRows / data.pageSize));
 
   return (
-    <div className="flex flex-col h-full relative">
+    <div className="flex flex-col h-full">
       {/* Table toolbar */}
       <div className="flex items-center justify-between px-3 h-10 bg-[var(--bg-secondary)] border-b border-[var(--border-color)] shrink-0">
         {/* Left side - Row actions when selected */}
@@ -407,10 +417,12 @@ export function TableView({
           </span>
 
           {onFiltersChange && data && (
-            <FilterPopover
+            <FilterButton
               columns={data.columns}
               filters={filters}
-              onFiltersChange={onFiltersChange}
+              isOpen={isFilterPanelOpen}
+              onToggle={() => setIsFilterPanelOpen((v) => !v)}
+              onRemoveFilter={handleRemoveFilter}
             />
           )}
 
@@ -565,9 +577,19 @@ export function TableView({
         </div>
       </div>
 
-      {/* Shimmer loading line — absolutely positioned, no layout shift */}
+      {/* Inline filter panel — slides down below toolbar */}
+      {isFilterPanelOpen && onFiltersChange && data && (
+        <FilterPanel
+          columns={data.columns}
+          filters={filters}
+          onFiltersChange={onFiltersChange}
+          onClose={() => setIsFilterPanelOpen(false)}
+        />
+      )}
+
+      {/* Shimmer loading line */}
       {isFetching && (
-        <div className="absolute top-10 left-0 right-0 h-[1.5px] z-30 overflow-hidden bg-[var(--accent)]/10">
+        <div className="h-[1.5px] shrink-0 overflow-hidden bg-[var(--accent)]/10">
           <div className="h-full w-full animate-[shimmer_1.8s_linear_infinite] bg-[length:200%_100%] bg-gradient-to-r from-transparent via-[var(--accent)] to-transparent" />
         </div>
       )}
