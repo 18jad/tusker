@@ -301,7 +301,7 @@ export function FilterPanel({ columns, filters, onFiltersChange, onClose }: Filt
                 onChange={(e) => updateColumn(index, e.target.value)}
                 className={cn(
                   inputCls,
-                  "w-[160px] min-w-[160px] cursor-pointer",
+                  "flex-1 min-w-0 cursor-pointer",
                   !draft.column && "text-[var(--text-muted)]",
                 )}
               >
@@ -320,7 +320,7 @@ export function FilterPanel({ columns, filters, onFiltersChange, onClose }: Filt
                 value={draft.operator}
                 onChange={(e) => updateOperator(index, e.target.value as FilterOperator)}
                 disabled={!draft.column}
-                className={cn(inputCls, "w-[130px] min-w-[130px] cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed")}
+                className={cn(inputCls, "flex-1 min-w-0 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed")}
               >
                 {operators.map((op) => (
                   <option key={op.value} value={op.value}>
@@ -408,7 +408,7 @@ export function FilterPanel({ columns, filters, onFiltersChange, onClose }: Filt
           <button
             onClick={addFilterRule}
             className={cn(
-              "flex items-center gap-1.5 px-3 h-8 rounded text-xs",
+              "w-full flex items-center justify-center gap-1.5 h-8 rounded text-xs",
               "border border-dashed border-[var(--border-color)]",
               "text-[var(--text-muted)] hover:text-[var(--accent)]",
               "hover:border-[var(--accent)]/50 transition-colors",
