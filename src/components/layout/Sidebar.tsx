@@ -143,159 +143,197 @@ function SchemaTree({ schema, level }: SchemaTreeProps) {
   };
 
   return (
-    <TreeItem
-      label={schema.name}
-      icon={
-        isExpanded ? (
-          <FolderOpen className="w-4 h-4 text-[var(--warning)]" />
-        ) : (
-          <FolderClosed className="w-4 h-4 text-[var(--warning)]" />
-        )
-      }
-      level={level}
-      isExpanded={isExpanded}
-      onToggle={() => toggleSchemaExpanded(schema.name)}
-      action={
-        <button
-          onClick={handleCreateTable}
-          className={cn(
-            "p-0.5 rounded hover:bg-[var(--bg-tertiary)]",
-            "text-[var(--text-muted)] hover:text-purple-400",
-            "transition-colors duration-150"
-          )}
-          title={`Create table in ${schema.name}`}
-        >
-          <Plus className="w-3.5 h-3.5" />
-        </button>
-      }
+    <ContextMenu
+      items={[
+        {
+          label: "Add New Table",
+          icon: <Plus className="w-4 h-4" />,
+          onClick: () => {
+            addCreateTableTab(schema.name);
+          },
+        },
+        {
+          label: "Copy Schema Name",
+          icon: <Copy className="w-4 h-4" />,
+          onClick: () => {
+            navigator.clipboard.writeText(schema.name);
+            showToast(`Copied "${schema.name}" to clipboard`);
+          },
+        },
+        {
+          label: "Copy CREATE SCHEMA",
+          icon: <Code className="w-4 h-4" />,
+          onClick: () => {
+            navigator.clipboard.writeText(`CREATE SCHEMA "${schema.name}";`);
+            showToast(`Copied CREATE SCHEMA statement to clipboard`);
+          },
+        },
+        {
+          label: "Refresh Schema",
+          icon: <RefreshCw className="w-4 h-4" />,
+          onClick: () => {
+            queryClient.invalidateQueries({
+              queryKey: ["schemas"],
+            });
+            showToast(`Refreshed schema "${schema.name}"`);
+          },
+        },
+      ]}
     >
-      {schema.tables.map((table) => (
-        <ContextMenu
-          key={`${schema.name}.${table.name}`}
-          items={[
-            {
-              label: "Copy Name",
-              icon: <Copy className="w-4 h-4" />,
-              onClick: () => {
-                navigator.clipboard.writeText(`${schema.name}.${table.name}`);
+      <TreeItem
+        label={schema.name}
+        icon={
+          isExpanded ? (
+            <FolderOpen className="w-4 h-4 text-[var(--warning)]" />
+          ) : (
+            <FolderClosed className="w-4 h-4 text-[var(--warning)]" />
+          )
+        }
+        level={level}
+        isExpanded={isExpanded}
+        onToggle={() => toggleSchemaExpanded(schema.name)}
+        action={
+          <button
+            onClick={handleCreateTable}
+            className={cn(
+              "p-0.5 rounded hover:bg-[var(--bg-tertiary)]",
+              "text-[var(--text-muted)] hover:text-purple-400",
+              "transition-colors duration-150"
+            )}
+            title={`Create table in ${schema.name}`}
+          >
+            <Plus className="w-3.5 h-3.5" />
+          </button>
+        }
+      >
+        {schema.tables.map((table) => (
+          <ContextMenu
+            key={`${schema.name}.${table.name}`}
+            items={[
+              {
+                label: "Copy Name",
+                icon: <Copy className="w-4 h-4" />,
+                onClick: () => {
+                  navigator.clipboard.writeText(`${schema.name}.${table.name}`);
+                },
               },
-            },
-            {
-              label: "Copy SELECT",
-              icon: <Code className="w-4 h-4" />,
-              onClick: () => {
-                navigator.clipboard.writeText(`SELECT * FROM "${schema.name}"."${table.name}"`);
+              {
+                label: "Copy SELECT",
+                icon: <Code className="w-4 h-4" />,
+                onClick: () => {
+                  navigator.clipboard.writeText(`SELECT * FROM "${schema.name}"."${table.name}"`);
+                },
               },
-            },
-            {
-              label: "Refresh",
-              icon: <RefreshCw className="w-4 h-4" />,
-              onClick: () => {
-                queryClient.invalidateQueries({
-                  queryKey: ["tableData", schema.name, table.name],
-                });
+              {
+                label: "Refresh",
+                icon: <RefreshCw className="w-4 h-4" />,
+                onClick: () => {
+                  queryClient.invalidateQueries({
+                    queryKey: ["tableData", schema.name, table.name],
+                  });
+                },
               },
-            },
-            {
-              type: "separator" as const,
-            },
-            {
-              type: "submenu" as const,
-              label: "Export",
-              icon: <Download className="w-4 h-4" />,
-              items: [
-                {
-                  label: "Export as CSV",
-                  icon: <FileSpreadsheet className="w-4 h-4" />,
-                  onClick: () => {
-                    exportTable(
-                      schema.name,
-                      table.name,
-                      "csv",
-                      (message) => showToast(message),
-                      (message) => showToast(message, "error")
-                    );
+              {
+                type: "separator" as const,
+              },
+              {
+                type: "submenu" as const,
+                label: "Export",
+                icon: <Download className="w-4 h-4" />,
+                items: [
+                  {
+                    label: "Export as CSV",
+                    icon: <FileSpreadsheet className="w-4 h-4" />,
+                    onClick: () => {
+                      exportTable(
+                        schema.name,
+                        table.name,
+                        "csv",
+                        (message) => showToast(message),
+                        (message) => showToast(message, "error")
+                      );
+                    },
                   },
-                },
-                {
-                  label: "Export as JSON",
-                  icon: <FileJson className="w-4 h-4" />,
-                  onClick: () => {
-                    exportTable(
-                      schema.name,
-                      table.name,
-                      "json",
-                      (message) => showToast(message),
-                      (message) => showToast(message, "error")
-                    );
+                  {
+                    label: "Export as JSON",
+                    icon: <FileJson className="w-4 h-4" />,
+                    onClick: () => {
+                      exportTable(
+                        schema.name,
+                        table.name,
+                        "json",
+                        (message) => showToast(message),
+                        (message) => showToast(message, "error")
+                      );
+                    },
                   },
-                },
-              ],
-            },
-            {
-              type: "submenu" as const,
-              label: "Import",
-              icon: <Upload className="w-4 h-4" />,
-              items: [
-                {
-                  label: "Import from CSV",
-                  icon: <FileSpreadsheet className="w-4 h-4" />,
-                  onClick: () => {
-                    addImportDataTab(schema.name, table.name, "csv");
+                ],
+              },
+              {
+                type: "submenu" as const,
+                label: "Import",
+                icon: <Upload className="w-4 h-4" />,
+                items: [
+                  {
+                    label: "Import from CSV",
+                    icon: <FileSpreadsheet className="w-4 h-4" />,
+                    onClick: () => {
+                      addImportDataTab(schema.name, table.name, "csv");
+                    },
                   },
-                },
-                {
-                  label: "Import from JSON",
-                  icon: <FileJson className="w-4 h-4" />,
-                  onClick: () => {
-                    addImportDataTab(schema.name, table.name, "json");
+                  {
+                    label: "Import from JSON",
+                    icon: <FileJson className="w-4 h-4" />,
+                    onClick: () => {
+                      addImportDataTab(schema.name, table.name, "json");
+                    },
                   },
-                },
-              ],
-            },
-            {
-              type: "separator" as const,
-            },
-            {
-              label: "Edit Table",
-              icon: <Settings className="w-4 h-4" />,
-              onClick: () => addEditTableTab(schema.name, table.name),
-            },
-            {
-              type: "separator" as const,
-            },
-            {
-              label: "Truncate Table",
-              icon: <Eraser className="w-4 h-4" />,
-              variant: "danger",
-              onClick: () => openTruncateTableModal(schema.name, table.name, table.rowCount),
-            },
-            {
-              label: "Delete Table",
-              icon: <Trash2 className="w-4 h-4" />,
-              variant: "danger",
-              onClick: () => openDeleteTableModal(schema.name, table.name, table.rowCount),
-            },
-          ]}
-        >
-          <TreeItem
-            label={table.name}
-            icon={<Table2 className="w-4 h-4 text-[var(--accent)]" />}
-            level={level + 1}
-            onClick={() => handleTableClick(table)}
-            isActive={isTableActive(table.name)}
-          />
-        </ContextMenu>
-      ))}
-      {schema.tables.length === 0 && (
-        <div
-          className="text-xs text-[var(--text-muted)] py-1"
-          style={{ paddingLeft: 12 + (level + 1) * 16 }}
-        >
-          No tables
-        </div>
-      )}
-    </TreeItem>
+                ],
+              },
+              {
+                type: "separator" as const,
+              },
+              {
+                label: "Edit Table",
+                icon: <Settings className="w-4 h-4" />,
+                onClick: () => addEditTableTab(schema.name, table.name),
+              },
+              {
+                type: "separator" as const,
+              },
+              {
+                label: "Truncate Table",
+                icon: <Eraser className="w-4 h-4" />,
+                variant: "danger",
+                onClick: () => openTruncateTableModal(schema.name, table.name, table.rowCount),
+              },
+              {
+                label: "Delete Table",
+                icon: <Trash2 className="w-4 h-4" />,
+                variant: "danger",
+                onClick: () => openDeleteTableModal(schema.name, table.name, table.rowCount),
+              },
+            ]}
+          >
+            <TreeItem
+              label={table.name}
+              icon={<Table2 className="w-4 h-4 text-[var(--accent)]" />}
+              level={level + 1}
+              onClick={() => handleTableClick(table)}
+              isActive={isTableActive(table.name)}
+            />
+          </ContextMenu>
+        ))}
+        {schema.tables.length === 0 && (
+          <div
+            className="text-xs text-[var(--text-muted)] py-1"
+            style={{ paddingLeft: 12 + (level + 1) * 16 }}
+          >
+            No tables
+          </div>
+        )}
+      </TreeItem>
+    </ContextMenu>
   );
 }
 
