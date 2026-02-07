@@ -1636,13 +1636,12 @@ function ColumnDragOverlay({
  */
 function CreateTableTabContent({ tab }: { tab: Tab }) {
   const { schemas } = useProjectStore();
-  const { closeTab, addTab } = useUIStore();
+  const { closeTab, addTab, addQueryTab } = useUIStore();
   const migration = useMigration();
 
   const [tableName, setTableName] = useState("");
   const [selectedSchema, setSelectedSchema] = useState(tab.createTableSchema || "");
   const [columns, setColumns] = useState<ColumnFormState[]>([createEmptyColumn()]);
-  const [showPreview, setShowPreview] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -2163,20 +2162,19 @@ function CreateTableTabContent({ tab }: { tab: Tab }) {
 
           {/* SQL Preview */}
           <div>
-            <div className="flex items-center justify-between">
-              <button
-                onClick={() => setShowPreview(!showPreview)}
-                className="flex items-center gap-2 text-sm font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
-              >
-                {showPreview ? (
-                  <ChevronDown className="w-4 h-4" />
-                ) : (
-                  <ChevronRight className="w-4 h-4" />
-                )}
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2 text-sm font-medium text-[var(--text-secondary)]">
                 <Code className="w-4 h-4" />
                 Preview SQL
-              </button>
-              {showPreview && (
+              </div>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => addQueryTab(previewSQL)}
+                  className="flex items-center gap-1.5 px-2 py-1 text-xs rounded transition-colors text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)]"
+                >
+                  <Play className="w-3.5 h-3.5" />
+                  Open in Playground
+                </button>
                 <button
                   onClick={() => {
                     navigator.clipboard.writeText(previewSQL);
@@ -2203,13 +2201,9 @@ function CreateTableTabContent({ tab }: { tab: Tab }) {
                     </>
                   )}
                 </button>
-              )}
-            </div>
-            {showPreview && (
-              <div className="mt-5">
-                <CodeBlock code={previewSQL} language="sql" />
               </div>
-            )}
+            </div>
+            <CodeBlock code={previewSQL} language="sql" />
           </div>
         </div>
       </div>
@@ -2265,7 +2259,7 @@ function formStateToAlterDef(col: ColumnFormState): AlterColumnDef {
  */
 function EditTableTabContent({ tab }: { tab: Tab }) {
   const { schemas } = useProjectStore();
-  const { closeTab, addTab } = useUIStore();
+  const { closeTab, addTab, addQueryTab } = useUIStore();
   const migration = useMigration();
 
   const schemaName = tab.schema || "";
@@ -2840,32 +2834,41 @@ function EditTableTabContent({ tab }: { tab: Tab }) {
                 )}
               </div>
               {hasChanges && (
-                <button
-                  onClick={() => {
-                    navigator.clipboard.writeText(alterStatements.join(";\n") + ";");
-                    setCopied(true);
-                    setTimeout(() => setCopied(false), 2000);
-                  }}
-                  className={cn(
-                    "flex items-center gap-1.5 px-2 py-1 text-xs rounded",
-                    "transition-colors",
-                    copied
-                      ? "text-green-400 bg-green-500/10"
-                      : "text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)]"
-                  )}
-                >
-                  {copied ? (
-                    <>
-                      <Check className="w-3.5 h-3.5" />
-                      Copied!
-                    </>
-                  ) : (
-                    <>
-                      <Copy className="w-3.5 h-3.5" />
-                      Copy
-                    </>
-                  )}
-                </button>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => addQueryTab(alterStatements.join(";\n") + ";")}
+                    className="flex items-center gap-1.5 px-2 py-1 text-xs rounded transition-colors text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)]"
+                  >
+                    <Play className="w-3.5 h-3.5" />
+                    Open in Playground
+                  </button>
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(alterStatements.join(";\n") + ";");
+                      setCopied(true);
+                      setTimeout(() => setCopied(false), 2000);
+                    }}
+                    className={cn(
+                      "flex items-center gap-1.5 px-2 py-1 text-xs rounded",
+                      "transition-colors",
+                      copied
+                        ? "text-green-400 bg-green-500/10"
+                        : "text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)]"
+                    )}
+                  >
+                    {copied ? (
+                      <>
+                        <Check className="w-3.5 h-3.5" />
+                        Copied!
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-3.5 h-3.5" />
+                        Copy
+                      </>
+                    )}
+                  </button>
+                </div>
               )}
             </div>
             {hasChanges ? (
