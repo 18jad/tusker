@@ -96,6 +96,8 @@ interface UIState {
   addHistoryTab: () => void;
   addStagedChangesTab: () => void;
   reorderTabs: (fromIndex: number, toIndex: number) => void;
+  pinTab: (id: string) => void;
+  unpinTab: (id: string) => void;
   openHelpModal: () => void;
   closeHelpModal: () => void;
   showToast: (message: string, type?: "success" | "error" | "info") => void;
@@ -412,6 +414,26 @@ export const useUIStore = create<UIState>((set, get) => ({
       const [movedTab] = newTabs.splice(fromIndex, 1);
       newTabs.splice(toIndex, 0, movedTab);
       return { tabs: newTabs };
+    }),
+
+  pinTab: (id) =>
+    set((state) => {
+      const tab = state.tabs.find((t) => t.id === id);
+      if (!tab || tab.pinned) return state;
+      // Mark as pinned and move to end of pinned group
+      const pinned = state.tabs.filter((t) => t.pinned);
+      const unpinned = state.tabs.filter((t) => !t.pinned && t.id !== id);
+      return { tabs: [...pinned, { ...tab, pinned: true }, ...unpinned] };
+    }),
+
+  unpinTab: (id) =>
+    set((state) => {
+      const tab = state.tabs.find((t) => t.id === id);
+      if (!tab || !tab.pinned) return state;
+      // Unpin and move to start of unpinned group
+      const pinned = state.tabs.filter((t) => t.pinned && t.id !== id);
+      const unpinned = state.tabs.filter((t) => !t.pinned);
+      return { tabs: [...pinned, { ...tab, pinned: false }, ...unpinned] };
     }),
 
   openHelpModal: () => set({ helpModalOpen: true }),

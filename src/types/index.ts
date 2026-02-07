@@ -124,6 +124,7 @@ export interface Tab {
   queryContent?: string;
   createTableSchema?: string; // Pre-selected schema for create-table tabs
   importFormat?: "csv" | "json"; // Format for import-data tabs
+  pinned?: boolean;
 }
 
 // Command palette

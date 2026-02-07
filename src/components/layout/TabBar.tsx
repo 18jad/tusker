@@ -1,5 +1,5 @@
 import { useRef, useState, useEffect, useCallback } from "react";
-import { X, Table2, FileCode, ChevronLeft, ChevronRight, Database, FileUp, Pencil, XCircle } from "lucide-react";
+import { X, Table2, FileCode, ChevronLeft, ChevronRight, Database, FileUp, Pencil, XCircle, Pin, PinOff } from "lucide-react";
 import { useUIStore } from "../../stores/uiStore";
 import { ContextMenu } from "../ui/ContextMenu";
 import { cn } from "../../lib/utils";
@@ -23,6 +23,7 @@ function getTabIcon(type: Tab["type"]) {
 interface TabItemProps {
   tab: Tab;
   isActive: boolean;
+  isPinned: boolean;
   isRenaming: boolean;
   renameValue: string;
   onActivate: () => void;
@@ -33,12 +34,15 @@ interface TabItemProps {
   onRenameCancel: () => void;
   onCloseOthers: () => void;
   onCloseAll: () => void;
+  onPin: () => void;
+  onUnpin: () => void;
   tabCount: number;
 }
 
 function TabItem({
   tab,
   isActive,
+  isPinned,
   isRenaming,
   renameValue,
   onActivate,
@@ -49,6 +53,8 @@ function TabItem({
   onRenameCancel,
   onCloseOthers,
   onCloseAll,
+  onPin,
+  onUnpin,
   tabCount,
 }: TabItemProps) {
   const Icon = getTabIcon(tab.type);
@@ -72,6 +78,9 @@ function TabItem({
   };
 
   const contextMenuItems = [
+    isPinned
+      ? { label: "Unpin", icon: <PinOff className="w-3.5 h-3.5" />, onClick: onUnpin }
+      : { label: "Pin", icon: <Pin className="w-3.5 h-3.5" />, onClick: onPin },
     {
       label: "Rename",
       icon: <Pencil className="w-3.5 h-3.5" />,
@@ -107,20 +116,25 @@ function TabItem({
         onClick={onActivate}
         onDoubleClick={(e) => {
           e.stopPropagation();
-          onRenameStart();
+          if (!isPinned) onRenameStart();
         }}
         onKeyDown={(e) => e.key === "Enter" && onActivate()}
+        title={isPinned ? tab.title : undefined}
         className={cn(
-          "group flex items-center gap-2 px-3 h-10 min-w-[120px] max-w-[200px]",
+          "group flex items-center gap-2 h-10 shrink-0 cursor-grab active:cursor-grabbing",
           "border-r border-[var(--border-color)]",
-          "transition-colors duration-150 shrink-0 cursor-grab active:cursor-grabbing",
+          "transition-colors duration-150",
+          isPinned ? "px-3" : "px-3 min-w-[120px] max-w-[200px]",
           isActive
             ? "bg-[var(--bg-primary)] text-[var(--text-primary)]"
             : "bg-[var(--bg-tertiary)] text-[var(--text-secondary)] hover:bg-[var(--bg-secondary)] hover:text-[var(--text-primary)]"
         )}
       >
+        {isPinned && <Pin className="w-3.5 h-3.5 shrink-0 text-[var(--text-secondary)] fill-current rotate-45" />}
         <Icon className="w-4 h-4 shrink-0 text-[var(--text-muted)]" />
-        {isRenaming ? (
+        {isPinned ? (
+          <span className="truncate text-sm select-none">{tab.title}</span>
+        ) : isRenaming ? (
           <input
             ref={inputRef}
             type="text"
@@ -140,19 +154,21 @@ function TabItem({
         ) : (
           <span className="truncate text-sm select-none">{tab.title}</span>
         )}
-        <button
-          onClick={onClose}
-          onMouseDown={(e) => e.stopPropagation()}
-          className={cn(
-            "ml-auto p-0.5 rounded shrink-0",
-            "opacity-0 group-hover:opacity-100",
-            "hover:bg-[var(--border-color)]",
-            "transition-opacity duration-150"
-          )}
-          aria-label={`Close ${tab.title}`}
-        >
-          <X className="w-3.5 h-3.5" />
-        </button>
+        {!isPinned && (
+          <button
+            onClick={onClose}
+            onMouseDown={(e) => e.stopPropagation()}
+            className={cn(
+              "ml-auto p-0.5 rounded shrink-0",
+              "opacity-0 group-hover:opacity-100",
+              "hover:bg-[var(--border-color)]",
+              "transition-opacity duration-150"
+            )}
+            aria-label={`Close ${tab.title}`}
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        )}
       </div>
     </ContextMenu>
   );
@@ -167,6 +183,8 @@ export function TabBar() {
   const closeAllTabs = useUIStore((state) => state.closeAllTabs);
   const updateTab = useUIStore((state) => state.updateTab);
   const reorderTabs = useUIStore((state) => state.reorderTabs);
+  const pinTab = useUIStore((state) => state.pinTab);
+  const unpinTab = useUIStore((state) => state.unpinTab);
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const tabRefs = useRef<(HTMLDivElement | null)[]>([]);
@@ -300,7 +318,7 @@ export function TabBar() {
       const containerRect = container.getBoundingClientRect();
       const mouseX = moveEvent.clientX - containerRect.left + container.scrollLeft;
 
-      // Find drop position based on centers of other tabs (skip dragged tab)
+      // Find drop position based on centers of other tabs
       let newDropIndex = tabs.length;
       for (let i = 0; i < tabRefs.current.length; i++) {
         const el = tabRefs.current[i];
@@ -312,6 +330,17 @@ export function TabBar() {
           newDropIndex = i;
           break;
         }
+      }
+
+      // Clamp to pinned/unpinned boundary
+      const pinnedCount = tabs.filter((t) => t.pinned).length;
+      const isDraggedPinned = tabs[index]?.pinned;
+      if (isDraggedPinned) {
+        // Pinned tabs can only move within pinned range [0, pinnedCount)
+        newDropIndex = Math.min(newDropIndex, pinnedCount);
+      } else {
+        // Unpinned tabs can only move within unpinned range [pinnedCount, tabs.length]
+        newDropIndex = Math.max(newDropIndex, pinnedCount);
       }
 
       // Normalize: dropping at index or index+1 means no move
@@ -414,18 +443,19 @@ export function TabBar() {
         style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
       >
         {tabs.map((tab, index) => (
-          <div
-            key={tab.id}
-            ref={(el) => { tabRefs.current[index] = el; }}
-            onMouseDown={(e) => handleMouseDown(e, index)}
-            style={getTabTransform(index)}
-            className={cn(
-              dragIndex === index && "opacity-30 pointer-events-none"
-            )}
-          >
+          <div key={tab.id}>
+            <div
+              ref={(el) => { tabRefs.current[index] = el; }}
+              onMouseDown={(e) => handleMouseDown(e, index)}
+              style={getTabTransform(index)}
+              className={cn(
+                dragIndex === index && "opacity-30 pointer-events-none"
+              )}
+            >
             <TabItem
               tab={tab}
               isActive={tab.id === activeTabId}
+              isPinned={!!tab.pinned}
               isRenaming={renamingTabId === tab.id}
               renameValue={renameValue}
               onActivate={() => setActiveTab(tab.id)}
@@ -436,8 +466,11 @@ export function TabBar() {
               onRenameCancel={handleRenameCancel}
               onCloseOthers={() => closeOtherTabs(tab.id)}
               onCloseAll={closeAllTabs}
+              onPin={() => pinTab(tab.id)}
+              onUnpin={() => unpinTab(tab.id)}
               tabCount={tabs.length}
             />
+            </div>
           </div>
         ))}
       </div>
@@ -471,6 +504,7 @@ export function TabBar() {
           <TabItem
             tab={tabs[dragIndex]}
             isActive={true}
+            isPinned={!!tabs[dragIndex].pinned}
             isRenaming={false}
             renameValue=""
             onActivate={() => {}}
@@ -481,6 +515,8 @@ export function TabBar() {
             onRenameCancel={() => {}}
             onCloseOthers={() => {}}
             onCloseAll={() => {}}
+            onPin={() => {}}
+            onUnpin={() => {}}
             tabCount={0}
           />
         </div>
