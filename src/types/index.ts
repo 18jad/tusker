@@ -87,6 +87,33 @@ export interface SortColumn {
   direction: "ASC" | "DESC";
 }
 
+// Filter
+export type FilterOperator =
+  | "equals"
+  | "not_equals"
+  | "greater_than"
+  | "less_than"
+  | "greater_than_or_equal"
+  | "less_than_or_equal"
+  | "contains"
+  | "not_contains"
+  | "starts_with"
+  | "ends_with"
+  | "is_null"
+  | "is_not_null"
+  | "is_true"
+  | "is_false"
+  | "between"
+  | "in";
+
+export interface FilterCondition {
+  column: string;
+  operator: FilterOperator;
+  value?: string;
+  value2?: string;
+  values?: string[];
+}
+
 // Tab types
 export interface Tab {
   id: string;

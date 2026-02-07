@@ -60,6 +60,142 @@ pub struct DeleteRequest {
     pub where_clause: serde_json::Map<String, JsonValue>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum FilterOperator {
+    Equals,
+    NotEquals,
+    GreaterThan,
+    LessThan,
+    GreaterThanOrEqual,
+    LessThanOrEqual,
+    Contains,
+    NotContains,
+    StartsWith,
+    EndsWith,
+    IsNull,
+    IsNotNull,
+    IsTrue,
+    IsFalse,
+    Between,
+    In,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FilterCondition {
+    pub column: String,
+    pub operator: FilterOperator,
+    pub value: Option<String>,
+    pub value2: Option<String>,
+    pub values: Option<Vec<String>>,
+}
+
+/// Escape LIKE wildcards in a string
+fn escape_like_pattern(s: &str) -> String {
+    s.replace('\\', "\\\\")
+        .replace('%', "\\%")
+        .replace('_', "\\_")
+}
+
+/// Build a WHERE clause from filter conditions
+fn build_where_clause(filters: &[FilterCondition]) -> String {
+    let conditions: Vec<String> = filters
+        .iter()
+        .filter_map(|f| {
+            let col = quote_identifier(&f.column);
+            match f.operator {
+                FilterOperator::Equals => {
+                    let v = f.value.as_ref()?;
+                    Some(format!("{} = '{}'", col, escape_sql_string(v)))
+                }
+                FilterOperator::NotEquals => {
+                    let v = f.value.as_ref()?;
+                    Some(format!("{} != '{}'", col, escape_sql_string(v)))
+                }
+                FilterOperator::GreaterThan => {
+                    let v = f.value.as_ref()?;
+                    Some(format!("{} > '{}'", col, escape_sql_string(v)))
+                }
+                FilterOperator::LessThan => {
+                    let v = f.value.as_ref()?;
+                    Some(format!("{} < '{}'", col, escape_sql_string(v)))
+                }
+                FilterOperator::GreaterThanOrEqual => {
+                    let v = f.value.as_ref()?;
+                    Some(format!("{} >= '{}'", col, escape_sql_string(v)))
+                }
+                FilterOperator::LessThanOrEqual => {
+                    let v = f.value.as_ref()?;
+                    Some(format!("{} <= '{}'", col, escape_sql_string(v)))
+                }
+                FilterOperator::Contains => {
+                    let v = f.value.as_ref()?;
+                    Some(format!(
+                        "{}::text ILIKE '{}' ESCAPE '\\'",
+                        col,
+                        escape_sql_string(&format!("%{}%", escape_like_pattern(v)))
+                    ))
+                }
+                FilterOperator::NotContains => {
+                    let v = f.value.as_ref()?;
+                    Some(format!(
+                        "{}::text NOT ILIKE '{}' ESCAPE '\\'",
+                        col,
+                        escape_sql_string(&format!("%{}%", escape_like_pattern(v)))
+                    ))
+                }
+                FilterOperator::StartsWith => {
+                    let v = f.value.as_ref()?;
+                    Some(format!(
+                        "{}::text ILIKE '{}' ESCAPE '\\'",
+                        col,
+                        escape_sql_string(&format!("{}%", escape_like_pattern(v)))
+                    ))
+                }
+                FilterOperator::EndsWith => {
+                    let v = f.value.as_ref()?;
+                    Some(format!(
+                        "{}::text ILIKE '{}' ESCAPE '\\'",
+                        col,
+                        escape_sql_string(&format!("%{}", escape_like_pattern(v)))
+                    ))
+                }
+                FilterOperator::IsNull => Some(format!("{} IS NULL", col)),
+                FilterOperator::IsNotNull => Some(format!("{} IS NOT NULL", col)),
+                FilterOperator::IsTrue => Some(format!("{} = TRUE", col)),
+                FilterOperator::IsFalse => Some(format!("{} = FALSE", col)),
+                FilterOperator::Between => {
+                    let v1 = f.value.as_ref()?;
+                    let v2 = f.value2.as_ref()?;
+                    Some(format!(
+                        "{} BETWEEN '{}' AND '{}'",
+                        col,
+                        escape_sql_string(v1),
+                        escape_sql_string(v2)
+                    ))
+                }
+                FilterOperator::In => {
+                    let vals = f.values.as_ref()?;
+                    if vals.is_empty() {
+                        return None;
+                    }
+                    let escaped: Vec<String> = vals
+                        .iter()
+                        .map(|v| format!("'{}'", escape_sql_string(v)))
+                        .collect();
+                    Some(format!("{} IN ({})", col, escaped.join(", ")))
+                }
+            }
+        })
+        .collect();
+
+    if conditions.is_empty() {
+        String::new()
+    } else {
+        format!("WHERE {}", conditions.join(" AND "))
+    }
+}
+
 pub struct DataOperations;
 
 impl DataOperations {
@@ -72,6 +208,7 @@ impl DataOperations {
         page_size: Option<i64>,
         order_by: Option<&Vec<String>>,
         order_direction: Option<&Vec<String>>,
+        filters: Option<&Vec<FilterCondition>>,
     ) -> Result<PaginatedResult> {
         let page_size = page_size.unwrap_or(DEFAULT_PAGE_SIZE);
         let offset = (page - 1) * page_size;
@@ -101,20 +238,27 @@ impl DataOperations {
             _ => String::new(),
         };
 
+        let where_clause = filters
+            .filter(|f| !f.is_empty())
+            .map(|f| build_where_clause(f))
+            .unwrap_or_default();
+
         // Get total count
         let count_query = format!(
-            "SELECT COUNT(*) FROM {}.{}",
+            "SELECT COUNT(*) FROM {}.{} {}",
             quote_identifier(schema),
-            quote_identifier(table)
+            quote_identifier(table),
+            where_clause
         );
         let total_count: (i64,) = sqlx::query_as(&count_query).fetch_one(pool).await?;
         let total_count = total_count.0;
 
         // Fetch data
         let data_query = format!(
-            "SELECT * FROM {}.{} {} LIMIT {} OFFSET {}",
+            "SELECT * FROM {}.{} {} {} LIMIT {} OFFSET {}",
             quote_identifier(schema),
             quote_identifier(table),
+            where_clause,
             order_clause,
             page_size,
             offset

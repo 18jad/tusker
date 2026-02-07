@@ -17,10 +17,11 @@ import {
   Eraser,
 } from "lucide-react";
 import { Popover } from "../ui/Popover";
-import type { CellValue, TableData, SortColumn } from "../../types";
+import type { CellValue, TableData, SortColumn, FilterCondition } from "../../types";
 import { DataTable } from "./DataTable";
 import { Pagination } from "./Pagination";
 import { SortPopover } from "./SortPopover";
+import { FilterPopover } from "./FilterPopover";
 import { cn } from "../../lib/utils";
 import { useUIStore } from "../../stores/uiStore";
 import { exportTable } from "../../lib/exportTable";
@@ -50,6 +51,9 @@ interface TableViewProps {
   sorts?: SortColumn[];
   onSort?: (columnName: string, addToSort: boolean) => void;
   onSortsChange?: (sorts: SortColumn[]) => void;
+  filters?: FilterCondition[];
+  onFiltersChange?: (filters: FilterCondition[]) => void;
+  onReset?: () => void;
 }
 
 function SkeletonRow({ columns, rowNum }: { columns: number; rowNum: number }) {
@@ -138,6 +142,9 @@ export function TableView({
   sorts = [],
   onSort,
   onSortsChange,
+  filters = [],
+  onFiltersChange,
+  onReset,
 }: TableViewProps) {
   const showToast = useUIStore((state) => state.showToast);
   const [selectedRowIndices, setSelectedRowIndices] = useState<Set<number>>(new Set());
@@ -237,12 +244,62 @@ export function TableView({
 
   // Error state
   if (error) {
+    const hasFiltersOrSorts = filters.length > 0 || sorts.length > 0;
+
     return (
-      <div className="flex-1 flex items-center justify-center">
-        <div className="text-center max-w-md px-4">
-          <AlertCircle className="w-10 h-10 text-[var(--danger)] mx-auto mb-3" />
-          <div className="text-[var(--danger)] font-medium mb-2">Failed to load data</div>
-          <div className="text-sm text-[var(--text-muted)]">{error}</div>
+      <div className="h-full flex items-center justify-center p-6">
+        <div className="w-full max-w-sm rounded-xl bg-[var(--bg-secondary)] border border-[var(--border-color)] overflow-hidden">
+          {/* Red accent bar */}
+          <div className="h-1 bg-gradient-to-r from-red-500 to-red-600" />
+
+          <div className="p-5 space-y-4">
+            <div className="flex items-start gap-3">
+              <div className="w-8 h-8 rounded-lg bg-red-500/10 flex items-center justify-center shrink-0 mt-0.5">
+                <AlertCircle className="w-4 h-4 text-red-400" />
+              </div>
+              <div className="min-w-0">
+                <h3 className="text-[13px] font-medium text-[var(--text-primary)]">
+                  Failed to load {tableName}
+                </h3>
+                <p className="text-xs text-[var(--text-muted)] mt-1 leading-relaxed break-words">
+                  {error}
+                </p>
+              </div>
+            </div>
+
+            <div className={cn("flex gap-2", hasFiltersOrSorts ? "flex-col" : "")}>
+              {onRefresh && (
+                <button
+                  onClick={onRefresh}
+                  className={cn(
+                    "w-full h-8 rounded-lg text-xs font-medium",
+                    "flex items-center justify-center gap-1.5",
+                    "bg-[var(--bg-tertiary)] text-[var(--text-secondary)]",
+                    "hover:bg-[#2a2a2a] hover:text-[var(--text-primary)]",
+                    "transition-colors"
+                  )}
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  Retry
+                </button>
+              )}
+
+              {hasFiltersOrSorts && onReset && (
+                <button
+                  onClick={onReset}
+                  className={cn(
+                    "w-full h-8 rounded-lg text-xs font-medium",
+                    "flex items-center justify-center gap-1.5",
+                    "text-red-400 hover:bg-red-500/10",
+                    "transition-colors"
+                  )}
+                >
+                  <Eraser className="w-3.5 h-3.5" />
+                  Clear filters & retry
+                </button>
+              )}
+            </div>
+          </div>
         </div>
       </div>
     );
@@ -348,6 +405,14 @@ export function TableView({
           <span className="text-xs text-[var(--text-muted)]">
             {data.totalRows.toLocaleString()} rows
           </span>
+
+          {onFiltersChange && data && (
+            <FilterPopover
+              columns={data.columns}
+              filters={filters}
+              onFiltersChange={onFiltersChange}
+            />
+          )}
 
           {onSortsChange && data && (
             <SortPopover

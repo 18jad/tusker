@@ -1,8 +1,8 @@
 use crate::db::{
     BulkInsertRequest, ColumnInfo, ConnectionConfig, ConnectionInfo, ConnectionManager,
-    ConstraintInfo, CredentialStorage, DataOperations, DeleteRequest, IndexInfo, InsertRequest,
-    MigrationOperations, MigrationRequest, MigrationResult, PaginatedResult, QueryResult,
-    SchemaInfo, SchemaIntrospector, SslMode, TableInfo, UpdateRequest,
+    ConstraintInfo, CredentialStorage, DataOperations, DeleteRequest, FilterCondition, IndexInfo,
+    InsertRequest, MigrationOperations, MigrationRequest, MigrationResult, PaginatedResult,
+    QueryResult, SchemaInfo, SchemaIntrospector, SslMode, TableInfo, UpdateRequest,
 };
 use crate::error::Result;
 use serde::{Deserialize, Serialize};
@@ -269,6 +269,7 @@ pub struct FetchDataRequest {
     pub page_size: Option<i64>,
     pub order_by: Option<Vec<String>>,
     pub order_direction: Option<Vec<String>>,
+    pub filters: Option<Vec<FilterCondition>>,
 }
 
 #[tauri::command]
@@ -287,6 +288,7 @@ pub async fn fetch_table_data(
         request.page_size,
         request.order_by.as_ref(),
         request.order_direction.as_ref(),
+        request.filters.as_ref(),
     )
     .await
 }

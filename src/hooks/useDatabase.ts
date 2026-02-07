@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from "@tanstack/react-query";
-import type { Schema, TableData, Row, ConnectionConfig, SortColumn } from "../types";
+import type { Schema, TableData, Row, ConnectionConfig, SortColumn, FilterCondition } from "../types";
 import { useProjectStore } from "../stores/projectStore";
 
 // Store the current connection ID
@@ -273,14 +273,16 @@ export function useTableData(
   table: string,
   page: number = 1,
   sorts: SortColumn[] = [],
+  filters: FilterCondition[] = [],
 ) {
   const { connectionStatus } = useProjectStore();
   const pageSize = 50;
-  // Stable key for React Query cache
+  // Stable keys for React Query cache
   const sortKey = JSON.stringify(sorts);
+  const filterKey = JSON.stringify(filters);
 
   return useQuery({
-    queryKey: ["tableData", schema, table, page, sortKey],
+    queryKey: ["tableData", schema, table, page, sortKey, filterKey],
     queryFn: async () => {
       if (!currentConnectionId) throw new Error("Not connected");
 
@@ -315,6 +317,7 @@ export function useTableData(
           page_size: pageSize,
           order_by: orderByColumns.length > 0 ? orderByColumns : undefined,
           order_direction: orderDirections.length > 0 ? orderDirections : undefined,
+          filters: filters.length > 0 ? filters : undefined,
         },
       });
 

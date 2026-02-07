@@ -65,9 +65,10 @@ import { generateUpdateSQL, generateDeleteSQL, generateInsertSQL, generateCreate
 import { cn } from "../../lib/utils";
 import { ImportDataTab } from "../tabs/ImportDataTab";
 import { QueryTab } from "../tabs/QueryTab";
-import type { CellValue, Row, Column, Tab, SortColumn } from "../../types";
+import type { CellValue, Row, Column, Tab, SortColumn, FilterCondition } from "../../types";
 
 const EMPTY_SORTS: SortColumn[] = [];
+const EMPTY_FILTERS: FilterCondition[] = [];
 
 /**
  * Compare two cell values for equality
@@ -118,6 +119,8 @@ function TableTabContent({ schema, table }: { schema: string; table: string }) {
   const addImportDataTab = useUIStore((state) => state.addImportDataTab);
   const sorts = useUIStore((state) => state.tableSortState[tableKey] ?? EMPTY_SORTS);
   const setTableSort = useUIStore((state) => state.setTableSort);
+  const filters = useUIStore((state) => state.tableFilterState[tableKey] ?? EMPTY_FILTERS);
+  const setTableFilters = useUIStore((state) => state.setTableFilters);
   const schemas = useProjectStore((state) => state.schemas);
 
   // Get row count for the current table
@@ -128,7 +131,7 @@ function TableTabContent({ schema, table }: { schema: string; table: string }) {
   }, [schemas, schema, table]);
 
   const { data, isLoading, isFetching, error, refetch } = useTableData(
-    schema, table, page, sorts,
+    schema, table, page, sorts, filters,
   );
   const commitChanges = useCommitChanges();
   const addChange = useChangesStore((state) => state.addChange);
@@ -248,6 +251,20 @@ function TableTabContent({ schema, table }: { schema: string; table: string }) {
     setPage(1);
     setLocalEdits(new Map());
   }, [tableKey, setTableSort]);
+
+  const handleFiltersChange = useCallback((newFilters: FilterCondition[]) => {
+    setTableFilters(tableKey, newFilters);
+    setPage(1);
+    setLocalEdits(new Map());
+  }, [tableKey, setTableFilters]);
+
+  const handleReset = useCallback(() => {
+    setTableFilters(tableKey, []);
+    setTableSort(tableKey, []);
+    setPage(1);
+    setLocalEdits(new Map());
+    refetch();
+  }, [tableKey, setTableFilters, setTableSort, refetch]);
 
   const handleCellEdit = useCallback((rowIndex: number, columnName: string, newValue: CellValue) => {
     if (!data) return;
@@ -592,7 +609,7 @@ function TableTabContent({ schema, table }: { schema: string; table: string }) {
         data={mergedData}
         isLoading={isLoading}
         isFetching={isFetching}
-        error={error ? (error instanceof Error ? error.message : String(error)) : null}
+        error={error ? (error instanceof Error ? error.message : (typeof error === "object" ? ((error as Record<string, unknown>).message as string ?? JSON.stringify(error)) : String(error))) : null}
         onPageChange={handlePageChange}
         onCellEdit={handleCellEdit}
         onRowView={handleRowView}
@@ -610,6 +627,9 @@ function TableTabContent({ schema, table }: { schema: string; table: string }) {
         sorts={sorts}
         onSort={handleSort}
         onSortsChange={handleSortsChange}
+        filters={filters}
+        onFiltersChange={handleFiltersChange}
+        onReset={handleReset}
       />
 
       {/* Row detail modal */}

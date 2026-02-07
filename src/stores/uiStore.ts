@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { Tab, SortColumn } from "../types";
+import type { Tab, SortColumn, FilterCondition } from "../types";
 
 interface Toast {
   id: string;
@@ -21,6 +21,9 @@ interface UIState {
 
   // Sort state per table (key: "schema.table") - array for multi-column sort
   tableSortState: Record<string, SortColumn[]>;
+
+  // Filter state per table (key: "schema.table")
+  tableFilterState: Record<string, FilterCondition[]>;
 
   // Expanded schemas in sidebar (persists across schema refresh)
   expandedSchemas: Set<string>;
@@ -103,6 +106,8 @@ interface UIState {
   resetColumnWidths: (tableKey: string) => void;
   setTableSort: (tableKey: string, sorts: SortColumn[]) => void;
   getTableSort: (tableKey: string) => SortColumn[];
+  setTableFilters: (tableKey: string, filters: FilterCondition[]) => void;
+  getTableFilters: (tableKey: string) => FilterCondition[];
   toggleSchemaExpanded: (schemaName: string) => void;
   isSchemaExpanded: (schemaName: string) => boolean;
 }
@@ -114,6 +119,7 @@ export const useUIStore = create<UIState>((set, get) => ({
   activeTabId: null,
   columnWidths: {},
   tableSortState: {},
+  tableFilterState: {},
   expandedSchemas: new Set<string>(),
   commandPaletteOpen: false,
   projectSpotlightOpen: false,
@@ -451,4 +457,20 @@ export const useUIStore = create<UIState>((set, get) => ({
     }),
 
   getTableSort: (tableKey) => get().tableSortState[tableKey] || [],
+
+  setTableFilters: (tableKey, filters) =>
+    set((state) => {
+      if (filters.length === 0) {
+        const { [tableKey]: _, ...rest } = state.tableFilterState;
+        return { tableFilterState: rest };
+      }
+      return {
+        tableFilterState: {
+          ...state.tableFilterState,
+          [tableKey]: filters,
+        },
+      };
+    }),
+
+  getTableFilters: (tableKey) => get().tableFilterState[tableKey] || [],
 }));
