@@ -173,6 +173,7 @@ export const useUIStore = create<UIState>((set, get) => ({
   closeTab: (id) =>
     set((state) => {
       const index = state.tabs.findIndex((t) => t.id === id);
+      const tabToClose = state.tabs.find((t) => t.id === id);
       const newTabs = state.tabs.filter((t) => t.id !== id);
       let newActiveId = state.activeTabId;
 
@@ -184,16 +185,61 @@ export const useUIStore = create<UIState>((set, get) => ({
         }
       }
 
+      // Clean up filters, sorts, and column widths for table tabs
+      if (tabToClose?.type === "table" && tabToClose.schema && tabToClose.table) {
+        const tableKey = `${tabToClose.schema}.${tabToClose.table}`;
+        const { [tableKey]: _, ...remainingFilters } = state.tableFilterState;
+        const { [tableKey]: __, ...remainingSorts } = state.tableSortState;
+        const { [tableKey]: ___, ...remainingWidths } = state.columnWidths;
+
+        return {
+          tabs: newTabs,
+          activeTabId: newActiveId,
+          tableFilterState: remainingFilters,
+          tableSortState: remainingSorts,
+          columnWidths: remainingWidths,
+        };
+      }
+
       return { tabs: newTabs, activeTabId: newActiveId };
     }),
 
-  closeAllTabs: () => set({ tabs: [], activeTabId: null }),
+  closeAllTabs: () =>
+    set({
+      tabs: [],
+      activeTabId: null,
+      tableFilterState: {},
+      tableSortState: {},
+      columnWidths: {},
+    }),
 
   closeOtherTabs: (id) =>
-    set((state) => ({
-      tabs: state.tabs.filter((t) => t.id === id),
-      activeTabId: id,
-    })),
+    set((state) => {
+      const remainingTab = state.tabs.find((t) => t.id === id);
+      const closingTabs = state.tabs.filter((t) => t.id !== id);
+
+      // Clean up state for all closing table tabs
+      let newFilterState = { ...state.tableFilterState };
+      let newSortState = { ...state.tableSortState };
+      let newWidthState = { ...state.columnWidths };
+
+      closingTabs.forEach((tab) => {
+        if (tab.type === "table" && tab.schema && tab.table) {
+          const tableKey = `${tab.schema}.${tab.table}`;
+          delete newFilterState[tableKey];
+          delete newSortState[tableKey];
+          delete newWidthState[tableKey];
+        }
+      });
+
+      return {
+        tabs: [remainingTab].filter(Boolean) as Tab[],
+        activeTabId: id,
+        tableFilterState: newFilterState,
+        tableSortState: newSortState,
+        columnWidths: newWidthState,
+      };
+    }),
 
   setActiveTab: (id) => set({ activeTabId: id }),
 
