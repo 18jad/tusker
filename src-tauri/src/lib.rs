@@ -77,6 +77,10 @@ pub fn run() {
             commands::execute_migration,
             // Utility commands
             commands::get_database_info,
+            // Commit history commands
+            commands::save_commit,
+            commands::get_commits,
+            commands::get_commit_detail,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

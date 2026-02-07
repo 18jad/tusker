@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from "@tanstack/react-query";
-import type { Schema, TableData, Row, ConnectionConfig, SortColumn, FilterCondition } from "../types";
+import type { Schema, TableData, Row, ConnectionConfig, SortColumn, FilterCondition, CommitRecord, CommitDetail } from "../types";
 import { useProjectStore } from "../stores/projectStore";
 
 // Store the current connection ID
@@ -684,4 +684,54 @@ export async function getPassword(projectId: string): Promise<string> {
 
 export async function deletePassword(projectId: string): Promise<void> {
   await invoke("delete_password", { projectId });
+}
+
+// Commit history hooks
+export function useSaveCommit() {
+  return useMutation({
+    mutationFn: async (params: {
+      projectId: string;
+      message: string;
+      summary: string;
+      changes: {
+        type: string;
+        schema_name: string;
+        table_name: string;
+        data: string;
+        original_data: string | null;
+        sql: string;
+      }[];
+    }) => {
+      return invoke<CommitRecord>("save_commit", {
+        request: {
+          project_id: params.projectId,
+          message: params.message,
+          summary: params.summary,
+          changes: params.changes,
+        },
+      });
+    },
+  });
+}
+
+export function useCommitHistory(projectId: string | null) {
+  return useQuery({
+    queryKey: ["commitHistory", projectId],
+    queryFn: async () => {
+      if (!projectId) throw new Error("No project selected");
+      return invoke<CommitRecord[]>("get_commits", { projectId });
+    },
+    enabled: !!projectId,
+  });
+}
+
+export function useCommitDetail(projectId: string | null, commitId: string | null) {
+  return useQuery({
+    queryKey: ["commitDetail", projectId, commitId],
+    queryFn: async () => {
+      if (!projectId || !commitId) throw new Error("Missing project or commit ID");
+      return invoke<CommitDetail>("get_commit_detail", { projectId, commitId });
+    },
+    enabled: !!projectId && !!commitId,
+  });
 }

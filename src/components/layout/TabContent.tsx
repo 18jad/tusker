@@ -66,6 +66,8 @@ import { generateUpdateSQL, generateDeleteSQL, generateInsertSQL, generateCreate
 import { cn } from "../../lib/utils";
 import { ImportDataTab } from "../tabs/ImportDataTab";
 import { QueryTab } from "../tabs/QueryTab";
+import { CommitHistoryTab } from "../tabs/CommitHistoryTab";
+import { StagedChangesTab } from "../tabs/StagedChangesTab";
 import type { CellValue, Row, Column, Tab, SortColumn, FilterCondition } from "../../types";
 
 const EMPTY_SORTS: SortColumn[] = [];
@@ -3850,6 +3852,10 @@ export function TabContent() {
           content = <ImportDataTab key={tab.id} tab={tab} />;
         } else if (tab.type === "query") {
           content = <QueryTab key={tab.id} tab={tab} />;
+        } else if (tab.type === "history") {
+          content = <CommitHistoryTab key={tab.id} tab={tab} />;
+        } else if (tab.type === "staged-changes") {
+          content = <StagedChangesTab key={tab.id} tab={tab} />;
         }
 
         if (!content) return null;

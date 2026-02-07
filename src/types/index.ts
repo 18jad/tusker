@@ -117,7 +117,7 @@ export interface FilterCondition {
 // Tab types
 export interface Tab {
   id: string;
-  type: "table" | "query" | "create-table" | "edit-table" | "import-data";
+  type: "table" | "query" | "create-table" | "edit-table" | "import-data" | "history" | "staged-changes";
   title: string;
   schema?: string;
   table?: string;
@@ -133,4 +133,31 @@ export interface Command {
   shortcut?: string;
   action: () => void;
   category: "navigation" | "project" | "table" | "query";
+}
+
+// Commit history
+export interface CommitRecord {
+  id: string;
+  parent_id: string | null;
+  message: string;
+  summary: string;
+  created_at: string;
+  change_count: number;
+}
+
+export interface CommitChangeRecord {
+  id: number;
+  commit_id: string;
+  type: "insert" | "update" | "delete";
+  schema_name: string;
+  table_name: string;
+  data: string;
+  original_data: string | null;
+  sql: string;
+  sort_order: number;
+}
+
+export interface CommitDetail {
+  commit: CommitRecord;
+  changes: CommitChangeRecord[];
 }

@@ -59,3 +59,12 @@ hex = "0.4"
 
 # URL encoding for connection strings
 urlencoding = "2"
+
+# Local SQLite for commit history
+rusqlite = { version = "0.31", features = ["bundled"] }
+
+# SHA-256 hashing for commit IDs
+sha2 = "0.10"
+
+# Platform-specific directories
+dirs = "5"

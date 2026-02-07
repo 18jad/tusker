@@ -225,6 +225,17 @@ export function TabBar() {
     }
   }, [checkScrollState, tabs.length]);
 
+  // Auto-scroll to active tab when it changes
+  useEffect(() => {
+    if (!activeTabId) return;
+    const index = tabs.findIndex((t) => t.id === activeTabId);
+    if (index === -1) return;
+    const tabEl = tabRefs.current[index];
+    if (tabEl) {
+      tabEl.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" });
+    }
+  }, [activeTabId, tabs]);
+
   const handleScroll = (direction: "left" | "right") => {
     const container = scrollContainerRef.current;
     if (!container) return;

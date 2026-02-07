@@ -37,7 +37,6 @@ interface UIState {
   // Modals
   projectModalOpen: boolean;
   editingProjectId: string | null;
-  stagedChangesOpen: boolean;
   createTableModalOpen: boolean;
   createTableSchema: string | null;
   deleteTableModal: {
@@ -82,7 +81,6 @@ interface UIState {
   closeProjectSpotlight: () => void;
   openProjectModal: (projectId?: string) => void;
   closeProjectModal: () => void;
-  toggleStagedChanges: () => void;
   openCreateTableModal: (schema?: string) => void;
   closeCreateTableModal: () => void;
   addCreateTableTab: (schema?: string) => void;
@@ -95,6 +93,8 @@ interface UIState {
   closeExportTableModal: () => void;
   addImportDataTab: (schema: string, table: string, format: "csv" | "json") => void;
   addQueryTab: (initialSql?: string) => void;
+  addHistoryTab: () => void;
+  addStagedChangesTab: () => void;
   reorderTabs: (fromIndex: number, toIndex: number) => void;
   openHelpModal: () => void;
   closeHelpModal: () => void;
@@ -125,7 +125,6 @@ export const useUIStore = create<UIState>((set, get) => ({
   projectSpotlightOpen: false,
   projectModalOpen: false,
   editingProjectId: null,
-  stagedChangesOpen: false,
   createTableModalOpen: false,
   createTableSchema: null,
   deleteTableModal: {
@@ -262,9 +261,6 @@ export const useUIStore = create<UIState>((set, get) => ({
   closeProjectModal: () =>
     set({ projectModalOpen: false, editingProjectId: null }),
 
-  toggleStagedChanges: () =>
-    set((state) => ({ stagedChangesOpen: !state.stagedChangesOpen })),
-
   openCreateTableModal: (schema) =>
     set({ createTableModalOpen: true, createTableSchema: schema ?? null }),
 
@@ -368,6 +364,40 @@ export const useUIStore = create<UIState>((set, get) => ({
         type: "query" as const,
         title: `Query ${queryTabCount + 1}`,
         queryContent: initialSql || "",
+      };
+      return {
+        tabs: [...state.tabs, newTab],
+        activeTabId: newTab.id,
+      };
+    }),
+
+  addHistoryTab: () =>
+    set((state) => {
+      const existing = state.tabs.find((t) => t.type === "history");
+      if (existing) {
+        return { activeTabId: existing.id };
+      }
+      const newTab: Tab = {
+        id: `history-${Date.now()}`,
+        type: "history",
+        title: "Commit History",
+      };
+      return {
+        tabs: [...state.tabs, newTab],
+        activeTabId: newTab.id,
+      };
+    }),
+
+  addStagedChangesTab: () =>
+    set((state) => {
+      const existing = state.tabs.find((t) => t.type === "staged-changes");
+      if (existing) {
+        return { activeTabId: existing.id };
+      }
+      const newTab: Tab = {
+        id: `staged-changes-${Date.now()}`,
+        type: "staged-changes",
+        title: "Staged Changes",
       };
       return {
         tabs: [...state.tabs, newTab],

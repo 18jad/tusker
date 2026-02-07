@@ -1,4 +1,4 @@
-import { Circle, Database, FileEdit, Loader2 } from "lucide-react";
+import { Circle, Database, FileEdit, History, Loader2 } from "lucide-react";
 import { useProjectStore } from "../../stores/projectStore";
 import { useUIStore } from "../../stores/uiStore";
 import { useChangesStore } from "../../stores/changesStore";
@@ -50,8 +50,9 @@ export function StatusBar() {
   const activeProject = useProjectStore((state) => state.getActiveProject());
   const tabs = useUIStore((state) => state.tabs);
   const activeTabId = useUIStore((state) => state.activeTabId);
-  const toggleStagedChanges = useUIStore((state) => state.toggleStagedChanges);
+  const addStagedChangesTab = useUIStore((state) => state.addStagedChangesTab);
   const changes = useChangesStore((state) => state.changes);
+  const addHistoryTab = useUIStore((state) => state.addHistoryTab);
 
   const connect = useConnect();
   const disconnect = useDisconnect();
@@ -127,20 +128,35 @@ export function StatusBar() {
         )}
       </div>
 
-      {/* Right section - Staged changes */}
+      {/* Right section - History & Staged changes */}
       <div className="flex items-center gap-3">
+        {connectionStatus === "connected" && (
+          <button
+            onClick={addHistoryTab}
+            className={cn(
+              "flex items-center gap-1.5 px-2 py-0.5 rounded",
+              "text-[var(--text-secondary)] hover:text-[var(--text-primary)]",
+              "hover:bg-[var(--bg-tertiary)]",
+              "transition-colors duration-150"
+            )}
+            title="Commit History"
+          >
+            <History className="w-3 h-3" />
+            <span>History</span>
+          </button>
+        )}
         {changesCount > 0 && (
           <button
-            onClick={toggleStagedChanges}
+            onClick={addStagedChangesTab}
             className={cn(
               "flex items-center gap-1.5 px-2 py-0.5 rounded",
               "text-[var(--warning)] hover:bg-[var(--bg-tertiary)]",
               "transition-colors duration-150"
             )}
+            title="View staged changes"
           >
             <FileEdit className="w-3 h-3" />
             <span>{changesCount} staged change{changesCount !== 1 ? "s" : ""}</span>
-            <span className="text-[var(--text-muted)]">- Review</span>
           </button>
         )}
       </div>

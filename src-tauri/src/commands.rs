@@ -1,8 +1,9 @@
 use crate::db::{
-    BulkInsertRequest, ColumnInfo, ConnectionConfig, ConnectionInfo, ConnectionManager,
-    ConstraintInfo, CredentialStorage, DataOperations, DeleteRequest, FilterCondition, IndexInfo,
-    InsertRequest, MigrationOperations, MigrationRequest, MigrationResult, PaginatedResult,
-    QueryResult, SchemaInfo, SchemaIntrospector, SslMode, TableInfo, UpdateRequest,
+    BulkInsertRequest, ColumnInfo, Commit, CommitDetail, CommitStore, ConnectionConfig,
+    ConnectionInfo, ConnectionManager, ConstraintInfo, CredentialStorage, DataOperations,
+    DeleteRequest, FilterCondition, IndexInfo, InsertRequest, MigrationOperations,
+    MigrationRequest, MigrationResult, PaginatedResult, QueryResult, SaveCommitChange,
+    SaveCommitRequest, SchemaInfo, SchemaIntrospector, SslMode, TableInfo, UpdateRequest,
 };
 use crate::error::Result;
 use serde::{Deserialize, Serialize};
@@ -451,4 +452,38 @@ pub async fn get_database_info(
         server_encoding: server_encoding.0,
         client_encoding: client_encoding.0,
     })
+}
+
+// ============================================================================
+// Commit History Commands
+// ============================================================================
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SaveCommitCommandRequest {
+    pub project_id: String,
+    pub message: String,
+    pub summary: String,
+    pub changes: Vec<SaveCommitChange>,
+}
+
+#[tauri::command]
+pub fn save_commit(request: SaveCommitCommandRequest) -> Result<Commit> {
+    CommitStore::save_commit(SaveCommitRequest {
+        project_id: request.project_id,
+        message: request.message,
+        summary: request.summary,
+        changes: request.changes,
+    }).map_err(|e| crate::error::DbViewerError::Configuration(e))
+}
+
+#[tauri::command]
+pub fn get_commits(project_id: String) -> Result<Vec<Commit>> {
+    CommitStore::get_commits(&project_id)
+        .map_err(|e| crate::error::DbViewerError::Configuration(e))
+}
+
+#[tauri::command]
+pub fn get_commit_detail(project_id: String, commit_id: String) -> Result<CommitDetail> {
+    CommitStore::get_commit_detail(&project_id, &commit_id)
+        .map_err(|e| crate::error::DbViewerError::Configuration(e))
 }
