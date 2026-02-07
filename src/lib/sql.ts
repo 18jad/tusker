@@ -376,6 +376,136 @@ export function generateAlterTableSQL(
   return stmts;
 }
 
+// ============================================================================
+// Index types and SQL generation
+// ============================================================================
+
+export type IndexMethod = "btree" | "hash" | "gin" | "gist" | "spgist" | "brin";
+
+export interface IndexColumnDef {
+  id: string;
+  mode: "column" | "expression";
+  column: string;
+  expression: string;
+  sortDirection: "ASC" | "DESC";
+  nullsOrder: "DEFAULT" | "NULLS FIRST" | "NULLS LAST";
+}
+
+export interface IndexDef {
+  id: string;
+  name: string;
+  indexType: IndexMethod;
+  isUnique: boolean;
+  isConcurrently: boolean;
+  columns: IndexColumnDef[];
+  whereClause: string;
+}
+
+/**
+ * Generate a CREATE INDEX SQL statement from an IndexDef
+ */
+export function generateCreateIndexSQL(
+  schema: string,
+  tableName: string,
+  index: IndexDef
+): string {
+  const parts: string[] = ["CREATE"];
+
+  if (index.isUnique) {
+    parts.push("UNIQUE");
+  }
+
+  parts.push("INDEX");
+
+  if (index.isConcurrently) {
+    parts.push("CONCURRENTLY");
+  }
+
+  parts.push(`"${index.name}"`);
+  parts.push("ON");
+  parts.push(`"${schema}"."${tableName}"`);
+
+  if (index.indexType !== "btree") {
+    parts.push(`USING ${index.indexType}`);
+  }
+
+  // Build column list
+  const colDefs = index.columns.map((col) => {
+    const colParts: string[] = [];
+
+    if (col.mode === "expression" && col.expression.trim()) {
+      // Wrap expression in parens if it doesn't already have them
+      const expr = col.expression.trim();
+      if (expr.startsWith("(") && expr.endsWith(")")) {
+        colParts.push(expr);
+      } else {
+        colParts.push(`(${expr})`);
+      }
+    } else if (col.column) {
+      colParts.push(`"${col.column}"`);
+    }
+
+    // Sort direction and nulls order only apply to btree indexes
+    if (index.indexType === "btree") {
+      if (col.sortDirection === "DESC") {
+        colParts.push("DESC");
+      }
+      if (col.nullsOrder !== "DEFAULT") {
+        colParts.push(col.nullsOrder);
+      }
+    }
+
+    return colParts.join(" ");
+  }).filter(Boolean);
+
+  parts.push(`(${colDefs.join(", ")})`);
+
+  // WHERE clause for partial indexes
+  if (index.whereClause.trim()) {
+    parts.push(`WHERE ${index.whereClause.trim()}`);
+  }
+
+  return parts.join(" ");
+}
+
+/**
+ * Generate DROP INDEX SQL statement
+ */
+export function generateDropIndexSQL(
+  schema: string,
+  indexName: string,
+  concurrently?: boolean
+): string {
+  const parts = ["DROP INDEX"];
+  if (concurrently) {
+    parts.push("CONCURRENTLY");
+  }
+  parts.push(`"${schema}"."${indexName}"`);
+  return parts.join(" ");
+}
+
+/**
+ * Auto-generate an index name following PostgreSQL convention
+ */
+export function generateIndexName(tableName: string, columns: IndexColumnDef[]): string {
+  const tbl = tableName.trim() || "table";
+  const colNames = columns
+    .map((c) => {
+      if (c.mode === "expression" && c.expression.trim()) {
+        // Extract a short name from the expression
+        return c.expression.trim()
+          .replace(/[^a-zA-Z0-9_]/g, "")
+          .substring(0, 20)
+          .toLowerCase();
+      }
+      return c.column.toLowerCase();
+    })
+    .filter(Boolean);
+
+  if (colNames.length === 0) return `idx_${tbl}`;
+  return `idx_${tbl}_${colNames.join("_")}`;
+}
+
 /**
  * Validate SQL to prevent obvious injection (basic check)
  */

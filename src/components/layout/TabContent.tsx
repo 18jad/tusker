@@ -43,12 +43,13 @@ import {
   Undo2,
   Redo2,
   Zap,
+  Database,
 } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import { useUIStore } from "../../stores/uiStore";
 import { useProjectStore } from "../../stores/projectStore";
 import { useChangesStore } from "../../stores/changesStore";
-import { useTableData, useCommitChanges, useMigration, useTableColumns, getCurrentConnectionId, type MigrationResult, type FullColumnInfo } from "../../hooks/useDatabase";
+import { useTableData, useCommitChanges, useMigration, useTableColumns, useTableIndexes, getCurrentConnectionId, type MigrationResult, type FullColumnInfo, type IndexInfoRaw } from "../../hooks/useDatabase";
 import { TableView } from "../table/TableView";
 import { RowDetailModal } from "../table/RowDetailModal";
 import {
@@ -61,7 +62,7 @@ import {
   SelectValue,
   Toggle,
 } from "../ui";
-import { generateUpdateSQL, generateDeleteSQL, generateInsertSQL, generateCreateTableSQL, generateAlterTableSQL, type ColumnDefinition, type AlterColumnDef } from "../../lib/sql";
+import { generateUpdateSQL, generateDeleteSQL, generateInsertSQL, generateCreateTableSQL, generateAlterTableSQL, generateCreateIndexSQL, generateDropIndexSQL, generateIndexName, type ColumnDefinition, type AlterColumnDef, type IndexDef, type IndexMethod } from "../../lib/sql";
 import { cn } from "../../lib/utils";
 import { ImportDataTab } from "../tabs/ImportDataTab";
 import { QueryTab } from "../tabs/QueryTab";
@@ -821,6 +822,600 @@ const createEmptyColumn = (): ColumnFormState => ({
   defaultValue: "",
   isExpanded: true,
 });
+
+// ============================================================================
+// Index Editor Types & Helpers
+// ============================================================================
+
+interface IndexFormState {
+  id: string;
+  name: string;
+  isNameManual: boolean; // true if user manually edited the name
+  indexType: IndexMethod;
+  isUnique: boolean;
+  isConcurrently: boolean;
+  columns: IndexColumnFormState[];
+  whereClause: string;
+  isExpanded: boolean;
+}
+
+interface IndexColumnFormState {
+  id: string;
+  mode: "column" | "expression";
+  column: string;
+  expression: string;
+  sortDirection: "ASC" | "DESC";
+  nullsOrder: "DEFAULT" | "NULLS FIRST" | "NULLS LAST";
+}
+
+const INDEX_TYPES: { value: IndexMethod; label: string; description: string }[] = [
+  { value: "btree", label: "B-tree", description: "Default. Best for equality and range queries" },
+  { value: "hash", label: "Hash", description: "Equality comparisons only" },
+  { value: "gin", label: "GIN", description: "Generalized Inverted Index. Best for arrays, JSONB, full-text" },
+  { value: "gist", label: "GiST", description: "Generalized Search Tree. Best for geometric, full-text" },
+  { value: "spgist", label: "SP-GiST", description: "Space-partitioned GiST. Best for non-balanced data" },
+  { value: "brin", label: "BRIN", description: "Block Range Index. Best for large, naturally ordered tables" },
+];
+
+const createEmptyIndexColumn = (): IndexColumnFormState => ({
+  id: Math.random().toString(36).substring(2, 11),
+  mode: "column",
+  column: "",
+  expression: "",
+  sortDirection: "ASC",
+  nullsOrder: "DEFAULT",
+});
+
+const createEmptyIndex = (): IndexFormState => ({
+  id: Math.random().toString(36).substring(2, 11),
+  name: "",
+  isNameManual: false,
+  indexType: "btree",
+  isUnique: false,
+  isConcurrently: false,
+  columns: [createEmptyIndexColumn()],
+  whereClause: "",
+  isExpanded: true,
+});
+
+function indexFormToIndexDef(index: IndexFormState): IndexDef {
+  return {
+    id: index.id,
+    name: index.name,
+    indexType: index.indexType,
+    isUnique: index.isUnique,
+    isConcurrently: index.isConcurrently,
+    columns: index.columns.map((c) => ({
+      id: c.id,
+      mode: c.mode,
+      column: c.column,
+      expression: c.expression,
+      sortDirection: c.sortDirection,
+      nullsOrder: c.nullsOrder,
+    })),
+    whereClause: index.whereClause,
+  };
+}
+
+/** Convert backend IndexInfo to IndexFormState for editing */
+function indexInfoToFormState(idx: IndexInfoRaw): IndexFormState {
+  return {
+    id: `idx-${idx.name}`,
+    name: idx.name,
+    isNameManual: true,
+    indexType: (idx.index_type as IndexMethod) || "btree",
+    isUnique: idx.is_unique,
+    isConcurrently: false,
+    columns: idx.columns.map((colName) => ({
+      id: Math.random().toString(36).substring(2, 11),
+      mode: "column" as const,
+      column: colName,
+      expression: "",
+      sortDirection: "ASC" as const,
+      nullsOrder: "DEFAULT" as const,
+    })),
+    whereClause: "",
+    isExpanded: false,
+  };
+}
+
+/** Get a compact summary of index columns */
+function getIndexColumnsSummary(index: IndexFormState): string {
+  return index.columns
+    .map((c) => {
+      if (c.mode === "expression" && c.expression.trim()) return c.expression.trim();
+      return c.column || "?";
+    })
+    .join(", ");
+}
+
+// ============================================================================
+// Index Editor Components
+// ============================================================================
+
+/**
+ * Single index column row within an index editor
+ */
+function IndexColumnRow({
+  col,
+  availableColumns,
+  indexType,
+  onUpdate,
+  onRemove,
+  canRemove,
+}: {
+  col: IndexColumnFormState;
+  availableColumns: string[];
+  indexType: IndexMethod;
+  onUpdate: (updates: Partial<IndexColumnFormState>) => void;
+  onRemove: () => void;
+  canRemove: boolean;
+}) {
+  const showSortOptions = indexType === "btree";
+
+  return (
+    <div className="flex items-start gap-2">
+      {/* Column/Expression toggle and value */}
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2">
+          {/* Mode toggle */}
+          <div className="flex rounded-lg overflow-hidden border border-[var(--border-color)] shrink-0">
+            <button
+              type="button"
+              onClick={() => onUpdate({ mode: "column" })}
+              className={cn(
+                "px-2 py-1 text-xs transition-colors",
+                col.mode === "column"
+                  ? "bg-[var(--accent)] text-white"
+                  : "bg-[var(--bg-primary)] text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+              )}
+            >
+              Column
+            </button>
+            <button
+              type="button"
+              onClick={() => onUpdate({ mode: "expression" })}
+              className={cn(
+                "px-2 py-1 text-xs transition-colors",
+                col.mode === "expression"
+                  ? "bg-[var(--accent)] text-white"
+                  : "bg-[var(--bg-primary)] text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+              )}
+            >
+              Expr
+            </button>
+          </div>
+
+          {/* Column select or expression input */}
+          {col.mode === "column" ? (
+            <select
+              value={col.column}
+              onChange={(e) => onUpdate({ column: e.target.value })}
+              className={cn(
+                "flex-1 h-7 px-2 rounded text-sm",
+                "bg-[var(--bg-primary)] text-[var(--text-primary)]",
+                "border border-[var(--border-color)]",
+                "focus:border-[var(--accent)] focus:outline-none"
+              )}
+            >
+              <option value="">Select column...</option>
+              {availableColumns.map((c) => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
+          ) : (
+            <input
+              type="text"
+              value={col.expression}
+              onChange={(e) => onUpdate({ expression: e.target.value })}
+              placeholder="e.g., lower(email)"
+              autoCorrect="off"
+              autoCapitalize="off"
+              autoComplete="off"
+              spellCheck={false}
+              className={cn(
+                "flex-1 h-7 px-2 rounded text-sm font-mono",
+                "bg-[var(--bg-primary)] text-[var(--text-primary)]",
+                "border border-[var(--border-color)]",
+                "focus:border-[var(--accent)] focus:outline-none",
+                "placeholder:text-[var(--text-muted)]"
+              )}
+            />
+          )}
+        </div>
+
+        {/* Sort direction & nulls order (only for btree) */}
+        {showSortOptions && (
+          <div className="flex items-center gap-2 mt-1.5 ml-[calc(4rem+0.5rem)]">
+            <select
+              value={col.sortDirection}
+              onChange={(e) => onUpdate({ sortDirection: e.target.value as "ASC" | "DESC" })}
+              className={cn(
+                "h-6 px-1.5 rounded text-xs",
+                "bg-[var(--bg-primary)] text-[var(--text-secondary)]",
+                "border border-[var(--border-color)]",
+                "focus:border-[var(--accent)] focus:outline-none"
+              )}
+            >
+              <option value="ASC">ASC</option>
+              <option value="DESC">DESC</option>
+            </select>
+            <select
+              value={col.nullsOrder}
+              onChange={(e) => onUpdate({ nullsOrder: e.target.value as "DEFAULT" | "NULLS FIRST" | "NULLS LAST" })}
+              className={cn(
+                "h-6 px-1.5 rounded text-xs",
+                "bg-[var(--bg-primary)] text-[var(--text-secondary)]",
+                "border border-[var(--border-color)]",
+                "focus:border-[var(--accent)] focus:outline-none"
+              )}
+            >
+              <option value="DEFAULT">Nulls: default</option>
+              <option value="NULLS FIRST">Nulls first</option>
+              <option value="NULLS LAST">Nulls last</option>
+            </select>
+          </div>
+        )}
+      </div>
+
+      {/* Remove button */}
+      {canRemove && (
+        <button
+          type="button"
+          onClick={onRemove}
+          className="p-1 rounded text-[var(--text-muted)] hover:text-red-400 hover:bg-red-500/10 transition-colors mt-0.5"
+        >
+          <Trash2 className="w-3.5 h-3.5" />
+        </button>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Expandable index card for editing a single index
+ */
+function IndexEditorCard({
+  index,
+  schema,
+  tableName,
+  availableColumns,
+  onUpdate,
+  onRemove,
+  onToggleExpanded,
+}: {
+  index: IndexFormState;
+  schema: string;
+  tableName: string;
+  availableColumns: string[];
+  onUpdate: (updates: Partial<IndexFormState>) => void;
+  onRemove: () => void;
+  onToggleExpanded: () => void;
+}) {
+  const updateIndexColumn = (colId: string, updates: Partial<IndexColumnFormState>) => {
+    const newCols = index.columns.map((c) =>
+      c.id === colId ? { ...c, ...updates } : c
+    );
+    onUpdate({ columns: newCols });
+
+    // Auto-update name if not manually set
+    if (!index.isNameManual) {
+      const updatedIndex = { ...index, columns: newCols };
+      const autoName = generateIndexName(
+        tableName,
+        updatedIndex.columns.map((c) => ({
+          id: c.id, mode: c.mode, column: c.column, expression: c.expression,
+          sortDirection: c.sortDirection, nullsOrder: c.nullsOrder,
+        }))
+      );
+      onUpdate({ columns: newCols, name: autoName });
+    }
+  };
+
+  const addIndexColumn = () => {
+    onUpdate({ columns: [...index.columns, createEmptyIndexColumn()] });
+  };
+
+  const removeIndexColumn = (colId: string) => {
+    if (index.columns.length <= 1) return;
+    const newCols = index.columns.filter((c) => c.id !== colId);
+    onUpdate({ columns: newCols });
+
+    if (!index.isNameManual) {
+      const autoName = generateIndexName(
+        tableName,
+        newCols.map((c) => ({
+          id: c.id, mode: c.mode, column: c.column, expression: c.expression,
+          sortDirection: c.sortDirection, nullsOrder: c.nullsOrder,
+        }))
+      );
+      onUpdate({ columns: newCols, name: autoName });
+    }
+  };
+
+  // Generate per-index SQL preview
+  const indexDef = indexFormToIndexDef(index);
+  const hasValidColumns = index.columns.some(
+    (c) => (c.mode === "column" && c.column) || (c.mode === "expression" && c.expression.trim())
+  );
+  const previewSQL = hasValidColumns && index.name
+    ? generateCreateIndexSQL(schema || "public", tableName || "table_name", indexDef)
+    : null;
+
+  return (
+    <div className={cn(
+      "border border-[var(--border-color)] rounded-lg overflow-hidden",
+      "bg-[var(--bg-secondary)]"
+    )}>
+      {/* Index Header (collapsed view) */}
+      <div
+        className={cn(
+          "flex items-center gap-2 px-3 py-2 cursor-pointer",
+          "hover:bg-[var(--bg-tertiary)] transition-colors"
+        )}
+        onClick={onToggleExpanded}
+      >
+        {index.isExpanded ? (
+          <ChevronDown className="w-4 h-4 text-[var(--text-muted)]" />
+        ) : (
+          <ChevronRight className="w-4 h-4 text-[var(--text-muted)]" />
+        )}
+
+        <Database className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+
+        <div className="flex-1 flex items-center gap-2 min-w-0">
+          <span className="text-sm font-medium text-[var(--text-primary)] truncate">
+            {index.name || "Unnamed index"}
+          </span>
+          <span className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-[var(--bg-tertiary)] text-[var(--text-muted)] shrink-0">
+            {index.indexType}
+          </span>
+          {index.isUnique && (
+            <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-500/10 text-amber-400 shrink-0">
+              UNIQUE
+            </span>
+          )}
+          {!index.isExpanded && (
+            <span className="text-xs text-[var(--text-muted)] truncate">
+              ({getIndexColumnsSummary(index)})
+            </span>
+          )}
+        </div>
+
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onRemove();
+          }}
+          className="p-1 rounded text-[var(--text-muted)] hover:text-red-400 hover:bg-red-500/10 transition-colors"
+        >
+          <Trash2 className="w-4 h-4" />
+        </button>
+      </div>
+
+      {/* Index Details (expanded) */}
+      {index.isExpanded && (
+        <div className="px-3 pb-3 pt-1 space-y-3 border-t border-[var(--border-color)]">
+          {/* Name and Type */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs text-[var(--text-muted)] mb-1">
+                Index Name
+              </label>
+              <input
+                type="text"
+                value={index.name}
+                onChange={(e) => onUpdate({ name: e.target.value, isNameManual: true })}
+                placeholder="idx_table_column"
+                autoCorrect="off"
+                autoCapitalize="off"
+                autoComplete="off"
+                spellCheck={false}
+                className={cn(
+                  "w-full h-8 px-2.5 rounded text-sm font-mono",
+                  "bg-[var(--bg-primary)] text-[var(--text-primary)]",
+                  "border border-[var(--border-color)]",
+                  "focus:border-[var(--accent)] focus:outline-none",
+                  "placeholder:text-[var(--text-muted)]"
+                )}
+              />
+              {!index.isNameManual && (
+                <p className="text-[10px] text-[var(--text-muted)] mt-0.5">Auto-generated</p>
+              )}
+            </div>
+            <div>
+              <label className="block text-xs text-[var(--text-muted)] mb-1">
+                Index Type
+              </label>
+              <select
+                value={index.indexType}
+                onChange={(e) => onUpdate({ indexType: e.target.value as IndexMethod })}
+                className={cn(
+                  "w-full h-8 px-2.5 rounded text-sm",
+                  "bg-[var(--bg-primary)] text-[var(--text-primary)]",
+                  "border border-[var(--border-color)]",
+                  "focus:border-[var(--accent)] focus:outline-none"
+                )}
+              >
+                {INDEX_TYPES.map((t) => (
+                  <option key={t.value} value={t.value}>{t.label} — {t.description}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Options row */}
+          <div className="flex items-center gap-4 flex-wrap">
+            <Checkbox
+              checked={index.isUnique}
+              onChange={(checked) => onUpdate({ isUnique: checked })}
+              label="Unique"
+            />
+          </div>
+
+          {/* Index Columns */}
+          <div>
+            <label className="block text-xs text-[var(--text-muted)] mb-2">
+              Indexed Columns / Expressions
+            </label>
+            <div className="space-y-2">
+              {index.columns.map((col) => (
+                <IndexColumnRow
+                  key={col.id}
+                  col={col}
+                  availableColumns={availableColumns}
+                  indexType={index.indexType}
+                  onUpdate={(updates) => updateIndexColumn(col.id, updates)}
+                  onRemove={() => removeIndexColumn(col.id)}
+                  canRemove={index.columns.length > 1}
+                />
+              ))}
+            </div>
+            <button
+              type="button"
+              onClick={addIndexColumn}
+              className={cn(
+                "mt-2 flex items-center gap-1.5 px-2.5 py-1 rounded text-xs",
+                "text-[var(--text-muted)] hover:text-emerald-400",
+                "hover:bg-emerald-500/10 transition-colors"
+              )}
+            >
+              <Plus className="w-3 h-3" />
+              Add Column
+            </button>
+          </div>
+
+          {/* WHERE clause (partial index) */}
+          <div>
+            <label className="block text-xs text-[var(--text-muted)] mb-1">
+              WHERE Clause <span className="text-[var(--text-muted)]">(partial index)</span>
+            </label>
+            <input
+              type="text"
+              value={index.whereClause}
+              onChange={(e) => onUpdate({ whereClause: e.target.value })}
+              placeholder='e.g., active = true AND deleted_at IS NULL'
+              autoCorrect="off"
+              autoCapitalize="off"
+              autoComplete="off"
+              spellCheck={false}
+              className={cn(
+                "w-full h-8 px-2.5 rounded text-sm font-mono",
+                "bg-[var(--bg-primary)] text-[var(--text-primary)]",
+                "border border-[var(--border-color)]",
+                "focus:border-[var(--accent)] focus:outline-none",
+                "placeholder:text-[var(--text-muted)]"
+              )}
+            />
+          </div>
+
+          {/* Per-index SQL Preview */}
+          {previewSQL && (
+            <div className="mt-2">
+              <div className="flex items-center gap-1.5 mb-1">
+                <Code className="w-3 h-3 text-[var(--text-muted)]" />
+                <span className="text-[10px] font-medium text-[var(--text-muted)] uppercase tracking-wider">
+                  SQL Preview
+                </span>
+              </div>
+              <pre className={cn(
+                "text-xs font-mono p-2.5 rounded-lg overflow-x-auto",
+                "bg-[var(--bg-primary)] text-emerald-300",
+                "border border-[var(--border-color)]"
+              )}>
+                {previewSQL}
+              </pre>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Indexes section - used in both Create Table and Edit Table
+ */
+function IndexesSection({
+  indexes,
+  schema,
+  tableName,
+  availableColumns,
+  onUpdate,
+  onAdd,
+  onRemove,
+  onToggleExpanded,
+  disabled,
+  accentColor = "purple",
+}: {
+  indexes: IndexFormState[];
+  schema: string;
+  tableName: string;
+  availableColumns: string[];
+  onUpdate: (id: string, updates: Partial<IndexFormState>) => void;
+  onAdd: () => void;
+  onRemove: (id: string) => void;
+  onToggleExpanded: (id: string) => void;
+  disabled?: boolean;
+  accentColor?: "purple" | "blue" | "emerald";
+}) {
+  const colorMap = {
+    purple: "hover:border-purple-500/50 hover:text-purple-400",
+    blue: "hover:border-blue-500/50 hover:text-blue-400",
+    emerald: "hover:border-emerald-500/50 hover:text-emerald-400",
+  };
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <label className="text-sm font-medium text-[var(--text-secondary)]">
+            Indexes
+          </label>
+          <span className="text-xs text-[var(--text-muted)]">
+            (optional)
+          </span>
+        </div>
+        <span className="text-xs text-[var(--text-muted)]">
+          {indexes.length} index{indexes.length !== 1 ? "es" : ""}
+        </span>
+      </div>
+
+      {indexes.length > 0 && (
+        <div className="space-y-2">
+          {indexes.map((index) => (
+            <IndexEditorCard
+              key={index.id}
+              index={index}
+              schema={schema}
+              tableName={tableName}
+              availableColumns={availableColumns}
+              onUpdate={(updates) => onUpdate(index.id, updates)}
+              onRemove={() => onRemove(index.id)}
+              onToggleExpanded={() => onToggleExpanded(index.id)}
+            />
+          ))}
+        </div>
+      )}
+
+      {!disabled && (
+        <button
+          onClick={onAdd}
+          className={cn(
+            "w-full mt-3 flex items-center justify-center gap-2 px-4 py-3 rounded-lg",
+            "border border-dashed border-[var(--border-color)]",
+            "text-sm text-[var(--text-muted)]",
+            colorMap[accentColor],
+            "transition-colors"
+          )}
+        >
+          <Plus className="w-4 h-4" />
+          Add Index
+        </button>
+      )}
+    </div>
+  );
+}
 
 /**
  * Type Dropdown Component for selecting PostgreSQL types
@@ -1658,6 +2253,9 @@ function CreateTableTabContent({ tab }: { tab: Tab }) {
   // Track tables currently being fetched to avoid showing error during load
   const [fkColumnsLoading, setFkColumnsLoading] = useState<Set<string>>(new Set());
 
+  // Index state
+  const [indexes, setIndexes] = useState<IndexFormState[]>([]);
+
   // Initialize schema on mount
   useEffect(() => {
     if (!selectedSchema && schemas.length > 0) {
@@ -1692,6 +2290,40 @@ function CreateTableTabContent({ tab }: { tab: Tab }) {
     });
     clearResult();
   }, [clearResult]);
+
+  // Index callbacks
+  const updateIndex = useCallback((id: string, updates: Partial<IndexFormState>) => {
+    setIndexes((prev) =>
+      prev.map((idx) => (idx.id === id ? { ...idx, ...updates } : idx))
+    );
+    clearResult();
+  }, [clearResult]);
+
+  const addIndex = useCallback(() => {
+    const newIndex = createEmptyIndex();
+    // Auto-generate name from current table name
+    const autoName = generateIndexName(tableName || "table", newIndex.columns.map((c) => ({
+      id: c.id, mode: c.mode, column: c.column, expression: c.expression,
+      sortDirection: c.sortDirection, nullsOrder: c.nullsOrder,
+    })));
+    newIndex.name = autoName;
+    setIndexes((prev) => [
+      ...prev.map((idx) => ({ ...idx, isExpanded: false })),
+      newIndex,
+    ]);
+    clearResult();
+  }, [clearResult, tableName]);
+
+  const removeIndex = useCallback((id: string) => {
+    setIndexes((prev) => prev.filter((idx) => idx.id !== id));
+    clearResult();
+  }, [clearResult]);
+
+  const toggleIndexExpanded = useCallback((id: string) => {
+    setIndexes((prev) =>
+      prev.map((idx) => (idx.id === id ? { ...idx, isExpanded: !idx.isExpanded } : idx))
+    );
+  }, []);
 
   const toggleColumnExpanded = useCallback((id: string) => {
     setColumns((prev) =>
@@ -1840,7 +2472,29 @@ function CreateTableTabContent({ tab }: { tab: Tab }) {
       return `  ${parts.join(" ")}`;
     });
 
-    return `CREATE TABLE "${schemaName}"."${tblName}" (\n${columnLines.join(",\n")}\n)`;
+    let result = `CREATE TABLE "${schemaName}"."${tblName}" (\n${columnLines.join(",\n")}\n)`;
+
+    // Append index statements to preview
+    const indexStatements = getIndexStatements(schemaName, tblName);
+    if (indexStatements.length > 0) {
+      result += ";\n\n" + indexStatements.join(";\n");
+    }
+
+    return result;
+  };
+
+  /** Generate CREATE INDEX statements for all valid indexes */
+  const getIndexStatements = (schema?: string, table?: string): string[] => {
+    const s = schema || selectedSchema || "schema";
+    const t = table || tableName.trim() || "table_name";
+    return indexes
+      .filter((idx) => {
+        if (!idx.name) return false;
+        return idx.columns.some(
+          (c) => (c.mode === "column" && c.column) || (c.mode === "expression" && c.expression.trim())
+        );
+      })
+      .map((idx) => generateCreateIndexSQL(s, t, indexFormToIndexDef(idx)));
   };
 
   const validate = (): boolean => {
@@ -1874,6 +2528,28 @@ function CreateTableTabContent({ tab }: { tab: Tab }) {
       return false;
     }
 
+    // Validate indexes
+    for (const idx of indexes) {
+      if (!idx.name.trim()) {
+        setError("All indexes must have a name");
+        return false;
+      }
+      const hasValidCol = idx.columns.some(
+        (c) => (c.mode === "column" && c.column) || (c.mode === "expression" && c.expression.trim())
+      );
+      if (!hasValidCol) {
+        setError(`Index "${idx.name}" must have at least one column or expression`);
+        return false;
+      }
+    }
+
+    const indexNames = indexes.map((idx) => idx.name.trim().toLowerCase());
+    const dupIdx = indexNames.filter((name, i) => indexNames.indexOf(name) !== i);
+    if (dupIdx.length > 0) {
+      setError(`Duplicate index name: "${dupIdx[0]}"`);
+      return false;
+    }
+
     return true;
   };
 
@@ -1883,8 +2559,9 @@ function CreateTableTabContent({ tab }: { tab: Tab }) {
 
     try {
       const sql = generateCreateTableSQL(selectedSchema, tableName.trim(), getColumnDefinitions());
+      const indexStmts = getIndexStatements(selectedSchema, tableName.trim());
       const result = await migration.mutateAsync({
-        statements: [sql],
+        statements: [sql, ...indexStmts],
         dry_run: true,
       });
       setMigrationResult(result);
@@ -1900,8 +2577,9 @@ function CreateTableTabContent({ tab }: { tab: Tab }) {
 
     try {
       const sql = generateCreateTableSQL(selectedSchema, tableName.trim(), getColumnDefinitions());
+      const indexStmts = getIndexStatements(selectedSchema, tableName.trim());
       const result = await migration.mutateAsync({
-        statements: [sql],
+        statements: [sql, ...indexStmts],
         dry_run: false,
       });
       setMigrationResult(result);
@@ -2160,6 +2838,20 @@ function CreateTableTabContent({ tab }: { tab: Tab }) {
             )}
           </div>
 
+          {/* Indexes Section */}
+          <IndexesSection
+            indexes={indexes}
+            schema={selectedSchema || "schema"}
+            tableName={tableName.trim() || "table_name"}
+            availableColumns={columns.map((c) => c.name).filter(Boolean)}
+            onUpdate={updateIndex}
+            onAdd={addIndex}
+            onRemove={removeIndex}
+            onToggleExpanded={toggleIndexExpanded}
+            disabled={success}
+            accentColor="purple"
+          />
+
           {/* SQL Preview */}
           <div>
             <div className="flex items-center justify-between mb-2">
@@ -2266,12 +2958,16 @@ function EditTableTabContent({ tab }: { tab: Tab }) {
   const originalTableName = tab.table || "";
 
   const { data: columnData, isLoading, dataUpdatedAt } = useTableColumns(schemaName, originalTableName);
+  const { data: indexData, dataUpdatedAt: indexDataUpdatedAt } = useTableIndexes(schemaName, originalTableName);
 
   const [tableName, setTableName] = useState(originalTableName);
   const [columns, setColumns] = useState<ColumnFormState[]>([]);
   const [originalColumns, setOriginalColumns] = useState<ColumnFormState[]>([]);
+  const [indexes, setIndexes] = useState<IndexFormState[]>([]);
+  const [originalIndexes, setOriginalIndexes] = useState<IndexFormState[]>([]);
   const [initialized, setInitialized] = useState(false);
   const [lastDataUpdatedAt, setLastDataUpdatedAt] = useState(0);
+  const [lastIndexDataUpdatedAt, setLastIndexDataUpdatedAt] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [migrationResult, setMigrationResult] = useState<MigrationResult | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -2286,12 +2982,12 @@ function EditTableTabContent({ tab }: { tab: Tab }) {
   const [fkColumnsLoading, setFkColumnsLoading] = useState<Set<string>>(new Set());
 
   // Undo/redo history
-  const undoStack = useRef<{ tableName: string; columns: ColumnFormState[] }[]>([]);
-  const redoStack = useRef<{ tableName: string; columns: ColumnFormState[] }[]>([]);
-  const [undoCount, setUndoCount] = useState(0); // triggers re-render when stacks change
+  const undoStack = useRef<{ tableName: string; columns: ColumnFormState[]; indexes: IndexFormState[] }[]>([]);
+  const redoStack = useRef<{ tableName: string; columns: ColumnFormState[]; indexes: IndexFormState[] }[]>([]);
+  const [undoCount, setUndoCount] = useState(0);
   const [redoCount, setRedoCount] = useState(0);
 
-  const pushUndo = useCallback((snapshot: { tableName: string; columns: ColumnFormState[] }) => {
+  const pushUndo = useCallback((snapshot: { tableName: string; columns: ColumnFormState[]; indexes: IndexFormState[] }) => {
     undoStack.current.push(snapshot);
     redoStack.current = [];
     setUndoCount(undoStack.current.length);
@@ -2301,28 +2997,28 @@ function EditTableTabContent({ tab }: { tab: Tab }) {
   const undo = useCallback(() => {
     const snapshot = undoStack.current.pop();
     if (!snapshot) return;
-    // Push current state to redo stack
-    redoStack.current.push({ tableName, columns });
+    redoStack.current.push({ tableName, columns, indexes });
     setTableName(snapshot.tableName);
     setColumns(snapshot.columns);
+    setIndexes(snapshot.indexes);
     setMigrationResult(null);
     setError(null);
     setUndoCount(undoStack.current.length);
     setRedoCount(redoStack.current.length);
-  }, [tableName, columns]);
+  }, [tableName, columns, indexes]);
 
   const redo = useCallback(() => {
     const snapshot = redoStack.current.pop();
     if (!snapshot) return;
-    // Push current state to undo stack
-    undoStack.current.push({ tableName, columns });
+    undoStack.current.push({ tableName, columns, indexes });
     setTableName(snapshot.tableName);
     setColumns(snapshot.columns);
+    setIndexes(snapshot.indexes);
     setMigrationResult(null);
     setError(null);
     setUndoCount(undoStack.current.length);
     setRedoCount(redoStack.current.length);
-  }, [tableName, columns]);
+  }, [tableName, columns, indexes]);
 
   // Keyboard shortcuts: Cmd+Z / Ctrl+Z for undo, Cmd+Shift+Z / Ctrl+Shift+Z for redo
   useEffect(() => {
@@ -2357,14 +3053,26 @@ function EditTableTabContent({ tab }: { tab: Tab }) {
     }
   }, [columnData, dataUpdatedAt, lastDataUpdatedAt]);
 
+  // Initialize indexes from fetched data
+  useEffect(() => {
+    if (indexData && indexDataUpdatedAt > lastIndexDataUpdatedAt) {
+      // Filter out primary key indexes as they're managed via column constraints
+      const nonPkIndexes = indexData.filter((idx) => !idx.is_primary);
+      const formIndexes = nonPkIndexes.map(indexInfoToFormState);
+      setOriginalIndexes(formIndexes);
+      setIndexes(formIndexes);
+      setLastIndexDataUpdatedAt(indexDataUpdatedAt);
+    }
+  }, [indexData, indexDataUpdatedAt, lastIndexDataUpdatedAt]);
+
   const clearResult = useCallback(() => {
     setMigrationResult(null);
     setError(null);
   }, []);
 
   const saveSnapshot = useCallback(() => {
-    pushUndo({ tableName, columns });
-  }, [pushUndo, tableName, columns]);
+    pushUndo({ tableName, columns, indexes });
+  }, [pushUndo, tableName, columns, indexes]);
 
   const updateColumn = useCallback((id: string, updates: Partial<ColumnFormState>) => {
     setColumns((prev) =>
@@ -2374,26 +3082,62 @@ function EditTableTabContent({ tab }: { tab: Tab }) {
   }, [clearResult]);
 
   const addColumn = useCallback(() => {
-    pushUndo({ tableName, columns });
+    pushUndo({ tableName, columns, indexes });
     setColumns((prev) => [
       ...prev.map((col) => ({ ...col, isExpanded: false })),
       createEmptyColumn(),
     ]);
     clearResult();
-  }, [clearResult, pushUndo, tableName, columns]);
+  }, [clearResult, pushUndo, tableName, columns, indexes]);
 
   const removeColumn = useCallback((id: string) => {
-    pushUndo({ tableName, columns });
+    pushUndo({ tableName, columns, indexes });
     setColumns((prev) => {
       if (prev.length <= 1) return prev;
       return prev.filter((col) => col.id !== id);
     });
     clearResult();
-  }, [clearResult, pushUndo, tableName, columns]);
+  }, [clearResult, pushUndo, tableName, columns, indexes]);
 
   const toggleColumnExpanded = useCallback((id: string) => {
     setColumns((prev) =>
       prev.map((col) => (col.id === id ? { ...col, isExpanded: !col.isExpanded } : col))
+    );
+  }, []);
+
+  // Index callbacks
+  const updateIndex = useCallback((id: string, updates: Partial<IndexFormState>) => {
+    setIndexes((prev) =>
+      prev.map((idx) => (idx.id === id ? { ...idx, ...updates } : idx))
+    );
+    clearResult();
+  }, [clearResult]);
+
+  const addIndex = useCallback(() => {
+    pushUndo({ tableName, columns, indexes });
+    const newIndex = createEmptyIndex();
+    const tblName = tableName || originalTableName;
+    const autoName = generateIndexName(tblName, newIndex.columns.map((c) => ({
+      id: c.id, mode: c.mode, column: c.column, expression: c.expression,
+      sortDirection: c.sortDirection, nullsOrder: c.nullsOrder,
+    })));
+    newIndex.name = autoName;
+    setIndexes((prev) => [
+      ...prev.map((idx) => ({ ...idx, isExpanded: false })),
+      newIndex,
+    ]);
+    clearResult();
+  }, [clearResult, pushUndo, tableName, columns, indexes, originalTableName]);
+
+  const removeIndex = useCallback((id: string) => {
+    pushUndo({ tableName, columns, indexes });
+    setIndexes((prev) => prev.filter((idx) => idx.id !== id));
+    clearResult();
+  }, [clearResult, pushUndo, tableName, columns, indexes]);
+
+  const toggleIndexExpanded = useCallback((id: string) => {
+    setIndexes((prev) =>
+      prev.map((idx) => (idx.id === id ? { ...idx, isExpanded: !idx.isExpanded } : idx))
     );
   }, []);
 
@@ -2410,7 +3154,7 @@ function EditTableTabContent({ tab }: { tab: Tab }) {
   const handleDragEnd = useCallback((event: DragEndEvent) => {
     const { active, over } = event;
     if (over && active.id !== over.id) {
-      pushUndo({ tableName, columns });
+      pushUndo({ tableName, columns, indexes });
       setColumns((prev) => {
         const oldIndex = prev.findIndex((col) => col.id === active.id);
         const newIndex = prev.findIndex((col) => col.id === over.id);
@@ -2459,8 +3203,8 @@ function EditTableTabContent({ tab }: { tab: Tab }) {
     }
   }, [fkColumnsCache, fkColumnsLoading]);
 
-  // Generate ALTER SQL from diff
-  const generateSQL = (): string[] => {
+  // Generate ALTER SQL from column diff
+  const generateColumnSQL = (): string[] => {
     return generateAlterTableSQL(
       schemaName,
       originalTableName,
@@ -2468,6 +3212,66 @@ function EditTableTabContent({ tab }: { tab: Tab }) {
       columns.map(formStateToAlterDef),
       tableName !== originalTableName ? tableName.trim() : undefined
     );
+  };
+
+  // Generate index diff SQL (DROP removed/modified, CREATE new/modified)
+  const generateIndexSQL = (): string[] => {
+    const stmts: string[] = [];
+    const originalById = new Map(originalIndexes.map((idx) => [idx.id, idx]));
+    const currentById = new Map(indexes.map((idx) => [idx.id, idx]));
+
+    // Dropped indexes: in original but not in current
+    for (const orig of originalIndexes) {
+      if (!currentById.has(orig.id)) {
+        stmts.push(generateDropIndexSQL(schemaName, orig.name));
+      }
+    }
+
+    // Modified indexes: same id, but definition changed -> DROP old + CREATE new
+    for (const current of indexes) {
+      const orig = originalById.get(current.id);
+      if (orig) {
+        // Check if anything meaningful changed
+        const changed =
+          orig.name !== current.name ||
+          orig.indexType !== current.indexType ||
+          orig.isUnique !== current.isUnique ||
+          JSON.stringify(orig.columns.map((c) => ({ column: c.column, expression: c.expression, mode: c.mode, sortDirection: c.sortDirection, nullsOrder: c.nullsOrder }))) !==
+          JSON.stringify(current.columns.map((c) => ({ column: c.column, expression: c.expression, mode: c.mode, sortDirection: c.sortDirection, nullsOrder: c.nullsOrder }))) ||
+          orig.whereClause !== current.whereClause;
+
+        if (changed) {
+          stmts.push(generateDropIndexSQL(schemaName, orig.name));
+          const hasValidCol = current.columns.some(
+            (c) => (c.mode === "column" && c.column) || (c.mode === "expression" && c.expression.trim())
+          );
+          if (hasValidCol && current.name) {
+            const effTableName = tableName.trim() || originalTableName;
+            stmts.push(generateCreateIndexSQL(schemaName, effTableName, indexFormToIndexDef(current)));
+          }
+        }
+      }
+    }
+
+    // New indexes: in current but not in original
+    for (const current of indexes) {
+      if (!originalById.has(current.id)) {
+        const hasValidCol = current.columns.some(
+          (c) => (c.mode === "column" && c.column) || (c.mode === "expression" && c.expression.trim())
+        );
+        if (hasValidCol && current.name) {
+          const effTableName = tableName.trim() || originalTableName;
+          stmts.push(generateCreateIndexSQL(schemaName, effTableName, indexFormToIndexDef(current)));
+        }
+      }
+    }
+
+    return stmts;
+  };
+
+  // Combined SQL: column changes + index changes
+  const generateSQL = (): string[] => {
+    return [...generateColumnSQL(), ...generateIndexSQL()];
   };
 
   const validate = (): boolean => {
@@ -2486,6 +3290,28 @@ function EditTableTabContent({ tab }: { tab: Tab }) {
     const duplicates = names.filter((name, index) => names.indexOf(name) !== index);
     if (duplicates.length > 0) {
       setError(`Duplicate column name: "${duplicates[0]}"`);
+      return false;
+    }
+
+    // Validate indexes
+    for (const idx of indexes) {
+      if (!idx.name.trim()) {
+        setError("All indexes must have a name");
+        return false;
+      }
+      const hasValidCol = idx.columns.some(
+        (c) => (c.mode === "column" && c.column) || (c.mode === "expression" && c.expression.trim())
+      );
+      if (!hasValidCol) {
+        setError(`Index "${idx.name}" must have at least one column or expression`);
+        return false;
+      }
+    }
+
+    const indexNames = indexes.map((idx) => idx.name.trim().toLowerCase());
+    const dupIdx = indexNames.filter((name, i) => indexNames.indexOf(name) !== i);
+    if (dupIdx.length > 0) {
+      setError(`Duplicate index name: "${dupIdx[0]}"`);
       return false;
     }
 
@@ -2681,7 +3507,7 @@ function EditTableTabContent({ tab }: { tab: Tab }) {
               type="text"
               value={tableName}
               onFocus={() => {
-                pushUndo({ tableName, columns });
+                pushUndo({ tableName, columns, indexes });
               }}
               onChange={(e) => {
                 setTableName(e.target.value);
@@ -2820,6 +3646,19 @@ function EditTableTabContent({ tab }: { tab: Tab }) {
               Add Column
             </button>
           </div>
+
+          {/* Indexes Section */}
+          <IndexesSection
+            indexes={indexes}
+            schema={schemaName}
+            tableName={tableName.trim() || originalTableName}
+            availableColumns={columns.map((c) => c.name).filter(Boolean)}
+            onUpdate={updateIndex}
+            onAdd={addIndex}
+            onRemove={removeIndex}
+            onToggleExpanded={toggleIndexExpanded}
+            accentColor="blue"
+          />
 
           {/* SQL Preview */}
           <div>

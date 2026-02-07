@@ -267,6 +267,33 @@ export function useTableColumns(schema: string, table: string) {
   });
 }
 
+// Backend IndexInfo shape
+export interface IndexInfoRaw {
+  name: string;
+  is_unique: boolean;
+  is_primary: boolean;
+  columns: string[];
+  index_type: string;
+}
+
+// Fetch indexes for a table (for Edit Table)
+export function useTableIndexes(schema: string, table: string) {
+  const { connectionStatus } = useProjectStore();
+
+  return useQuery({
+    queryKey: ["tableIndexes", schema, table],
+    queryFn: async () => {
+      if (!currentConnectionId) throw new Error("Not connected");
+      return invoke<IndexInfoRaw[]>("get_indexes", {
+        connectionId: currentConnectionId,
+        schema,
+        table,
+      });
+    },
+    enabled: connectionStatus === "connected" && !!schema && !!table && !!currentConnectionId,
+  });
+}
+
 // Fetch table data with pagination and sorting
 export function useTableData(
   schema: string,
@@ -547,6 +574,7 @@ export function useMigration() {
       if (result.committed) {
         queryClient.invalidateQueries({ queryKey: ["tableData"] });
         queryClient.invalidateQueries({ queryKey: ["tableColumns"] });
+        queryClient.invalidateQueries({ queryKey: ["tableIndexes"] });
 
         if (currentConnectionId) {
           setSchemasLoading(true);
