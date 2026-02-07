@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { useFloating, autoUpdate, offset, flip, size } from "@floating-ui/react";
 import { ChevronDown, Search, Loader2, X } from "lucide-react";
 import { cn } from "../../lib/utils";
 import { useForeignKeyValues } from "../../hooks/useDatabase";
@@ -27,8 +28,24 @@ export function RelationSelect({
 }: RelationSelectProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState("");
-  const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  const { refs, floatingStyles } = useFloating({
+    open: isOpen,
+    onOpenChange: setIsOpen,
+    middleware: [
+      offset(4),
+      flip(),
+      size({
+        apply({ rects, elements }) {
+          Object.assign(elements.floating.style, {
+            width: `${rects.reference.width}px`,
+          });
+        },
+      }),
+    ],
+    whileElementsMounted: autoUpdate,
+  });
 
   const { data: options, isLoading } = useForeignKeyValues(
     foreignKeyInfo.referencedSchema,
@@ -41,7 +58,14 @@ export function RelationSelect({
   // Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+      const target = e.target as HTMLElement;
+      const refElement = refs.reference.current as HTMLElement | null;
+      const floatElement = refs.floating.current as HTMLElement | null;
+      
+      const isOutsideReference = refElement && !refElement.contains(target);
+      const isOutsideFloating = floatElement && !floatElement.contains(target);
+      
+      if (isOutsideReference && isOutsideFloating) {
         setIsOpen(false);
       }
     };
@@ -50,7 +74,7 @@ export function RelationSelect({
       document.addEventListener("mousedown", handleClickOutside);
       return () => document.removeEventListener("mousedown", handleClickOutside);
     }
-  }, [isOpen]);
+  }, [isOpen, refs]);
 
   // Focus search input when opening
   useEffect(() => {
@@ -75,9 +99,10 @@ export function RelationSelect({
   const hasValue = value !== "" && value !== null && value !== undefined;
 
   return (
-    <div ref={containerRef} className={cn("relative", className)}>
+    <div className={cn("relative", className)}>
       {/* Trigger button */}
       <button
+        ref={refs.setReference}
         type="button"
         onClick={() => !disabled && setIsOpen(!isOpen)}
         disabled={disabled}
@@ -119,8 +144,10 @@ export function RelationSelect({
       {/* Dropdown */}
       {isOpen && (
         <div
+          ref={refs.setFloating}
+          style={floatingStyles}
           className={cn(
-            "absolute z-50 w-full mt-1 rounded-md overflow-hidden",
+            "z-[100] rounded-md overflow-hidden",
             "bg-[var(--bg-secondary)] border border-[var(--border-color)]",
             "shadow-lg"
           )}

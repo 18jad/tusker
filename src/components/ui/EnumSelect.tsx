@@ -1,4 +1,5 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useEffect } from "react";
+import { useFloating, autoUpdate, offset, flip, size } from "@floating-ui/react";
 import { ChevronDown, X } from "lucide-react";
 import { cn } from "../../lib/utils";
 
@@ -26,12 +27,35 @@ export function EnumSelect({
   isNullable = true,
 }: EnumSelectProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
+
+  const { refs, floatingStyles } = useFloating({
+    open: isOpen,
+    onOpenChange: setIsOpen,
+    middleware: [
+      offset(4),
+      flip(),
+      size({
+        apply({ rects, elements }) {
+          Object.assign(elements.floating.style, {
+            width: `${rects.reference.width}px`,
+          });
+        },
+      }),
+    ],
+    whileElementsMounted: autoUpdate,
+  });
 
   // Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+      const target = e.target as HTMLElement;
+      const refElement = refs.reference.current as HTMLElement | null;
+      const floatElement = refs.floating.current as HTMLElement | null;
+      
+      const isOutsideReference = refElement && !refElement.contains(target);
+      const isOutsideFloating = floatElement && !floatElement.contains(target);
+      
+      if (isOutsideReference && isOutsideFloating) {
         setIsOpen(false);
       }
     };
@@ -40,7 +64,7 @@ export function EnumSelect({
       document.addEventListener("mousedown", handleClickOutside);
       return () => document.removeEventListener("mousedown", handleClickOutside);
     }
-  }, [isOpen]);
+  }, [isOpen, refs]);
 
   const handleSelect = (selectedValue: string | null) => {
     const strValue = selectedValue === null ? "" : selectedValue;
@@ -57,9 +81,10 @@ export function EnumSelect({
   const hasValue = value !== "" && value !== null && value !== undefined;
 
   return (
-    <div ref={containerRef} className={cn("relative", className)}>
+    <div className={cn("relative", className)}>
       {/* Trigger button */}
       <button
+        ref={refs.setReference}
         type="button"
         onClick={() => !disabled && setIsOpen(!isOpen)}
         disabled={disabled}
@@ -101,8 +126,10 @@ export function EnumSelect({
       {/* Dropdown */}
       {isOpen && (
         <div
+          ref={refs.setFloating}
+          style={floatingStyles}
           className={cn(
-            "absolute z-50 w-full mt-1 rounded-md overflow-hidden",
+            "z-[100] rounded-md overflow-hidden",
             "bg-[var(--bg-secondary)] border border-[var(--border-color)]",
             "shadow-lg"
           )}
