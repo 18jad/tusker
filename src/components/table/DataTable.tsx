@@ -6,7 +6,7 @@ import { RelationSelect } from "../ui/RelationSelect";
 import { EnumSelect } from "../ui/EnumSelect";
 import { ContextMenu } from "../ui/ContextMenu";
 import type { Column, Row, CellValue, SortColumn } from "../../types";
-import { Key, Hash, Type, Calendar, ToggleLeft, Braces, ArrowUp, ArrowDown, Copy, Columns, RotateCcw } from "lucide-react";
+import { Key, Hash, Type, Calendar, ToggleLeft, Braces, ArrowUp, ArrowDown, Copy, Columns, RotateCcw, ChevronDown } from "lucide-react";
 import "react-datepicker/dist/react-datepicker.css";
 
 interface DataTableProps {
@@ -1133,11 +1133,17 @@ export function DataTable({
                   >
                     <div
                       className={cn(
-                        "flex flex-col px-3 py-1.5 transition-colors",
+                        "flex flex-col px-3 py-1.5 transition-colors relative group",
                         onSort && "cursor-pointer select-none hover:bg-[var(--bg-tertiary)]/50",
                         isSorted && "bg-[var(--bg-tertiary)]/30"
                       )}
-                      onClick={(e) => onSort?.(column.name, e.shiftKey)}
+                      onClick={(e) => {
+                        // Don't trigger sort if clicking on chevron
+                        if ((e.target as HTMLElement).closest('.context-menu-trigger')) {
+                          return;
+                        }
+                        onSort?.(column.name, e.shiftKey);
+                      }}
                       onKeyDown={(e) => {
                         if (onSort && (e.key === "Enter" || e.key === " ")) {
                           e.preventDefault();
@@ -1160,19 +1166,39 @@ export function DataTable({
                         )}>
                           {column.name}
                         </span>
-                        {isSorted && (
-                          <span className="flex items-center gap-0.5 flex-shrink-0">
-                            {isMultiSort && (
-                              <span className="text-[9px] font-semibold text-[var(--accent)] min-w-[12px] h-[14px] flex items-center justify-center rounded bg-[var(--accent)]/15">
-                                {sortIndex + 1}
-                              </span>
-                            )}
-                            {isAsc
-                              ? <ArrowUp className="w-3 h-3 text-[var(--accent)]" />
-                              : <ArrowDown className="w-3 h-3 text-[var(--accent)]" />
-                            }
-                          </span>
-                        )}
+                        <div className="flex items-center gap-0.5 ml-auto">
+                          {isSorted && (
+                            <span className="flex items-center gap-0.5 flex-shrink-0">
+                              {isMultiSort && (
+                                <span className="text-[9px] font-semibold text-[var(--accent)] min-w-[12px] h-[14px] flex items-center justify-center rounded bg-[var(--accent)]/15">
+                                  {sortIndex + 1}
+                                </span>
+                              )}
+                              {isAsc
+                                ? <ArrowUp className="w-3 h-3 text-[var(--accent)]" />
+                                : <ArrowDown className="w-3 h-3 text-[var(--accent)]" />
+                              }
+                            </span>
+                          )}
+                          <button
+                            className="context-menu-trigger opacity-0 group-hover:opacity-100 transition-opacity p-0.5 hover:bg-[var(--bg-tertiary)] rounded"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              // Trigger a synthetic context menu event
+                              const syntheticEvent = new MouseEvent('contextmenu', {
+                                bubbles: true,
+                                cancelable: true,
+                                view: window,
+                                clientX: e.clientX,
+                                clientY: e.clientY,
+                              });
+                              e.currentTarget.parentElement?.parentElement?.dispatchEvent(syntheticEvent);
+                            }}
+                            aria-label="Open column menu"
+                          >
+                            <ChevronDown className="w-3 h-3 text-[var(--text-muted)]" />
+                          </button>
+                        </div>
                       </div>
                       <span className="text-[10px] text-[var(--text-muted)] truncate">
                         {column.dataType}
