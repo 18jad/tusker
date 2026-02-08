@@ -15,6 +15,7 @@ import {
   FileJson,
   Upload,
   Eraser,
+  DatabaseZap,
 } from "lucide-react";
 import { Popover } from "../ui/Popover";
 import type { CellValue, TableData, SortColumn, FilterCondition } from "../../types";
@@ -318,8 +319,36 @@ export function TableView({
   // No data
   if (!data) {
     return (
-      <div className="flex-1 flex items-center justify-center text-[var(--text-muted)]">
-        No data available
+      <div className="h-full flex items-center justify-center p-6">
+        <div className="flex flex-col items-center gap-4 max-w-xs text-center">
+          <div className="w-16 h-16 rounded-2xl bg-[var(--bg-tertiary)] border border-[var(--border-color)] flex items-center justify-center">
+            <DatabaseZap className="w-7 h-7 text-[var(--text-muted)]" />
+          </div>
+          <div>
+            <h3 className="text-sm font-medium text-[var(--text-secondary)] mb-1">
+              No data available
+            </h3>
+            <p className="text-xs text-[var(--text-muted)] leading-relaxed">
+              Could not load data for <span className="font-medium text-[var(--text-secondary)]">{tableName}</span>. The table may be empty, or the connection was interrupted.
+            </p>
+          </div>
+          {onRefresh && (
+            <button
+              onClick={onRefresh}
+              className={cn(
+                "h-8 px-4 rounded-lg text-xs font-medium",
+                "flex items-center gap-1.5",
+                "bg-[var(--bg-tertiary)] text-[var(--text-secondary)]",
+                "hover:bg-[#2a2a2a] hover:text-[var(--text-primary)]",
+                "border border-[var(--border-color)]",
+                "transition-colors"
+              )}
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              Retry
+            </button>
+          )}
+        </div>
       </div>
     );
   }
