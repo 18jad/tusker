@@ -62,6 +62,15 @@
         "headerImage": null,
         "sidebarImage": null
       }
+    },
+    "createUpdaterArtifacts": "v1Compatible"
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDlBMUNEQTU3NDUxNUMxRkYKUldUL3dSVkZWOW9jbWgxR3UzSm5Pc1h3VWpCZFRHWEsvNE51NWZBTVNCWEMwSFFobzhNUkVGZXAK",
+      "endpoints": [
+        "https://github.com/18jad/tusker/releases/latest/download/latest.json"
+      ]
     }
   }
 }

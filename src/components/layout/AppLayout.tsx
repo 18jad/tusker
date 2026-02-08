@@ -7,7 +7,10 @@ import {
   Unplug,
   Loader2,
   ArrowLeftRight,
-  Plus
+  Plus,
+  X,
+  Download,
+  RefreshCw
 } from "lucide-react";
 import { Sidebar } from "./Sidebar";
 import { TabBar } from "./TabBar";
@@ -19,6 +22,7 @@ import { useChangesStore } from "../../stores/changesStore";
 import { useConnect, useDisconnect } from "../../hooks/useDatabase";
 import { useGlobalKeyboardShortcuts } from "../../hooks/useKeyboard";
 import { useConnectionHealthCheck } from "../../hooks/useConnectionHealthCheck";
+import { useUpdateCheck } from "../../hooks/useUpdateCheck";
 import { cn, PROJECT_COLORS } from "../../lib/utils";
 
 function ProjectMenu() {
@@ -244,6 +248,73 @@ function TitleBar() {
   );
 }
 
+function UpdateBanner() {
+  const { status, version, progress, dismissed, installUpdate, dismiss } =
+    useUpdateCheck();
+
+  if (dismissed || (status !== "available" && status !== "downloading" && status !== "installed")) {
+    return null;
+  }
+
+  return (
+    <div
+      className={cn(
+        "h-8 flex items-center justify-center gap-3 px-4 shrink-0",
+        "bg-[var(--accent)]/10 border-b border-[var(--accent)]/20",
+        "text-xs text-[var(--accent)]"
+      )}
+    >
+      {status === "available" && (
+        <>
+          <span>Tusker v{version} is available</span>
+          <button
+            onClick={installUpdate}
+            className={cn(
+              "flex items-center gap-1 px-2 py-0.5 rounded",
+              "bg-[var(--accent)] text-white",
+              "hover:bg-[var(--accent-hover)] transition-colors duration-150",
+              "text-xs font-medium"
+            )}
+          >
+            <Download className="w-3 h-3" />
+            Update Now
+          </button>
+        </>
+      )}
+
+      {status === "downloading" && (
+        <>
+          <Loader2 className="w-3 h-3 animate-spin" />
+          <span>Downloading update... {progress}%</span>
+          <div className="w-32 h-1.5 rounded-full bg-[var(--accent)]/20 overflow-hidden">
+            <div
+              className="h-full rounded-full bg-[var(--accent)] transition-all duration-300"
+              style={{ width: `${progress}%` }}
+            />
+          </div>
+        </>
+      )}
+
+      {status === "installed" && (
+        <>
+          <RefreshCw className="w-3 h-3" />
+          <span>Update installed — restart Tusker to apply</span>
+        </>
+      )}
+
+      <button
+        onClick={dismiss}
+        className={cn(
+          "ml-auto p-0.5 rounded",
+          "hover:bg-[var(--accent)]/20 transition-colors duration-150"
+        )}
+      >
+        <X className="w-3 h-3" />
+      </button>
+    </div>
+  );
+}
+
 interface AppLayoutProps {
   children?: React.ReactNode;
 }
@@ -269,6 +340,9 @@ export function AppLayout({ children }: AppLayoutProps) {
     <div className="h-screen w-screen flex flex-col overflow-hidden bg-[var(--bg-primary)]">
       {/* Title Bar */}
       <TitleBar />
+
+      {/* Update Banner */}
+      <UpdateBanner />
 
       {/* Main Content Area */}
       <div className="flex-1 flex overflow-hidden">
