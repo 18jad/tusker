@@ -85,7 +85,7 @@ export function ChangeCard({ type, schema, table, data, originalData, sql, onRem
         <span className="text-[10px] text-[var(--text-muted)]">
           {getChangeSummary(type, data, originalData)}
         </span>
-        <Check className="w-3 h-3 text-green-400 ml-auto shrink-0" title="Reviewed" />
+        <Check className="w-3 h-3 text-green-400 ml-auto shrink-0" />
         {onRemove && (
           <button
             onClick={(e) => { e.stopPropagation(); onRemove(); }}

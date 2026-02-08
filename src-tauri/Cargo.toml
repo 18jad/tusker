@@ -1,8 +1,8 @@
 [package]
 name = "tusker"
 version = "0.1.0"
-description = "A Tauri App"
-authors = ["you"]
+description = "A modern PostgreSQL database client"
+authors = ["Jad"]
 edition = "2021"
 
 [[bin]]

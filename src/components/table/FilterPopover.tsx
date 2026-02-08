@@ -6,7 +6,6 @@ import {
   type ColumnCategory,
   type DraftFilter,
   getColumnCategory,
-  getFilterChipLabel,
   OPERATORS_BY_CATEGORY,
   TEXT_OPERATORS,
   DEFAULT_OPERATOR,
@@ -79,9 +78,8 @@ interface FilterButtonProps {
   onRemoveFilter: (index: number) => void;
 }
 
-export function FilterButton({ columns, filters, isOpen, onToggle, onRemoveFilter }: FilterButtonProps) {
+export function FilterButton({ filters, isOpen, onToggle }: FilterButtonProps) {
   const hasFilters = filters.length > 0;
-  const MAX_CHIPS = 3;
 
   return (
     <div className="flex items-center gap-1.5">
