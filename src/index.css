@@ -35,6 +35,8 @@ body,
 #root {
   height: 100%;
   width: 100%;
+  user-select: none;
+  -webkit-user-select: none;
   font-family:
     "Inter",
     -apple-system,
@@ -67,6 +69,23 @@ body,
 
 ::-webkit-scrollbar-thumb:hover {
   background: #3a3a3a;
+}
+
+/* Allow text selection in inputs, editable content, and data review areas */
+input,
+textarea,
+select,
+pre,
+code,
+[contenteditable="true"],
+[data-selectable] {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+[data-selectable] * {
+  user-select: text;
+  -webkit-user-select: text;
 }
 
 /* Selection */

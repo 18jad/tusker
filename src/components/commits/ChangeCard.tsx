@@ -105,7 +105,7 @@ export function ChangeCard({ type, schema, table, data, originalData, sql, onRem
   }
 
   return (
-    <div className={cn("rounded-lg border p-4", config.bg, config.border)}>
+    <div data-selectable className={cn("rounded-lg border p-4", config.bg, config.border)}>
       {/* Header */}
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
