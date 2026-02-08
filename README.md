@@ -10,6 +10,7 @@ Download the latest release from the [Releases page](https://github.com/18jad/tu
 - **Windows**: `.exe` or `.msi`
 
 ### macOS: "App is damaged" warning
+<img width="270" height="280" alt="image" src="https://github.com/user-attachments/assets/eb29e46f-2efe-4609-a66d-d38f64da68fd" />
 
 The app is not code-signed with an Apple Developer certificate, so macOS Gatekeeper may block it. To fix this, run after installing:
 
