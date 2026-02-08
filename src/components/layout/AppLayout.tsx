@@ -18,6 +18,7 @@ import { useUIStore } from "../../stores/uiStore";
 import { useChangesStore } from "../../stores/changesStore";
 import { useConnect, useDisconnect } from "../../hooks/useDatabase";
 import { useGlobalKeyboardShortcuts } from "../../hooks/useKeyboard";
+import { useConnectionHealthCheck } from "../../hooks/useConnectionHealthCheck";
 import { cn, PROJECT_COLORS } from "../../lib/utils";
 
 function ProjectMenu() {
@@ -258,8 +259,11 @@ export function AppLayout({ children }: AppLayoutProps) {
   // Global keyboard shortcuts (Cmd+W to close tab, Cmd+K for command palette, etc.)
   useGlobalKeyboardShortcuts();
 
+  // Live database connection health check
+  useConnectionHealthCheck();
+
   // Determine what content to show
-  const showTabContent = activeTabId && connectionStatus === "connected";
+  const showTabContent = activeTabId && (connectionStatus === "connected" || connectionStatus === "reconnecting");
 
   return (
     <div className="h-screen w-screen flex flex-col overflow-hidden bg-[var(--bg-primary)]">

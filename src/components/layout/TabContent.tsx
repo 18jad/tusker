@@ -3826,7 +3826,7 @@ export function TabContent() {
   const activeTabId = useUIStore((state) => state.activeTabId);
   const connectionStatus = useProjectStore((state) => state.connectionStatus);
 
-  if (connectionStatus !== "connected" || tabs.length === 0) {
+  if ((connectionStatus !== "connected" && connectionStatus !== "reconnecting") || tabs.length === 0) {
     return null;
   }
 

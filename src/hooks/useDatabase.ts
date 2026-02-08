@@ -10,6 +10,10 @@ export function getCurrentConnectionId() {
   return currentConnectionId;
 }
 
+export function setCurrentConnectionId(id: string | null) {
+  currentConnectionId = id;
+}
+
 interface ConnectRequest {
   name: string;
   host: string;

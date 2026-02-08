@@ -8,7 +8,9 @@ use crate::db::{
 use crate::error::Result;
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
+use sqlx::Row;
 use std::sync::Arc;
+use std::time::Duration;
 use tauri::State;
 use tokio::sync::RwLock;
 
@@ -149,6 +151,28 @@ pub async fn list_active_connections(state: State<'_, AppState>) -> Result<Vec<C
 pub async fn is_connected(state: State<'_, AppState>, connection_id: String) -> Result<bool> {
     let connection_manager = state.connection_manager.read().await;
     Ok(connection_manager.is_connected(&connection_id).await)
+}
+
+#[tauri::command]
+pub async fn ping_database(
+    state: State<'_, AppState>,
+    connection_id: String,
+) -> Result<bool> {
+    let connection_manager = state.connection_manager.read().await;
+    let pool = match connection_manager.get_pool(&connection_id).await {
+        Ok(pool) => pool,
+        Err(_) => return Ok(false),
+    };
+
+    match tokio::time::timeout(
+        Duration::from_secs(5),
+        sqlx::query("SELECT 1").fetch_one(&pool),
+    )
+    .await
+    {
+        Ok(Ok(row)) => Ok(row.get::<i32, _>(0) == 1),
+        _ => Ok(false),
+    }
 }
 
 // ============================================================================

@@ -53,6 +53,7 @@ pub fn run() {
             commands::test_connection,
             commands::list_active_connections,
             commands::is_connected,
+            commands::ping_database,
             // Saved connections commands
             commands::get_saved_connections,
             commands::save_connection,

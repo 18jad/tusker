@@ -548,7 +548,7 @@ export function Sidebar({
 
           {/* Footer buttons */}
           <div className="p-2 border-t border-[var(--border-color)] shrink-0 flex flex-col gap-2">
-            {connectionStatus === "connected" && (
+            {(connectionStatus === "connected" || connectionStatus === "reconnecting") && (
               <>
                 <button
                   onClick={() => addQueryTab()}

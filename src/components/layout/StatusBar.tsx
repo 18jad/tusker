@@ -25,6 +25,11 @@ const CONNECTION_STATUS_CONFIG: Record<
     color: "text-[var(--success)]",
     dotColor: "bg-[var(--success)]",
   },
+  reconnecting: {
+    label: "Reconnecting...",
+    color: "text-[var(--warning)]",
+    dotColor: "bg-[var(--warning)]",
+  },
   error: {
     label: "Connection Error",
     color: "text-[var(--danger)]",
@@ -71,7 +76,7 @@ export function StatusBar() {
     }
   };
 
-  const isLoading = connect.isPending || disconnect.isPending || connectionStatus === "connecting";
+  const isLoading = connect.isPending || disconnect.isPending || connectionStatus === "connecting" || connectionStatus === "reconnecting";
 
   return (
     <footer

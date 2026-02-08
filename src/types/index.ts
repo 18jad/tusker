@@ -25,7 +25,7 @@ export interface ProjectSettings {
   readOnly: boolean;
 }
 
-export type ConnectionStatus = "disconnected" | "connecting" | "connected" | "error";
+export type ConnectionStatus = "disconnected" | "connecting" | "connected" | "reconnecting" | "error";
 
 // Database schema types
 export interface Schema {
