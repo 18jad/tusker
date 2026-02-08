@@ -215,6 +215,16 @@ button:not(:disabled) {
   to { transform: translateX(0); }
 }
 
+@keyframes slide-out-to-left {
+  from { transform: translateX(0); opacity: 1; }
+  to { transform: translateX(-1rem); opacity: 0; }
+}
+
+@keyframes slide-out-to-right {
+  from { transform: translateX(0); opacity: 1; }
+  to { transform: translateX(1rem); opacity: 0; }
+}
+
 .animate-in {
   animation-duration: 150ms;
   animation-fill-mode: both;
@@ -257,6 +267,33 @@ button:not(:disabled) {
 
 .slide-in-from-right-2 {
   animation-name: slide-in-from-right;
+}
+
+.slide-out-to-left-4 {
+  animation-name: slide-out-to-left;
+}
+
+.slide-out-to-right-4 {
+  animation-name: slide-out-to-right;
+}
+
+/* Onboarding step transitions — single-phase slide+fade on mount */
+@keyframes onboarding-from-right {
+  from { opacity: 0; transform: translateX(2rem); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes onboarding-from-left {
+  from { opacity: 0; transform: translateX(-2rem); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+.onboarding-slide-in-right {
+  animation: onboarding-from-right 250ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.onboarding-slide-in-left {
+  animation: onboarding-from-left 250ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 .spotlight-backdrop {

@@ -2,6 +2,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AppLayout } from "./components/layout";
 import { ProjectModal, DeleteTableModal, TruncateTableModal, ExportTableModal, HelpModal } from "./components/modals";
 import { CommandPalette, ProjectSpotlight, Toast } from "./components/ui";
+import { OnboardingPage } from "./components/OnboardingOverlay";
+import { useOnboardingStore } from "./stores";
 import "./index.css";
 
 const queryClient = new QueryClient({
@@ -15,6 +17,12 @@ const queryClient = new QueryClient({
 });
 
 function App() {
+  const { hasCompletedOnboarding } = useOnboardingStore();
+
+  if (!hasCompletedOnboarding) {
+    return <OnboardingPage />;
+  }
+
   return (
     <QueryClientProvider client={queryClient}>
       <AppLayout />
