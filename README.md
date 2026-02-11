@@ -5,7 +5,7 @@ A modern, fast PostgreSQL database client built with Tauri, React, and TypeScrip
 | | | |
 |:-------------------------:|:-------------------------:|:-------------------------:|
 |<img width="1312" height="912" alt="image" src="https://github.com/user-attachments/assets/663cac93-7554-42dc-894d-93e7ab90bc41" />  Main Screen |  <img width="1312" height="912" alt="image" src="https://github.com/user-attachments/assets/da2731af-bf81-435f-9540-da873378d4d7" /> Table Browse | <img width="1312" height="912" alt="image" src="https://github.com/user-attachments/assets/980bd21f-5b65-42ef-b863-27a5e1762081" /> Git Diff Changes |
-| <img width="1312" height="912" alt="image" src="https://github.com/user-attachments/assets/55a00f44-dd92-4dfa-ba91-40aad979cab6" /> Commits History | <img width="1312" height="912" alt="image" src="https://github.com/user-attachments/assets/3645b480-6cbd-43d7-9adb-31d50f5b3b4c" /> Fully Custom Table Builder | <img width="1312" height="912" alt="image" src="https://github.com/user-attachments/assets/3ed05e72-e4ed-4154-833b-fa052ce7f1e7" /> SQL Playgound with autocomplete
+| <img width="1312" height="912" alt="image" src="https://github.com/user-attachments/assets/55a00f44-dd92-4dfa-ba91-40aad979cab6" /> Commits History | <img width="1312" height="912" alt="image" src="https://github.com/user-attachments/assets/3645b480-6cbd-43d7-9adb-31d50f5b3b4c" /> Fully Custom Table Builder | <img width="1312" height="912" alt="image" src="https://github.com/user-attachments/assets/1a9b4d8c-f790-431a-9a2e-83a296650e3a" /> SQL Playgound with autocomplete
 
 ## Features
 
