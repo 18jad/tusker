@@ -2,6 +2,13 @@ import { useState, useRef, useEffect } from "react";
 import { ArrowUpDown, ArrowUp, ArrowDown, Plus, X } from "lucide-react";
 import { cn } from "../../lib/utils";
 import type { Column, SortColumn } from "../../types";
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from "../ui/Select";
 
 /** Local draft rule — column can be "" when user hasn't picked yet */
 interface DraftSort {
@@ -40,11 +47,15 @@ export function SortPopover({ columns, sorts, onSortsChange }: SortPopoverProps)
     if (!isOpen) return;
 
     const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as Element;
+      // Ignore clicks inside portaled Radix Select dropdowns
+      if (target?.closest?.("[data-radix-popper-content-wrapper]")) return;
+
       if (
         popoverRef.current &&
-        !popoverRef.current.contains(e.target as Node) &&
+        !popoverRef.current.contains(target) &&
         triggerRef.current &&
-        !triggerRef.current.contains(e.target as Node)
+        !triggerRef.current.contains(target)
       ) {
         // On close, drop any draft rows that still have no column picked
         setDrafts((prev) => prev.filter((d) => d.column !== ""));
@@ -161,31 +172,34 @@ export function SortPopover({ columns, sorts, onSortsChange }: SortPopoverProps)
                 className="flex items-center gap-1.5"
               >
                 {/* Column select */}
-                <select
-                  value={draft.column}
-                  onChange={(e) => updateSortColumn(index, e.target.value)}
-                  className={cn(
-                    "flex-1 h-7 px-2 text-xs rounded",
-                    "bg-[var(--bg-primary)]",
-                    draft.column ? "text-[var(--text-primary)]" : "text-[var(--text-muted)]",
-                    "border border-[var(--border-color)]",
-                    "focus:border-[var(--accent)] focus:outline-none",
-                    "cursor-pointer"
-                  )}
+                <Select
+                  value={draft.column || undefined}
+                  onValueChange={(val) => updateSortColumn(index, val)}
                 >
-                  <option value="" disabled>
-                    Select column...
-                  </option>
-                  {columns.map((col) => (
-                    <option
-                      key={col.name}
-                      value={col.name}
-                      disabled={usedColumns.has(col.name) && col.name !== draft.column}
-                    >
-                      {col.name}
-                    </option>
-                  ))}
-                </select>
+                  <SelectTrigger
+                    className={cn(
+                      "flex-1 h-7 px-2 text-xs rounded",
+                      "bg-[var(--bg-primary)]",
+                      draft.column ? "text-[var(--text-primary)]" : "text-[var(--text-muted)]",
+                      "border border-[var(--border-color)]",
+                      "focus:border-[var(--accent)] focus:outline-none",
+                      "cursor-pointer"
+                    )}
+                  >
+                    <SelectValue placeholder="Select column..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {columns.map((col) => (
+                      <SelectItem
+                        key={col.name}
+                        value={col.name}
+                        disabled={usedColumns.has(col.name) && col.name !== draft.column}
+                      >
+                        {col.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
 
                 {/* Direction toggle */}
                 <button

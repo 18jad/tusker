@@ -990,21 +990,26 @@ function IndexColumnRow({
 
           {/* Column select or expression input */}
           {col.mode === "column" ? (
-            <select
-              value={col.column}
-              onChange={(e) => onUpdate({ column: e.target.value })}
-              className={cn(
-                "flex-1 h-7 px-2 rounded text-sm",
-                "bg-[var(--bg-primary)] text-[var(--text-primary)]",
-                "border border-[var(--border-color)]",
-                "focus:border-[var(--accent)] focus:outline-none"
-              )}
+            <Select
+              value={col.column || undefined}
+              onValueChange={(val) => onUpdate({ column: val })}
             >
-              <option value="">Select column...</option>
-              {availableColumns.map((c) => (
-                <option key={c} value={c}>{c}</option>
-              ))}
-            </select>
+              <SelectTrigger
+                className={cn(
+                  "flex-1 h-7 px-2 rounded text-sm",
+                  "bg-[var(--bg-primary)] text-[var(--text-primary)]",
+                  "border border-[var(--border-color)]",
+                  "focus:border-[var(--accent)] focus:outline-none"
+                )}
+              >
+                <SelectValue placeholder="Select column..." />
+              </SelectTrigger>
+              <SelectContent>
+                {availableColumns.map((c) => (
+                  <SelectItem key={c} value={c}>{c}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           ) : (
             <input
               type="text"
@@ -1029,33 +1034,45 @@ function IndexColumnRow({
         {/* Sort direction & nulls order (only for btree) */}
         {showSortOptions && (
           <div className="flex items-center gap-2 mt-1.5 ml-[calc(4rem+0.5rem)]">
-            <select
+            <Select
               value={col.sortDirection}
-              onChange={(e) => onUpdate({ sortDirection: e.target.value as "ASC" | "DESC" })}
-              className={cn(
-                "h-6 px-1.5 rounded text-xs",
-                "bg-[var(--bg-primary)] text-[var(--text-secondary)]",
-                "border border-[var(--border-color)]",
-                "focus:border-[var(--accent)] focus:outline-none"
-              )}
+              onValueChange={(val) => onUpdate({ sortDirection: val as "ASC" | "DESC" })}
             >
-              <option value="ASC">ASC</option>
-              <option value="DESC">DESC</option>
-            </select>
-            <select
+              <SelectTrigger
+                className={cn(
+                  "h-6 px-1.5 rounded text-xs",
+                  "bg-[var(--bg-primary)] text-[var(--text-secondary)]",
+                  "border border-[var(--border-color)]",
+                  "focus:border-[var(--accent)] focus:outline-none"
+                )}
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ASC">ASC</SelectItem>
+                <SelectItem value="DESC">DESC</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select
               value={col.nullsOrder}
-              onChange={(e) => onUpdate({ nullsOrder: e.target.value as "DEFAULT" | "NULLS FIRST" | "NULLS LAST" })}
-              className={cn(
-                "h-6 px-1.5 rounded text-xs",
-                "bg-[var(--bg-primary)] text-[var(--text-secondary)]",
-                "border border-[var(--border-color)]",
-                "focus:border-[var(--accent)] focus:outline-none"
-              )}
+              onValueChange={(val) => onUpdate({ nullsOrder: val as "DEFAULT" | "NULLS FIRST" | "NULLS LAST" })}
             >
-              <option value="DEFAULT">Nulls: default</option>
-              <option value="NULLS FIRST">Nulls first</option>
-              <option value="NULLS LAST">Nulls last</option>
-            </select>
+              <SelectTrigger
+                className={cn(
+                  "h-6 px-1.5 rounded text-xs",
+                  "bg-[var(--bg-primary)] text-[var(--text-secondary)]",
+                  "border border-[var(--border-color)]",
+                  "focus:border-[var(--accent)] focus:outline-none"
+                )}
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="DEFAULT">Nulls: default</SelectItem>
+                <SelectItem value="NULLS FIRST">Nulls first</SelectItem>
+                <SelectItem value="NULLS LAST">Nulls last</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
         )}
       </div>
@@ -1229,20 +1246,28 @@ function IndexEditorCard({
               <label className="block text-xs text-[var(--text-muted)] mb-1">
                 Index Type
               </label>
-              <select
+              <Select
                 value={index.indexType}
-                onChange={(e) => onUpdate({ indexType: e.target.value as IndexMethod })}
-                className={cn(
-                  "w-full h-8 px-2.5 rounded text-sm",
-                  "bg-[var(--bg-primary)] text-[var(--text-primary)]",
-                  "border border-[var(--border-color)]",
-                  "focus:border-[var(--accent)] focus:outline-none"
-                )}
+                onValueChange={(val) => onUpdate({ indexType: val as IndexMethod })}
               >
-                {INDEX_TYPES.map((t) => (
-                  <option key={t.value} value={t.value}>{t.label} — {t.description}</option>
-                ))}
-              </select>
+                <SelectTrigger
+                  className={cn(
+                    "w-full h-8 px-2.5 rounded text-sm",
+                    "bg-[var(--bg-primary)] text-[var(--text-primary)]",
+                    "border border-[var(--border-color)]",
+                    "focus:border-[var(--accent)] focus:outline-none"
+                  )}
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {INDEX_TYPES.map((t) => (
+                    <SelectItem key={t.value} value={t.value} description={t.description}>
+                      {t.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
 

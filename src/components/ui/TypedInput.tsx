@@ -4,6 +4,13 @@ import { ChevronUp, ChevronDown } from "lucide-react";
 import { cn } from "../../lib/utils";
 import { RelationSelect } from "./RelationSelect";
 import { EnumSelect } from "./EnumSelect";
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from "./Select";
 import type { ForeignKeyInfo } from "../../types";
 import "react-datepicker/dist/react-datepicker.css";
 
@@ -305,20 +312,24 @@ export function TypedInput({
 
   // Boolean type - render as select
   if (config.type === "boolean") {
-    const boolValue = localValue === "" || localValue === "null" ? "" : localValue === "true" ? "true" : "false";
+    const boolValue = localValue === "" || localValue === "null" ? "__null__" : localValue === "true" ? "true" : "false";
     return (
-      <select
+      <Select
         value={boolValue}
-        onChange={(e) => handleChange(e.target.value)}
+        onValueChange={(val) => handleChange(val === "__null__" ? "" : val)}
         disabled={disabled}
-        autoFocus={autoFocus}
-        onBlur={onBlur}
-        className={cn(inputClasses, errorClasses, modifiedClasses, className)}
       >
-        <option value="">NULL</option>
-        <option value="true">true</option>
-        <option value="false">false</option>
-      </select>
+        <SelectTrigger
+          className={cn(inputClasses, errorClasses, modifiedClasses, className)}
+        >
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="__null__">NULL</SelectItem>
+          <SelectItem value="true">true</SelectItem>
+          <SelectItem value="false">false</SelectItem>
+        </SelectContent>
+      </Select>
     );
   }
 

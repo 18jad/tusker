@@ -5,6 +5,13 @@ import { useUIStore } from "../../stores/uiStore";
 import { RelationSelect } from "../ui/RelationSelect";
 import { EnumSelect } from "../ui/EnumSelect";
 import { ContextMenu } from "../ui/ContextMenu";
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from "../ui/Select";
 import type { Column, Row, CellValue, SortColumn } from "../../types";
 import { Key, Hash, Type, Calendar, ToggleLeft, Braces, ArrowUp, ArrowDown, Copy, Columns, RotateCcw, ChevronDown } from "lucide-react";
 import "react-datepicker/dist/react-datepicker.css";
@@ -746,29 +753,26 @@ function EditableCell({
 
     // Boolean - use select
     if (inputType === "boolean") {
-      const boolValue = editValue === "" || editValue === "null" ? "" : editValue === "true" ? "true" : "false";
+      const boolValue = editValue === "" || editValue === "null" ? "__null__" : editValue === "true" ? "true" : "false";
       return (
         <div ref={containerRef} className="flex items-center gap-1 px-1 py-1 h-full">
-          <select
-            autoFocus
+          <Select
             value={boolValue}
-            onChange={(e) => {
-              const val = e.target.value;
-              setEditValue(val);
-              onSave(val === "" ? null : val === "true");
+            onValueChange={(val) => {
+              const mapped = val === "__null__" ? "" : val;
+              setEditValue(mapped);
+              onSave(mapped === "" ? null : mapped === "true");
             }}
-            onKeyDown={(e) => {
-              if (e.key === "Escape") {
-                e.preventDefault();
-                onCancel();
-              }
-            }}
-            className={inputClasses}
           >
-            <option value="">NULL</option>
-            <option value="true">true</option>
-            <option value="false">false</option>
-          </select>
+            <SelectTrigger className={inputClasses}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__null__">NULL</SelectItem>
+              <SelectItem value="true">true</SelectItem>
+              <SelectItem value="false">false</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
       );
     }

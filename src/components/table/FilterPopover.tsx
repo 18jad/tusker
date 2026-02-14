@@ -3,6 +3,13 @@ import { Filter, Plus, X } from "lucide-react";
 import { cn } from "../../lib/utils";
 import type { Column, FilterCondition, FilterOperator } from "../../types";
 import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from "../ui/Select";
+import {
   type ColumnCategory,
   type DraftFilter,
   getColumnCategory,
@@ -294,61 +301,73 @@ export function FilterPanel({ columns, filters, onFiltersChange, onClose }: Filt
           return (
             <div key={index} className="flex items-center gap-2">
               {/* Column select */}
-              <select
-                value={draft.column}
-                onChange={(e) => updateColumn(index, e.target.value)}
-                className={cn(
-                  inputCls,
-                  "flex-1 min-w-0 cursor-pointer",
-                  !draft.column && "text-[var(--text-muted)]",
-                )}
+              <Select
+                value={draft.column || undefined}
+                onValueChange={(val) => updateColumn(index, val)}
               >
-                <option value="" disabled>
-                  Column...
-                </option>
-                {columns.map((c) => (
-                  <option key={c.name} value={c.name}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
+                <SelectTrigger
+                  className={cn(
+                    inputCls,
+                    "flex-1 min-w-0 cursor-pointer",
+                    !draft.column && "text-[var(--text-muted)]",
+                  )}
+                >
+                  <SelectValue placeholder="Column..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {columns.map((c) => (
+                    <SelectItem key={c.name} value={c.name}>
+                      {c.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
 
               {/* Operator select */}
-              <select
+              <Select
                 value={draft.operator}
-                onChange={(e) => updateOperator(index, e.target.value as FilterOperator)}
+                onValueChange={(val) => updateOperator(index, val as FilterOperator)}
                 disabled={!draft.column}
-                className={cn(inputCls, "flex-1 min-w-0 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed")}
               >
-                {operators.map((op) => (
-                  <option key={op.value} value={op.value}>
-                    {op.label}
-                  </option>
-                ))}
-              </select>
+                <SelectTrigger
+                  className={cn(inputCls, "flex-1 min-w-0 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed")}
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {operators.map((op) => (
+                    <SelectItem key={op.value} value={op.value}>
+                      {op.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
 
               {/* Value input */}
               {needsValue && draft.column && (
                 isEnum ? (
-                  <select
-                    value={draft.value}
-                    onChange={(e) => {
+                  <Select
+                    value={draft.value || undefined}
+                    onValueChange={(val) => {
                       const next = drafts.map((d, i) =>
-                        i === index ? { ...d, value: e.target.value } : d,
+                        i === index ? { ...d, value: val } : d,
                       );
                       commitDrafts(next);
                     }}
-                    className={cn(inputCls, "flex-1 min-w-0 cursor-pointer")}
                   >
-                    <option value="" disabled>
-                      Value...
-                    </option>
-                    {col!.enumValues!.map((ev) => (
-                      <option key={ev} value={ev}>
-                        {ev}
-                      </option>
-                    ))}
-                  </select>
+                    <SelectTrigger
+                      className={cn(inputCls, "flex-1 min-w-0 cursor-pointer")}
+                    >
+                      <SelectValue placeholder="Value..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {col!.enumValues!.map((ev) => (
+                        <SelectItem key={ev} value={ev}>
+                          {ev}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 ) : isBetween ? (
                   <div className="flex-1 min-w-0 flex items-center gap-2">
                     <DebouncedInput
