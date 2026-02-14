@@ -149,49 +149,57 @@ function VersionBar() {
   }, []);
 
   return (
-    <div className="flex items-center justify-center gap-4 py-4 text-[11px] text-[var(--text-muted)]">
-      {appVersion && <span>Tusker v{appVersion}</span>}
+    <div className="flex items-center justify-between px-6 py-3 text-[11px] text-[var(--text-muted)]">
+      {/* Left: version + update */}
+      <div className="flex items-center gap-3">
+        {appVersion && (
+          <span className="text-[var(--text-muted)]/60">v{appVersion}</span>
+        )}
 
-      {status === "available" && (
-        <>
-          <span className="text-[var(--border-color)]">&middot;</span>
+        {status === "available" && (
           <button
             onClick={installUpdate}
-            className="flex items-center gap-1 text-[var(--accent)] hover:text-[var(--accent-hover)] transition-colors"
+            className={cn(
+              "flex items-center gap-1.5 px-2 py-0.5 rounded-md",
+              "text-[var(--accent)] hover:bg-[var(--accent)]/10",
+              "transition-colors"
+            )}
           >
             <Download className="w-3 h-3" />
-            v{updateVersion} available
+            Update to v{updateVersion}
           </button>
-        </>
-      )}
+        )}
 
-      {status === "downloading" && (
-        <>
-          <span className="text-[var(--border-color)]">&middot;</span>
-          <span className="flex items-center gap-1">
+        {status === "downloading" && (
+          <span className="flex items-center gap-1.5">
             <Loader2 className="w-3 h-3 animate-spin" />
-            Updating {progress}%
+            Updating... {progress}%
           </span>
-        </>
-      )}
+        )}
 
-      {status === "installed" && (
-        <>
-          <span className="text-[var(--border-color)]">&middot;</span>
-          <span className="flex items-center gap-1 text-[var(--success)]">
+        {status === "installed" && (
+          <span className="flex items-center gap-1.5 text-[var(--success)]">
             <Check className="w-3 h-3" />
-            Restart to update
+            Restart to apply
           </span>
-        </>
-      )}
+        )}
+      </div>
 
-      <span className="text-[var(--border-color)]">&middot;</span>
-      <span>
-        <kbd className="px-1 py-0.5 rounded bg-[var(--bg-tertiary)] border border-[var(--border-color)] text-[10px]">
-          {modKey}P
-        </kbd>{" "}
-        switch projects
-      </span>
+      {/* Right: shortcuts */}
+      <div className="flex items-center gap-3">
+        <span className="flex items-center gap-1.5">
+          <kbd className="px-1.5 py-0.5 rounded bg-[var(--bg-tertiary)] border border-[var(--border-color)] text-[10px]">
+            {modKey}K
+          </kbd>
+          <span className="text-[var(--text-muted)]/60">Commands</span>
+        </span>
+        <span className="flex items-center gap-1.5">
+          <kbd className="px-1.5 py-0.5 rounded bg-[var(--bg-tertiary)] border border-[var(--border-color)] text-[10px]">
+            {modKey}P
+          </kbd>
+          <span className="text-[var(--text-muted)]/60">Projects</span>
+        </span>
+      </div>
     </div>
   );
 }
