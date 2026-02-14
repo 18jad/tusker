@@ -1,6 +1,12 @@
-# Tusker
+<div align="center">
+  <img width="300" height="300" alt="image" src="https://github.com/user-attachments/assets/6faa472a-1d63-41a0-afe5-9496a2b22541" />
+  <h1>Tuskter</h1>
+</div>
 
-A modern, fast PostgreSQL database client built with Tauri, React, and TypeScript. Browse schemas, edit data, write queries, and manage your databases with a native interface.
+<p align="center">
+  A modern, fast PostgreSQL database client built with Tauri, React, and TypeScript. Browse schemas, edit data, write queries, and manage your databases with a native interface.
+</p>
+
 
 | | | |
 |:-------------------------:|:-------------------------:|:-------------------------:|
