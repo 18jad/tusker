@@ -58,6 +58,18 @@ interface UIState {
     rowCount: number | null;
   };
 
+  // Delete project modal
+  deleteProjectModal: {
+    isOpen: boolean;
+    projectId: string | null;
+  };
+
+  // Schema info modal
+  schemaInfoModal: {
+    isOpen: boolean;
+    schema: string | null;
+  };
+
   // Help modal
   helpModalOpen: boolean;
 
@@ -98,6 +110,10 @@ interface UIState {
   reorderTabs: (fromIndex: number, toIndex: number) => void;
   pinTab: (id: string) => void;
   unpinTab: (id: string) => void;
+  openDeleteProjectModal: (projectId: string) => void;
+  closeDeleteProjectModal: () => void;
+  openSchemaInfoModal: (schema: string) => void;
+  closeSchemaInfoModal: () => void;
   openHelpModal: () => void;
   closeHelpModal: () => void;
   showToast: (message: string, type?: "success" | "error" | "info") => void;
@@ -146,6 +162,14 @@ export const useUIStore = create<UIState>((set, get) => ({
     schema: null,
     table: null,
     rowCount: null,
+  },
+  deleteProjectModal: {
+    isOpen: false,
+    projectId: null,
+  },
+  schemaInfoModal: {
+    isOpen: false,
+    schema: null,
   },
   helpModalOpen: false,
   toasts: [],
@@ -435,6 +459,18 @@ export const useUIStore = create<UIState>((set, get) => ({
       const unpinned = state.tabs.filter((t) => !t.pinned);
       return { tabs: [...pinned, { ...tab, pinned: false }, ...unpinned] };
     }),
+
+  openDeleteProjectModal: (projectId) =>
+    set({ deleteProjectModal: { isOpen: true, projectId } }),
+
+  closeDeleteProjectModal: () =>
+    set({ deleteProjectModal: { isOpen: false, projectId: null } }),
+
+  openSchemaInfoModal: (schema) =>
+    set({ schemaInfoModal: { isOpen: true, schema } }),
+
+  closeSchemaInfoModal: () =>
+    set({ schemaInfoModal: { isOpen: false, schema: null } }),
 
   openHelpModal: () => set({ helpModalOpen: true }),
 

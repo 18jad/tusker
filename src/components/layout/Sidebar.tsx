@@ -23,10 +23,13 @@ import {
   Plug,
   Unplug,
   ArrowLeftRight,
+  Info,
+  Pencil,
 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useProjectStore } from "../../stores/projectStore";
 import { useUIStore } from "../../stores/uiStore";
+
 import { cn, generateId, PROJECT_COLORS, modKey } from "../../lib/utils";
 import { exportTable } from "../../lib/exportTable";
 import { ContextMenu } from "../ui";
@@ -117,6 +120,7 @@ function SchemaTree({ schema, level }: SchemaTreeProps) {
   const openDeleteTableModal = useUIStore((state) => state.openDeleteTableModal);
   const openTruncateTableModal = useUIStore((state) => state.openTruncateTableModal);
   const addImportDataTab = useUIStore((state) => state.addImportDataTab);
+  const openSchemaInfoModal = useUIStore((state) => state.openSchemaInfoModal);
   const showToast = useUIStore((state) => state.showToast);
   const isExpanded = useUIStore((state) => state.expandedSchemas.has(schema.name));
   const toggleSchemaExpanded = useUIStore((state) => state.toggleSchemaExpanded);
@@ -149,6 +153,14 @@ function SchemaTree({ schema, level }: SchemaTreeProps) {
   return (
     <ContextMenu
       items={[
+        {
+          label: "Schema Info",
+          icon: <Info className="w-4 h-4" />,
+          onClick: () => openSchemaInfoModal(schema.name),
+        },
+        {
+          type: "separator" as const,
+        },
         {
           label: "Add New Table",
           icon: <Plus className="w-4 h-4" />,
@@ -347,6 +359,7 @@ function ProjectTree() {
   const connectionStatus = useProjectStore((state) => state.connectionStatus);
   const schemasLoading = useProjectStore((state) => state.schemasLoading);
   const openProjectModal = useUIStore((state) => state.openProjectModal);
+  const openDeleteProjectModal = useUIStore((state) => state.openDeleteProjectModal);
   const toggleProjectSpotlight = useUIStore((state) => state.toggleProjectSpotlight);
   const showToast = useUIStore((state) => state.showToast);
   const queryClient = useQueryClient();
@@ -435,11 +448,20 @@ function ProjectTree() {
             },
           },
           {
-            label: "Project Settings",
-            icon: <Settings className="w-4 h-4" />,
+            label: "Edit Project",
+            icon: <Pencil className="w-4 h-4" />,
             onClick: () => {
               openProjectModal(activeProject.id);
             },
+          },
+          {
+            type: "separator" as const,
+          },
+          {
+            label: "Delete Project",
+            icon: <Trash2 className="w-4 h-4" />,
+            variant: "danger" as const,
+            onClick: () => openDeleteProjectModal(activeProject.id),
           },
         ]}
       >

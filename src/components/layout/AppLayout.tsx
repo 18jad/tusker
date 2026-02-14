@@ -2,7 +2,6 @@ import { useState, useRef, useEffect } from "react";
 import {
   ChevronDown,
   Database,
-  Settings,
   Plug,
   Unplug,
   Loader2,
@@ -10,7 +9,9 @@ import {
   Plus,
   X,
   Download,
-  RefreshCw
+  RefreshCw,
+  Pencil,
+  Trash2,
 } from "lucide-react";
 import { Sidebar } from "./Sidebar";
 import { TabBar } from "./TabBar";
@@ -33,6 +34,7 @@ function ProjectMenu() {
   const activeProjectId = useProjectStore((state) => state.activeProjectId);
   const connectionStatus = useProjectStore((state) => state.connectionStatus);
   const openProjectModal = useUIStore((state) => state.openProjectModal);
+  const openDeleteProjectModal = useUIStore((state) => state.openDeleteProjectModal);
 
   const connect = useConnect();
   const disconnect = useDisconnect();
@@ -143,6 +145,8 @@ function ProjectMenu() {
             </button>
           ) : null}
 
+          <div className="my-1 h-px bg-[var(--border-color)]" />
+
           <button
             onClick={() => {
               openProjectModal(activeProject.id);
@@ -154,8 +158,23 @@ function ProjectMenu() {
               "text-sm text-[var(--text-secondary)]"
             )}
           >
-            <Settings className="w-4 h-4" />
-            <span>Project Settings</span>
+            <Pencil className="w-4 h-4" />
+            <span>Edit Project</span>
+          </button>
+
+          <button
+            onClick={() => {
+              setIsOpen(false);
+              openDeleteProjectModal(activeProject.id);
+            }}
+            className={cn(
+              "w-full flex items-center gap-2 px-3 py-2",
+              "hover:bg-red-500/10 transition-colors duration-150",
+              "text-sm text-red-400"
+            )}
+          >
+            <Trash2 className="w-4 h-4" />
+            <span>Delete Project</span>
           </button>
         </div>
       )}
