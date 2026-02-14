@@ -1,118 +1,117 @@
-import { useState, useEffect, useCallback, useRef } from "react";
 import {
-  Database,
-  FolderOpen,
-  Code,
-  Table2,
-  Keyboard,
-  Rocket,
-  ArrowRight,
   ArrowLeft,
-  Check,
-  Sparkles,
+  ArrowRight,
+  Code,
+  GitBranch,
+  Hammer,
+  Table2
 } from "lucide-react";
-import { cn, modKey } from "../lib/utils";
+import { useCallback, useEffect, useState } from "react";
+import appIcon from "../assets/app-icon.png";
+import imgQueryEditor from "../assets/onboarding-query-editor.png";
+import imgStagedChanges from "../assets/onboarding-staged-changes.png";
+import imgTableBrowser from "../assets/onboarding-table-browser.png";
+import imgTableBuilder from "../assets/onboarding-table-builder.png";
+import { cn } from "../lib/utils";
 import { useOnboardingStore } from "../stores";
 
-interface Step {
+interface FeatureStep {
+  type: "feature";
   icon: React.ElementType;
+  tag: string;
   title: string;
-  subtitle: string;
-  features?: { text: string; icon: React.ElementType }[];
+  description: string;
+  image: string;
 }
 
+interface BookendStep {
+  type: "welcome" | "ready";
+}
+
+type Step = FeatureStep | BookendStep;
+
 const STEPS: Step[] = [
+  { type: "welcome" },
   {
-    icon: Database,
-    title: "Welcome to Tusker",
-    subtitle:
-      "A modern PostgreSQL client built for developers.\nLet's take a quick tour of what you can do.",
-  },
-  {
-    icon: FolderOpen,
-    title: "Project Management",
-    subtitle: "Organize your database connections into projects.",
-    features: [
-      { text: "Manage multiple connections at once", icon: Check },
-      { text: `Quick switch between projects with ${modKey}P`, icon: Check },
-      { text: "Credentials stored securely in your system keychain", icon: Check },
-    ],
-  },
-  {
-    icon: Code,
-    title: "Query Editor",
-    subtitle: "Write and execute SQL with a powerful editor.",
-    features: [
-      { text: "Syntax highlighting and auto-completion", icon: Check },
-      { text: `Execute queries with ${modKey}Enter`, icon: Check },
-      { text: `Format and save your queries with ${modKey}S`, icon: Check },
-    ],
-  },
-  {
+    type: "feature",
     icon: Table2,
+    tag: "Browse",
     title: "Table Browser",
-    subtitle: "Explore and manage your data visually.",
-    features: [
-      { text: "Inline editing of rows and cells", icon: Check },
-      { text: "Sort, filter, and search your data", icon: Check },
-      { text: "Import and export tables with ease", icon: Check },
-    ],
+    description:
+      "Explore your data visually with inline editing, multi-column sorting, and full CRUD operations.",
+    image: imgTableBrowser
   },
   {
-    icon: Keyboard,
-    title: "Keyboard-First",
-    subtitle: "Navigate everything without leaving the keyboard.",
-    features: [
-      { text: `Command palette with ${modKey}K`, icon: Check },
-      { text: `Tab management with ${modKey}W`, icon: Check },
-      { text: `View all shortcuts with ${modKey}/`, icon: Check },
-    ],
+    type: "feature",
+    icon: Code,
+    tag: "Query",
+    title: "Query Editor",
+    description:
+      "Write SQL with syntax highlighting, auto-completion, and instant execution.",
+    image: imgQueryEditor
   },
   {
-    icon: Rocket,
-    title: "You're All Set!",
-    subtitle: "You're ready to start exploring your databases.",
+    type: "feature",
+    icon: GitBranch,
+    tag: "Changes",
+    title: "Staged Changes",
+    description:
+      "Review every edit before it hits your database with git-style diffs and commit history.",
+    image: imgStagedChanges
   },
+  {
+    type: "feature",
+    icon: Hammer,
+    tag: "Build",
+    title: "Table Builder",
+    description:
+      "Design tables visually with columns, constraints, indexes, and foreign keys.",
+    image: imgTableBuilder
+  },
+  { type: "ready" }
 ];
 
 export function OnboardingPage() {
   const { completeOnboarding } = useOnboardingStore();
   const [step, setStep] = useState(0);
-  const [direction, setDirection] = useState<1 | -1>(1);
-  const [isTransitioning, setIsTransitioning] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
+  const [animating, setAnimating] = useState(false);
+  const [visible, setVisible] = useState(true);
 
-  const isLastStep = step === STEPS.length - 1;
-  const isFirstStep = step === 0;
+  const total = STEPS.length;
+  const isFirst = step === 0;
+  const isLast = step === total - 1;
 
   const handleExit = useCallback(() => {
     completeOnboarding();
   }, [completeOnboarding]);
 
+  const transition = useCallback(
+    (next: number) => {
+      if (animating) return;
+      setAnimating(true);
+      setVisible(false);
+
+      setTimeout(() => {
+        setStep(next);
+        setVisible(true);
+        setTimeout(() => setAnimating(false), 350);
+      }, 200);
+    },
+    [animating]
+  );
+
   const goNext = useCallback(() => {
-    if (isTransitioning) return;
-    if (isLastStep) {
+    if (isLast) {
       handleExit();
       return;
     }
-    setDirection(1);
-    setIsTransitioning(true);
-    // Small delay so React picks up the direction before we change step
-    requestAnimationFrame(() => {
-      setStep((s) => s + 1);
-      setTimeout(() => setIsTransitioning(false), 250);
-    });
-  }, [isLastStep, handleExit, isTransitioning]);
+    transition(step + 1);
+  }, [isLast, handleExit, transition, step]);
 
   const goBack = useCallback(() => {
-    if (isTransitioning || isFirstStep) return;
-    setDirection(-1);
-    setIsTransitioning(true);
-    requestAnimationFrame(() => {
-      setStep((s) => s - 1);
-      setTimeout(() => setIsTransitioning(false), 250);
-    });
-  }, [isFirstStep, isTransitioning]);
+    if (isFirst) return;
+    transition(step - 1);
+  }, [isFirst, transition, step]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -132,11 +131,20 @@ export function OnboardingPage() {
   }, [handleExit, goNext, goBack]);
 
   const current = STEPS[step];
-  const Icon = current.icon;
 
   return (
-    <div className="h-screen w-screen flex flex-col overflow-hidden bg-[var(--bg-primary)]">
-      {/* Titlebar with drag region */}
+    <div className="h-screen w-screen flex flex-col overflow-hidden bg-[var(--bg-primary)] relative">
+      {/* Dot pattern overlay — fades from top to bottom */}
+      <div
+        className="absolute inset-0 pointer-events-none"
+        style={{
+          backgroundImage: "radial-gradient(circle, rgba(255,255,255,0.1) 4px, transparent 4px)",
+          backgroundSize: "32px 32px",
+          maskImage: "linear-gradient(to bottom, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0.3) 40%, transparent 70%)",
+          WebkitMaskImage: "linear-gradient(to bottom, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0.3) 40%, transparent 70%)",
+        }}
+      />
+      {/* Titlebar */}
       <header
         className={cn(
           "h-10 flex items-center shrink-0 relative",
@@ -153,9 +161,7 @@ export function OnboardingPage() {
         >
           Tusker
         </div>
-
-        {/* Skip in titlebar area */}
-        {!isLastStep && (
+        {!isLast && (
           <button
             onClick={handleExit}
             className={cn(
@@ -166,160 +172,196 @@ export function OnboardingPage() {
               "transition-colors"
             )}
           >
-            Skip tour
+            Skip
           </button>
         )}
       </header>
 
-      {/* Content area */}
-      <div className="flex-1 flex flex-col items-center justify-center overflow-hidden relative">
-        {/* Decorative subtle radial glow behind the icon */}
-        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[400px] h-[400px] rounded-full bg-[var(--accent)]/[0.03] blur-3xl pointer-events-none" />
+      {/* Content */}
+      <div className="flex-1 flex flex-col overflow-hidden relative">
+        {/* Background glow */}
+        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[400px] rounded-full bg-[var(--accent)]/[0.03] blur-[100px] pointer-events-none" />
 
-        {/* Step content — keyed so it remounts with animation on each step */}
+        {/* Step content with crossfade */}
         <div
-          ref={containerRef}
-          key={step}
           className={cn(
-            "w-full max-w-sm px-6 flex flex-col items-center",
-            direction === 1
-              ? "onboarding-slide-in-right"
-              : "onboarding-slide-in-left"
+            "flex-1 flex flex-col overflow-hidden transition-all duration-300 ease-out",
+            visible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-3"
           )}
         >
-          {/* Icon */}
-          <div className="relative mb-10">
-            <div
-              className={cn(
-                "w-[72px] h-[72px] rounded-2xl flex items-center justify-center",
-                "bg-[var(--accent)]/10 border border-[var(--accent)]/20"
-              )}
-            >
-              <Icon className="w-9 h-9 text-[var(--accent)]" />
-            </div>
-            {isLastStep && (
-              <div className="absolute -top-1 -right-1">
-                <Sparkles className="w-4 h-4 text-[var(--warning)]" />
-              </div>
-            )}
-          </div>
-
-          {/* Step label */}
-          {!isFirstStep && !isLastStep && (
-            <div className="mb-4">
-              <span className="text-[11px] font-medium uppercase tracking-widest text-[var(--accent)]">
-                Step {step} of {STEPS.length - 2}
-              </span>
-            </div>
-          )}
-
-          {/* Title */}
-          <h1 className="text-2xl font-bold text-[var(--text-primary)] mb-3 text-center">
-            {current.title}
-          </h1>
-
-          {/* Subtitle */}
-          <p className="text-[13px] text-[var(--text-secondary)] text-center leading-relaxed whitespace-pre-line max-w-xs">
-            {current.subtitle}
-          </p>
-
-          {/* Feature list */}
-          {current.features && (
-            <div className="mt-8 w-full space-y-2">
-              {current.features.map((feature, i) => {
-                const FeatureIcon = feature.icon;
-                return (
-                  <div
-                    key={i}
-                    className={cn(
-                      "flex items-center gap-3 px-4 py-3 rounded-lg",
-                      "bg-[var(--bg-secondary)]/60"
-                    )}
-                    style={{ animationDelay: `${(i + 1) * 60}ms` }}
-                  >
-                    <div className="w-5 h-5 rounded-full bg-[var(--accent)]/10 flex items-center justify-center shrink-0">
-                      <FeatureIcon className="w-3 h-3 text-[var(--accent)]" />
-                    </div>
-                    <span className="text-[13px] text-[var(--text-secondary)]">
-                      {feature.text}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-
-          {/* Get Started CTA on last step */}
-          {isLastStep && (
-            <button
-              onClick={handleExit}
-              className={cn(
-                "mt-10 flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-medium",
-                "bg-[var(--accent)] hover:bg-[var(--accent-hover)]",
-                "text-white",
-                "transition-colors"
-              )}
-            >
-              Get Started
-              <ArrowRight className="w-4 h-4" />
-            </button>
-          )}
+          {current.type === "welcome" && <WelcomeStep />}
+          {current.type === "feature" && <FeatureSlide step={current} />}
+          {current.type === "ready" && <ReadyStep onStart={handleExit} />}
         </div>
 
-        {/* Bottom bar: dots + nav */}
-        <div className="absolute bottom-8 left-0 right-0 flex items-center justify-center gap-8">
-          {/* Back button */}
+        {/* Bottom navigation */}
+        <div className="shrink-0 py-4 flex items-center justify-center gap-6">
+          {/* Back */}
           <button
             onClick={goBack}
-            disabled={isFirstStep}
+            disabled={isFirst}
             className={cn(
-              "w-9 h-9 rounded-full flex items-center justify-center",
+              "w-8 h-8 rounded-full flex items-center justify-center",
               "border border-[var(--border-color)]",
-              "transition-all",
-              isFirstStep
+              "transition-all duration-200",
+              isFirst
                 ? "opacity-0 pointer-events-none"
                 : "text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--text-muted)] hover:bg-[var(--bg-tertiary)]"
             )}
           >
-            <ArrowLeft className="w-4 h-4" />
+            <ArrowLeft className="w-3.5 h-3.5" />
           </button>
 
-          {/* Dot indicators */}
-          <div className="flex items-center gap-2">
+          {/* Dots */}
+          <div className="flex items-center gap-1.5">
             {STEPS.map((_, i) => (
-              <div
+              <button
                 key={i}
+                onClick={() => {
+                  if (i !== step && !animating) transition(i);
+                }}
                 className={cn(
-                  "rounded-full transition-all duration-300",
+                  "rounded-full transition-all duration-300 ease-out",
                   i === step
-                    ? "w-6 h-2 bg-[var(--accent)]"
+                    ? "w-6 h-1.5 bg-[var(--accent)]"
                     : i < step
-                      ? "w-2 h-2 bg-[var(--accent)]/40"
-                      : "w-2 h-2 bg-[var(--text-muted)]/20"
+                      ? "w-1.5 h-1.5 bg-[var(--accent)]/40 hover:bg-[var(--accent)]/60 cursor-pointer"
+                      : "w-1.5 h-1.5 bg-[var(--text-muted)]/20 hover:bg-[var(--text-muted)]/40 cursor-pointer"
                 )}
               />
             ))}
           </div>
 
-          {/* Next button */}
-          {!isLastStep && (
+          {/* Next */}
+          {!isLast ? (
             <button
               onClick={goNext}
               className={cn(
-                "w-9 h-9 rounded-full flex items-center justify-center",
+                "w-8 h-8 rounded-full flex items-center justify-center",
                 "bg-[var(--accent)] hover:bg-[var(--accent-hover)]",
-                "text-white",
-                "transition-colors"
+                "text-white transition-colors duration-200"
               )}
             >
-              <ArrowRight className="w-4 h-4" />
+              <ArrowRight className="w-3.5 h-3.5" />
             </button>
-          )}
-          {isLastStep && (
-            <div className="w-9 h-9" />
+          ) : (
+            <div className="w-8 h-8" />
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+function WelcomeStep() {
+  return (
+    <div className="flex-1 flex flex-col items-center justify-center px-6">
+      <div className="relative mb-8">
+        <div className="w-40 h-40 rounded-2xl bg-[var(--bg-secondary)] border border-[var(--border-color)] flex items-center justify-center shadow-lg shadow-black/20">
+          <img
+            src={appIcon}
+            alt="Tusker"
+            className="w-full h-full scale-110"
+            draggable={false}
+          />
+        </div>
+        <div className="absolute inset-0 -m-2 rounded-2xl border border-[var(--accent)]/10 pointer-events-none" />
+      </div>
+
+      <h1 className="text-3xl font-bold text-[var(--text-primary)] mb-2">
+        Welcome to Tusker
+      </h1>
+      <p className="text-xl text-[var(--text-secondary)] leading-relaxed mb-1">
+        A modern PostgreSQL client built for developers.
+      </p>
+      <p className="text-base text-[var(--text-muted)]">
+        Let's take a quick look at what you can do.
+      </p>
+    </div>
+  );
+}
+
+function FeatureSlide({ step }: { step: FeatureStep }) {
+  const Icon = step.icon;
+
+  return (
+    <div className="flex-1 flex items-center overflow-hidden">
+      {/* Left — feature text */}
+      <div className="w-[400px] shrink-0 pl-14 pr-6 flex flex-col justify-center">
+        {/* Icon + tag */}
+        <div className="flex items-center gap-2.5 mb-5">
+          <div className="w-9 h-9 rounded-xl bg-[var(--accent)]/10 border border-[var(--accent)]/20 flex items-center justify-center">
+            <Icon className="w-[18px] h-[18px] text-[var(--accent)]" />
+          </div>
+          <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-[var(--accent)]">
+            {step.tag}
+          </span>
+        </div>
+
+        {/* Title */}
+        <h2 className="text-[28px] font-bold text-[var(--text-primary)] leading-tight mb-3">
+          {step.title}
+        </h2>
+
+        {/* Description */}
+        <p className="text-[13px] text-[var(--text-secondary)] leading-relaxed">
+          {step.description}
+        </p>
+      </div>
+
+      {/* Right — floating screenshot with perspective */}
+      <div
+        className="flex-1 min-w-0 h-full relative flex items-center"
+        style={{ perspective: "1200px" }}
+      >
+        <div
+          className="relative ml-4 -mr-24"
+          style={{
+            transform: "rotateY(-6deg) rotateX(2deg)",
+            transformOrigin: "center center"
+          }}
+        >
+          {/* Screenshot */}
+          <img
+            src={step.image}
+            alt={step.title}
+            className="w-full h-auto block rounded-2xl"
+            draggable={false}
+          />
+        </div>
+
+        {/* Right edge fade so the overflow feels intentional */}
+        <div className="absolute top-0 right-0 bottom-0 w-24 bg-gradient-to-l from-[var(--bg-primary)] to-transparent pointer-events-none z-10" />
+      </div>
+    </div>
+  );
+}
+
+function ReadyStep({ onStart }: { onStart: () => void }) {
+  return (
+    <div className="flex-1 flex flex-col items-center justify-center px-6">
+      <img src={appIcon} alt="Tusker" className="w-24 h-24 mb-8" draggable={false} />
+
+      <h1 className="text-3xl font-bold text-[var(--text-primary)] mb-2">
+        You're ready to go
+      </h1>
+      <p className="text-sm text-[var(--text-secondary)] leading-relaxed mb-10">
+        Create your first project and start exploring.
+      </p>
+
+      <button
+        onClick={onStart}
+        className={cn(
+          "flex items-center gap-2.5 px-8 py-3.5 rounded-xl text-base font-semibold",
+          "bg-[var(--accent)] hover:bg-[var(--accent-hover)]",
+          "text-white",
+          "transition-all duration-200",
+          "hover:-translate-y-0.5"
+        )}
+      >
+        Get Started
+        <ArrowRight className="w-4.5 h-4.5" />
+      </button>
     </div>
   );
 }
