@@ -122,6 +122,8 @@ Open multiple tables, queries, imports, and schema editors side by side. Tabs ar
 
 Collapsible sidebar tree of all schemas, tables, views, materialized views, and foreign tables — with right-click context menus for quick operations (create, delete, truncate, export, rename).
 
+### Track future features and bugs on our [Trello Board](https://trello.com/b/fdFwEise/tusker)
+
 ## Installation
 
 Download the latest release from the [Releases page](https://github.com/18jad/tusker/releases/latest).
