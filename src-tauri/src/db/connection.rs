@@ -62,7 +62,7 @@ impl ConnectionConfig {
             username,
             password,
             ssl_mode: SslMode::default(),
-            max_connections: 5,
+            max_connections: 10,
         }
     }
 

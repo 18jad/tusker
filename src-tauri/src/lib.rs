@@ -8,7 +8,10 @@ use tauri::Emitter;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
+    env_logger::Builder::from_env(
+        env_logger::Env::default().default_filter_or("info,sqlx_postgres::options::pgpass=off"),
+    )
+    .init();
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
@@ -64,6 +67,7 @@ pub fn run() {
             commands::delete_password,
             // Schema commands
             commands::get_schemas,
+            commands::get_schemas_with_tables,
             commands::get_tables,
             commands::get_columns,
             commands::get_row_count,

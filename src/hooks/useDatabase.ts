@@ -30,15 +30,30 @@ interface ConnectResponse {
   message: string;
 }
 
-interface SchemaInfo {
+interface SchemaWithTables {
   name: string;
-  owner: string;
+  owner: string | null;
+  tables: Array<{
+    name: string;
+    schema: string;
+    table_type: string;
+    estimated_row_count: number | null;
+    description: string | null;
+  }>;
 }
 
-interface TableInfo {
-  name: string;
-  schema: string;
-  row_count: number;
+// Convert backend SchemaWithTables to frontend Schema type
+function convertSchemasWithTables(raw: SchemaWithTables[]): Schema[] {
+  return raw
+    .filter((s) => !s.name.startsWith("pg_") && s.name !== "information_schema")
+    .map((s) => ({
+      name: s.name,
+      tables: s.tables.map((t) => ({
+        name: t.name,
+        schema: t.schema,
+        rowCount: t.estimated_row_count ?? undefined,
+      })),
+    }));
 }
 
 // Connect to database
@@ -85,34 +100,12 @@ export function useConnect() {
       setError(null);
       setSchemasLoading(true);
 
-      // Fetch schemas after connecting
+      // Fetch all schemas with tables in a single IPC call
       try {
-        const schemaInfos = await invoke<SchemaInfo[]>("get_schemas", {
+        const raw = await invoke<SchemaWithTables[]>("get_schemas_with_tables", {
           connectionId: result.connection_id,
         });
-
-        // Convert to our Schema type with tables
-        const schemasWithTables: Schema[] = await Promise.all(
-          schemaInfos
-            .filter((s) => !s.name.startsWith("pg_") && s.name !== "information_schema")
-            .map(async (schemaInfo) => {
-              const tables = await invoke<TableInfo[]>("get_tables", {
-                connectionId: result.connection_id,
-                schema: schemaInfo.name,
-              });
-
-              return {
-                name: schemaInfo.name,
-                tables: tables.map((t) => ({
-                  name: t.name,
-                  schema: t.schema,
-                  rowCount: t.row_count,
-                })),
-              };
-            })
-        );
-
-        setSchemas(schemasWithTables);
+        setSchemas(convertSchemasWithTables(raw));
       } catch (err) {
         console.error("Failed to fetch schemas:", err);
       } finally {
@@ -178,31 +171,10 @@ export function useSchemas() {
     queryFn: async () => {
       if (!currentConnectionId) throw new Error("Not connected");
 
-      const schemaInfos = await invoke<SchemaInfo[]>("get_schemas", {
+      const raw = await invoke<SchemaWithTables[]>("get_schemas_with_tables", {
         connectionId: currentConnectionId,
       });
-
-      const schemasWithTables: Schema[] = await Promise.all(
-        schemaInfos
-          .filter((s) => !s.name.startsWith("pg_") && s.name !== "information_schema")
-          .map(async (schemaInfo) => {
-            const tables = await invoke<TableInfo[]>("get_tables", {
-              connectionId: currentConnectionId,
-              schema: schemaInfo.name,
-            });
-
-            return {
-              name: schemaInfo.name,
-              tables: tables.map((t) => ({
-                name: t.name,
-                schema: t.schema,
-                rowCount: t.row_count,
-              })),
-            };
-          })
-      );
-
-      return schemasWithTables;
+      return convertSchemasWithTables(raw);
     },
     enabled: connectionStatus === "connected" && !!currentConnectionId,
   });
@@ -307,6 +279,7 @@ export function useTableData(
   filters: FilterCondition[] = [],
 ) {
   const { connectionStatus } = useProjectStore();
+  const queryClient = useQueryClient();
   const pageSize = 50;
   // Stable keys for React Query cache
   const sortKey = JSON.stringify(sorts);
@@ -317,44 +290,43 @@ export function useTableData(
     queryFn: async () => {
       if (!currentConnectionId) throw new Error("Not connected");
 
-      // Fetch columns first to find primary key for consistent ordering
-      const columnsResult = await invoke<ColumnInfo[]>("get_columns", {
-        connectionId: currentConnectionId,
-        schema,
-        table,
-      });
+      // Build order arrays from explicit sorts (backend auto-detects PK if none provided)
+      const orderByColumns = sorts.length > 0 ? sorts.map((s) => s.column) : undefined;
+      const orderDirections = sorts.length > 0 ? sorts.map((s) => s.direction) : undefined;
 
-      // Build order arrays: use custom sorts if provided, otherwise fall back to PK ordering
-      let orderByColumns: string[];
-      let orderDirections: string[];
+      // Check if columns are already cached (they rarely change)
+      const cachedColumns = queryClient.getQueryData<ColumnInfo[]>(["tableColumns", schema, table]);
 
-      if (sorts.length > 0) {
-        orderByColumns = sorts.map((s) => s.column);
-        orderDirections = sorts.map((s) => s.direction);
-      } else {
-        const primaryKeyColumn = columnsResult.find((col) => col.is_primary_key);
-        const fallbackCol = primaryKeyColumn?.name || columnsResult[0]?.name;
-        orderByColumns = fallbackCol ? [fallbackCol] : [];
-        orderDirections = fallbackCol ? ["ASC"] : [];
-      }
-
-      // Fetch data with ORDER BY to ensure consistent row ordering
-      const dataResult = await invoke<PaginatedResult>("fetch_table_data", {
-        request: {
-          connection_id: currentConnectionId,
-          schema,
-          table,
-          page,
-          page_size: pageSize,
-          order_by: orderByColumns.length > 0 ? orderByColumns : undefined,
-          order_direction: orderDirections.length > 0 ? orderDirections : undefined,
-          filters: filters.length > 0 ? filters : undefined,
-        },
-      });
+      // Only fetch columns if not cached; always fetch data
+      const [columnsResult, dataResult] = await Promise.all([
+        cachedColumns
+          ? Promise.resolve(cachedColumns)
+          : invoke<ColumnInfo[]>("get_columns", {
+              connectionId: currentConnectionId,
+              schema,
+              table,
+            }).then((cols) => {
+              // Populate the cache for future calls
+              queryClient.setQueryData(["tableColumns", schema, table], cols);
+              return cols;
+            }),
+        invoke<PaginatedResult>("fetch_table_data", {
+          request: {
+            connection_id: currentConnectionId,
+            schema,
+            table,
+            page,
+            page_size: pageSize,
+            order_by: orderByColumns,
+            order_direction: orderDirections,
+            filters: filters.length > 0 ? filters : undefined,
+          },
+        }),
+      ]);
 
       return {
         rows: dataResult.rows,
-        columns: columnsResult.map((col) => ({
+        columns: columnsResult.map((col: ColumnInfo) => ({
           name: col.name,
           dataType: col.data_type,
           isNullable: col.is_nullable,
@@ -583,31 +555,10 @@ export function useMigration() {
         if (currentConnectionId) {
           setSchemasLoading(true);
           try {
-            const schemaInfos = await invoke<SchemaInfo[]>("get_schemas", {
+            const raw = await invoke<SchemaWithTables[]>("get_schemas_with_tables", {
               connectionId: currentConnectionId,
             });
-
-            const schemasWithTables: Schema[] = await Promise.all(
-              schemaInfos
-                .filter((s) => !s.name.startsWith("pg_") && s.name !== "information_schema")
-                .map(async (schemaInfo) => {
-                  const tables = await invoke<TableInfo[]>("get_tables", {
-                    connectionId: currentConnectionId,
-                    schema: schemaInfo.name,
-                  });
-
-                  return {
-                    name: schemaInfo.name,
-                    tables: tables.map((t) => ({
-                      name: t.name,
-                      schema: t.schema,
-                      rowCount: t.row_count,
-                    })),
-                  };
-                })
-            );
-
-            setSchemas(schemasWithTables);
+            setSchemas(convertSchemasWithTables(raw));
           } finally {
             setSchemasLoading(false);
           }
@@ -638,32 +589,10 @@ export function useExecuteSQL() {
       if (currentConnectionId) {
         setSchemasLoading(true);
         try {
-          const schemaInfos = await invoke<SchemaInfo[]>("get_schemas", {
+          const raw = await invoke<SchemaWithTables[]>("get_schemas_with_tables", {
             connectionId: currentConnectionId,
           });
-
-          // Convert to our Schema type with tables (same pattern as connect)
-          const schemasWithTables: Schema[] = await Promise.all(
-            schemaInfos
-              .filter((s) => !s.name.startsWith("pg_") && s.name !== "information_schema")
-              .map(async (schemaInfo) => {
-                const tables = await invoke<TableInfo[]>("get_tables", {
-                  connectionId: currentConnectionId,
-                  schema: schemaInfo.name,
-                });
-
-                return {
-                  name: schemaInfo.name,
-                  tables: tables.map((t) => ({
-                    name: t.name,
-                    schema: t.schema,
-                    rowCount: t.row_count,
-                  })),
-                };
-              })
-          );
-
-          setSchemas(schemasWithTables);
+          setSchemas(convertSchemasWithTables(raw));
         } finally {
           setSchemasLoading(false);
         }

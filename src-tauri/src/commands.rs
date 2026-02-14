@@ -3,7 +3,8 @@ use crate::db::{
     ConnectionInfo, ConnectionManager, ConstraintInfo, CredentialStorage, DataOperations,
     DeleteRequest, FilterCondition, IndexInfo, InsertRequest, MigrationOperations,
     MigrationRequest, MigrationResult, PaginatedResult, QueryResult, SaveCommitChange,
-    SaveCommitRequest, SchemaInfo, SchemaIntrospector, SslMode, TableInfo, UpdateRequest,
+    SaveCommitRequest, SchemaInfo, SchemaIntrospector, SchemaWithTables, SslMode, TableInfo,
+    UpdateRequest,
 };
 use crate::error::Result;
 use serde::{Deserialize, Serialize};
@@ -220,6 +221,16 @@ pub async fn get_schemas(state: State<'_, AppState>, connection_id: String) -> R
     let connection_manager = state.connection_manager.read().await;
     let pool = connection_manager.get_pool(&connection_id).await?;
     SchemaIntrospector::get_schemas(&pool).await
+}
+
+#[tauri::command]
+pub async fn get_schemas_with_tables(
+    state: State<'_, AppState>,
+    connection_id: String,
+) -> Result<Vec<SchemaWithTables>> {
+    let connection_manager = state.connection_manager.read().await;
+    let pool = connection_manager.get_pool(&connection_id).await?;
+    SchemaIntrospector::get_schemas_with_tables(&pool).await
 }
 
 #[tauri::command]
