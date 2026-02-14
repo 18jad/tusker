@@ -356,18 +356,20 @@ export function ProjectSpotlight() {
                   <button
                     onClick={() => handleSelectProject(project)}
                     disabled={isConnecting}
-                    className="flex items-center gap-3 flex-1 min-w-0"
+                    className="flex items-center gap-3 flex-1 min-w-0 text-left"
                   >
                     {/* Color indicator */}
-                    <div
-                      className={cn(
-                        "rounded-full flex-shrink-0 transition-all ring-2",
-                        colorClasses.dot,
-                        isSelected
-                          ? "w-3.5 h-3.5 ring-white/20"
-                          : "w-2.5 h-2.5 ring-transparent"
-                      )}
-                    />
+                    <div className="w-3.5 h-3.5 flex items-center justify-center flex-shrink-0">
+                      <div
+                        className={cn(
+                          "rounded-full transition-all ring-2",
+                          colorClasses.dot,
+                          isSelected
+                            ? "w-3.5 h-3.5 ring-white/20"
+                            : "w-2.5 h-2.5 ring-transparent"
+                        )}
+                      />
+                    </div>
 
                     {/* Project info */}
                     <div className="flex-1 min-w-0">

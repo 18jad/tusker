@@ -98,6 +98,14 @@ export function useConnect() {
     onSuccess: async (result) => {
       setConnectionStatus("connected");
       setError(null);
+
+      // Update lastConnected timestamp on the active project
+      const activeProject = getActiveProject();
+      if (activeProject) {
+        useProjectStore.getState().updateProject(activeProject.id, {
+          lastConnected: new Date().toISOString(),
+        });
+      }
       setSchemasLoading(true);
 
       // Fetch all schemas with tables in a single IPC call
