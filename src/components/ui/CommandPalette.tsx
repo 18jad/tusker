@@ -24,7 +24,7 @@ const CATEGORY_ICONS: Record<CommandCategory, React.ReactNode> = {
 export function CommandPalette() {
   const { commandPaletteOpen, toggleCommandPalette, openProjectModal, addTab } =
     useUIStore();
-  const { projects, schemas, setActiveProject } = useProjectStore();
+  const { projects, schemas, connectionStatus, setActiveProject } = useProjectStore();
 
   const [query, setQuery] = useState("");
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -41,7 +41,10 @@ export function CommandPalette() {
         action: () => openProjectModal(),
         category: "navigation",
       },
-      {
+    ];
+
+    if (connectionStatus === "connected") {
+      cmds.push({
         id: "new-query",
         label: "New Query Tab",
         shortcut: "Ctrl+T",
@@ -53,8 +56,8 @@ export function CommandPalette() {
             queryContent: "",
           }),
         category: "query",
-      },
-    ];
+      });
+    }
 
     // Add project commands
     projects.forEach((project) => {
@@ -92,7 +95,7 @@ export function CommandPalette() {
     });
 
     return cmds;
-  }, [projects, schemas, openProjectModal, addTab, setActiveProject]);
+  }, [projects, schemas, connectionStatus, openProjectModal, addTab, setActiveProject]);
 
   const filteredCommands = useMemo(() => {
     if (!query.trim()) return commands;

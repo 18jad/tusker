@@ -520,13 +520,14 @@ export function Sidebar({
   const addCreateTableTab = useUIStore((state) => state.addCreateTableTab);
   const addQueryTab = useUIStore((state) => state.addQueryTab);
   const connectionStatus = useProjectStore((state) => state.connectionStatus);
+  const [isResizing, setIsResizing] = useState(false);
 
   return (
     <aside
       className={cn(
         "flex flex-col h-full bg-[var(--bg-secondary)]",
         "border-r border-[var(--border-color)]",
-        "transition-[width] duration-200 ease-out",
+        !isResizing && "transition-[width] duration-200 ease-out",
         "relative shrink-0"
       )}
       style={{ width: isCollapsed ? 48 : width }}
@@ -627,7 +628,7 @@ export function Sidebar({
 
       {/* Resize handle */}
       {!isCollapsed && (
-        <ResizeHandle width={width} onWidthChange={onWidthChange} />
+        <ResizeHandle width={width} onWidthChange={onWidthChange} onResizingChange={setIsResizing} />
       )}
     </aside>
   );
@@ -636,14 +637,16 @@ export function Sidebar({
 interface ResizeHandleProps {
   width: number;
   onWidthChange: (width: number) => void;
+  onResizingChange: (resizing: boolean) => void;
 }
 
-function ResizeHandle({ width, onWidthChange }: ResizeHandleProps) {
+function ResizeHandle({ width, onWidthChange, onResizingChange }: ResizeHandleProps) {
   const [isDragging, setIsDragging] = useState(false);
 
   const handleMouseDown = (e: React.MouseEvent) => {
     e.preventDefault();
     setIsDragging(true);
+    onResizingChange(true);
 
     const startX = e.clientX;
     const startWidth = width;
@@ -656,6 +659,7 @@ function ResizeHandle({ width, onWidthChange }: ResizeHandleProps) {
 
     const handleMouseUp = () => {
       setIsDragging(false);
+      onResizingChange(false);
       document.removeEventListener("mousemove", handleMouseMove);
       document.removeEventListener("mouseup", handleMouseUp);
     };
