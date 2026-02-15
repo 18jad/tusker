@@ -70,6 +70,13 @@ interface UIState {
     schema: string | null;
   };
 
+  // Drop schema modal
+  dropSchemaModal: {
+    isOpen: boolean;
+    schema: string | null;
+    tableCount: number | null;
+  };
+
   // Export/Import connections modals
   exportModalOpen: boolean;
   importModalOpen: boolean;
@@ -118,6 +125,8 @@ interface UIState {
   closeDeleteProjectModal: () => void;
   openSchemaInfoModal: (schema: string) => void;
   closeSchemaInfoModal: () => void;
+  openDropSchemaModal: (schema: string, tableCount?: number) => void;
+  closeDropSchemaModal: () => void;
   openExportModal: () => void;
   closeExportModal: () => void;
   openImportModal: () => void;
@@ -178,6 +187,11 @@ export const useUIStore = create<UIState>((set, get) => ({
   schemaInfoModal: {
     isOpen: false,
     schema: null,
+  },
+  dropSchemaModal: {
+    isOpen: false,
+    schema: null,
+    tableCount: null,
   },
   exportModalOpen: false,
   importModalOpen: false,
@@ -481,6 +495,24 @@ export const useUIStore = create<UIState>((set, get) => ({
 
   closeSchemaInfoModal: () =>
     set({ schemaInfoModal: { isOpen: false, schema: null } }),
+
+  openDropSchemaModal: (schema, tableCount) =>
+    set({
+      dropSchemaModal: {
+        isOpen: true,
+        schema,
+        tableCount: tableCount ?? null,
+      },
+    }),
+
+  closeDropSchemaModal: () =>
+    set({
+      dropSchemaModal: {
+        isOpen: false,
+        schema: null,
+        tableCount: null,
+      },
+    }),
 
   openExportModal: () => set({ exportModalOpen: true }),
   closeExportModal: () => set({ exportModalOpen: false }),

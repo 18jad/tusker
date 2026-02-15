@@ -121,6 +121,7 @@ function SchemaTree({ schema, level }: SchemaTreeProps) {
   const openTruncateTableModal = useUIStore((state) => state.openTruncateTableModal);
   const addImportDataTab = useUIStore((state) => state.addImportDataTab);
   const openSchemaInfoModal = useUIStore((state) => state.openSchemaInfoModal);
+  const openDropSchemaModal = useUIStore((state) => state.openDropSchemaModal);
   const showToast = useUIStore((state) => state.showToast);
   const isExpanded = useUIStore((state) => state.expandedSchemas.has(schema.name));
   const toggleSchemaExpanded = useUIStore((state) => state.toggleSchemaExpanded);
@@ -193,6 +194,15 @@ function SchemaTree({ schema, level }: SchemaTreeProps) {
             });
             showToast(`Refreshed schema "${schema.name}"`);
           },
+        },
+        {
+          type: "separator" as const,
+        },
+        {
+          label: "Drop Schema",
+          icon: <Trash2 className="w-4 h-4" />,
+          variant: "danger" as const,
+          onClick: () => openDropSchemaModal(schema.name, schema.tables.length),
         },
       ]}
     >
