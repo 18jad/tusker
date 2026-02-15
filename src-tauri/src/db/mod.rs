@@ -1,6 +1,7 @@
 pub mod commit_store;
 pub mod connection;
 pub mod data;
+pub mod export;
 pub mod schema;
 
 pub use commit_store::{

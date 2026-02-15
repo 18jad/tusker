@@ -70,6 +70,10 @@ interface UIState {
     schema: string | null;
   };
 
+  // Export/Import connections modals
+  exportModalOpen: boolean;
+  importModalOpen: boolean;
+
   // Help modal
   helpModalOpen: boolean;
 
@@ -114,6 +118,10 @@ interface UIState {
   closeDeleteProjectModal: () => void;
   openSchemaInfoModal: (schema: string) => void;
   closeSchemaInfoModal: () => void;
+  openExportModal: () => void;
+  closeExportModal: () => void;
+  openImportModal: () => void;
+  closeImportModal: () => void;
   openHelpModal: () => void;
   closeHelpModal: () => void;
   showToast: (message: string, type?: "success" | "error" | "info") => void;
@@ -171,6 +179,8 @@ export const useUIStore = create<UIState>((set, get) => ({
     isOpen: false,
     schema: null,
   },
+  exportModalOpen: false,
+  importModalOpen: false,
   helpModalOpen: false,
   toasts: [],
   theme: "dark",
@@ -471,6 +481,11 @@ export const useUIStore = create<UIState>((set, get) => ({
 
   closeSchemaInfoModal: () =>
     set({ schemaInfoModal: { isOpen: false, schema: null } }),
+
+  openExportModal: () => set({ exportModalOpen: true }),
+  closeExportModal: () => set({ exportModalOpen: false }),
+  openImportModal: () => set({ importModalOpen: true }),
+  closeImportModal: () => set({ importModalOpen: false }),
 
   openHelpModal: () => set({ helpModalOpen: true }),
 

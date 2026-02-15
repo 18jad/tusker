@@ -67,5 +67,10 @@ rusqlite = { version = "0.31", features = ["bundled"] }
 # SHA-256 hashing for commit IDs
 sha2 = "0.10"
 
+# Encryption for connection export/import
+aes-gcm = "0.10"
+argon2 = "0.5"
+rand = "0.8"
+
 # Platform-specific directories
 dirs = "5"

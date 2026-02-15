@@ -35,6 +35,9 @@ pub enum DbViewerError {
 
     #[error("Configuration error: {0}")]
     Configuration(String),
+
+    #[error("Export error: {0}")]
+    Export(String),
 }
 
 impl From<keyring::Error> for DbViewerError {
@@ -70,6 +73,7 @@ impl From<&DbViewerError> for ErrorResponse {
             DbViewerError::SchemaNotFound(_) => ("SCHEMA_NOT_FOUND".to_string(), None),
             DbViewerError::Lock(_) => ("LOCK_ERROR".to_string(), None),
             DbViewerError::Configuration(_) => ("CONFIGURATION_ERROR".to_string(), None),
+            DbViewerError::Export(_) => ("EXPORT_ERROR".to_string(), None),
         };
 
         ErrorResponse {

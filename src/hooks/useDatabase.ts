@@ -130,7 +130,7 @@ export function useConnect() {
 
 // Disconnect from database
 export function useDisconnect() {
-  const { setConnectionStatus, setSchemas, setSchemasLoading, setError } = useProjectStore();
+  const { setConnectionStatus, setSchemas, setSchemasLoading, setError, setActiveProject } = useProjectStore();
 
   return useMutation({
     mutationFn: async () => {
@@ -144,6 +144,7 @@ export function useDisconnect() {
       setSchemas([]);
       setSchemasLoading(false);
       setError(null);
+      setActiveProject(null);
     },
     onError: (error: Error) => {
       setError(error.message);

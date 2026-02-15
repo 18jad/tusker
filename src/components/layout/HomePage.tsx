@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Plus, Pencil, Trash2, Download, Loader2, Check, ArrowRight } from "lucide-react";
+import { Plus, Pencil, Trash2, Download, Upload, Loader2, Check, ArrowRight } from "lucide-react";
 import { getVersion } from "@tauri-apps/api/app";
 import { useProjectStore } from "../../stores/projectStore";
 import { useUIStore } from "../../stores/uiStore";
@@ -207,6 +207,8 @@ function VersionBar() {
 export function HomePage() {
   const projects = useProjectStore((s) => s.projects);
   const openProjectModal = useUIStore((s) => s.openProjectModal);
+  const openExportModal = useUIStore((s) => s.openExportModal);
+  const openImportModal = useUIStore((s) => s.openImportModal);
 
   const hasProjects = projects.length > 0;
 
@@ -245,21 +247,49 @@ export function HomePage() {
               )}
             </h2>
 
-            {hasProjects && (
+            <div className="flex items-center gap-2">
               <button
-                onClick={() => openProjectModal()}
+                onClick={openImportModal}
                 className={cn(
                   "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium",
                   "text-[var(--text-secondary)] hover:text-[var(--text-primary)]",
-                  "bg-[var(--bg-secondary)] hover:bg-[var(--bg-tertiary)]",
-                  "border border-[var(--border-color)]",
+                  "hover:bg-[var(--bg-tertiary)]",
                   "transition-colors"
                 )}
               >
-                <Plus className="w-3.5 h-3.5" />
-                New Project
+                <Upload className="w-3.5 h-3.5" />
+                Import
               </button>
-            )}
+              {hasProjects && (
+                <button
+                  onClick={openExportModal}
+                  className={cn(
+                    "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium",
+                    "text-[var(--text-secondary)] hover:text-[var(--text-primary)]",
+                    "hover:bg-[var(--bg-tertiary)]",
+                    "transition-colors"
+                  )}
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  Export
+                </button>
+              )}
+              {hasProjects && (
+                <button
+                  onClick={() => openProjectModal()}
+                  className={cn(
+                    "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium",
+                    "text-[var(--text-secondary)] hover:text-[var(--text-primary)]",
+                    "bg-[var(--bg-secondary)] hover:bg-[var(--bg-tertiary)]",
+                    "border border-[var(--border-color)]",
+                    "transition-colors"
+                  )}
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  New Project
+                </button>
+              )}
+            </div>
           </div>
 
           {hasProjects ? (

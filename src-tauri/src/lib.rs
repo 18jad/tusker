@@ -87,6 +87,9 @@ pub fn run() {
             commands::save_commit,
             commands::get_commits,
             commands::get_commit_detail,
+            // Export/Import commands
+            commands::export_connections,
+            commands::import_connections,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
