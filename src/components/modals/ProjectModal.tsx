@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Plug, Database, ChevronRight, Check } from "lucide-react";
+import { Plug, Database, Check } from "lucide-react";
 import { Modal } from "../ui/Modal";
 import { Button } from "../ui/Button";
 import { Input } from "../ui/Input";
@@ -65,7 +65,6 @@ export function ProjectModal() {
   const [form, setForm] = useState<FormState>(INITIAL_FORM_STATE);
   const [testing, setTesting] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [settingsExpanded, setSettingsExpanded] = useState(false);
   const [colorPickerOpen, setColorPickerOpen] = useState(false);
   const colorPickerRef = useRef<HTMLDivElement>(null);
 
@@ -81,6 +80,7 @@ export function ProjectModal() {
       return () => document.removeEventListener("mousedown", handleClickOutside);
     }
   }, [colorPickerOpen]);
+
   const [testResult, setTestResult] = useState<{
     success: boolean;
     message: string;
@@ -95,7 +95,6 @@ export function ProjectModal() {
     if (projectModalOpen) {
       if (editingProject) {
         const conn = editingProject.connection;
-        // Load saved password from secure storage
         getPassword(editingProject.id)
           .then((savedPassword) => {
             setForm({
@@ -114,7 +113,6 @@ export function ProjectModal() {
             });
           })
           .catch(() => {
-            // No saved password, use empty
             setForm({
               name: editingProject.name,
               color: editingProject.color,
@@ -191,7 +189,7 @@ export function ProjectModal() {
     } catch (err) {
       setTestResult({
         success: false,
-        message: err instanceof Error ? err.message : "Failed to connect to database",
+        message: err instanceof Error ? err.message : "Failed to connect",
       });
     } finally {
       setTesting(false);
@@ -207,7 +205,6 @@ export function ProjectModal() {
       const connection = getConnectionConfig();
       const password = connection.password;
 
-      // Don't store password in the project config (it goes to keychain)
       const connectionWithoutPassword = { ...connection, password: "" };
 
       const projectData: Omit<Project, "id" | "createdAt"> = {
@@ -235,7 +232,6 @@ export function ProjectModal() {
         addProject(newProject);
       }
 
-      // Save password to secure keychain
       if (password) {
         await savePassword(projectId, password);
       }
@@ -257,12 +253,12 @@ export function ProjectModal() {
       open={projectModalOpen}
       onClose={closeProjectModal}
       title={isEditing ? "Edit Project" : "New Project"}
-      className="max-w-xl"
+      className="max-w-md"
     >
-      <div className="space-y-6">
+      <div className="space-y-5">
         {/* Project Name with Color Picker */}
         <div className="flex flex-col gap-1.5">
-          <label className="text-sm font-medium text-[var(--text-secondary)]">
+          <label className="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider">
             Project Name
           </label>
           <div
@@ -278,10 +274,10 @@ export function ProjectModal() {
             <button
               type="button"
               onClick={() => setColorPickerOpen(!colorPickerOpen)}
-              className="pl-3 pr-2 py-2.5 flex items-center justify-center"
+              className="pl-3 pr-2 py-2 flex items-center justify-center"
             >
               <span className={cn(
-                "w-4 h-4 rounded-full transition-transform duration-150 hover:scale-110",
+                "w-3.5 h-3.5 rounded-full transition-transform duration-150 hover:scale-110",
                 PROJECT_COLORS[form.color].dot
               )} />
             </button>
@@ -293,7 +289,7 @@ export function ProjectModal() {
                 "shadow-xl shadow-black/40",
                 "animate-in fade-in zoom-in-95 duration-150"
               )}>
-                <div className="flex gap-3">
+                <div className="flex gap-2.5">
                   {PROJECT_COLOR_OPTIONS.map((color) => (
                     <button
                       key={color}
@@ -303,7 +299,7 @@ export function ProjectModal() {
                         setColorPickerOpen(false);
                       }}
                       className={cn(
-                        "w-6 h-6 rounded-full transition-all duration-150 flex items-center justify-center",
+                        "w-5 h-5 rounded-full transition-all duration-150 flex items-center justify-center",
                         "hover:scale-125",
                         PROJECT_COLORS[color].dot,
                         form.color === color
@@ -312,7 +308,7 @@ export function ProjectModal() {
                       )}
                     >
                       {form.color === color && (
-                        <Check className="w-3 h-3 text-white drop-shadow" />
+                        <Check className="w-2.5 h-2.5 text-white drop-shadow" />
                       )}
                     </button>
                   ))}
@@ -328,7 +324,7 @@ export function ProjectModal() {
               value={form.name}
               onChange={(e) => updateField("name", e.target.value)}
               className={cn(
-                "flex-1 px-3 py-2.5 bg-transparent text-sm rounded-r-lg",
+                "flex-1 px-3 py-2 bg-transparent text-sm rounded-r-lg",
                 "text-[var(--text-primary)]",
                 "placeholder:text-[var(--text-muted)]",
                 "focus:outline-none"
@@ -339,34 +335,34 @@ export function ProjectModal() {
 
         {/* Connection Method Toggle */}
         <div className="flex flex-col gap-1.5">
-          <label className="text-sm font-medium text-[var(--text-secondary)]">
-            Connection Method
+          <label className="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider">
+            Connection
           </label>
-          <div className="flex rounded-lg border border-[var(--border-color)] p-1 bg-[var(--bg-tertiary)]">
+          <div className="flex rounded-lg border border-[var(--border-color)] p-0.5 bg-[var(--bg-tertiary)]">
             <button
               type="button"
               onClick={() => updateField("connectionMethod", "manual")}
               className={cn(
-                "flex-1 flex items-center justify-center gap-2 py-2 px-4 rounded-md text-sm font-medium transition-colors",
+                "flex-1 flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-md text-xs font-medium transition-colors",
                 form.connectionMethod === "manual"
                   ? "bg-[var(--bg-secondary)] text-[var(--text-primary)]"
                   : "text-[var(--text-muted)] hover:text-[var(--text-secondary)]"
               )}
             >
-              <Database className="w-4 h-4" />
+              <Database className="w-3.5 h-3.5" />
               Manual
             </button>
             <button
               type="button"
               onClick={() => updateField("connectionMethod", "string")}
               className={cn(
-                "flex-1 flex items-center justify-center gap-2 py-2 px-4 rounded-md text-sm font-medium transition-colors",
+                "flex-1 flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-md text-xs font-medium transition-colors",
                 form.connectionMethod === "string"
                   ? "bg-[var(--bg-secondary)] text-[var(--text-primary)]"
                   : "text-[var(--text-muted)] hover:text-[var(--text-secondary)]"
               )}
             >
-              <Plug className="w-4 h-4" />
+              <Plug className="w-3.5 h-3.5" />
               Connection String
             </button>
           </div>
@@ -374,17 +370,14 @@ export function ProjectModal() {
 
         {/* Connection Fields */}
         {form.connectionMethod === "string" ? (
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-[var(--text-secondary)]">
-              Connection String
-            </label>
+          <div>
             <textarea
               value={form.connectionString}
               onChange={(e) => handleConnectionStringChange(e.target.value)}
               placeholder="postgresql://user:password@localhost:5432/database"
-              rows={3}
+              rows={2}
               className={cn(
-                "w-full px-3 py-2 rounded-lg text-sm font-mono resize-none",
+                "w-full px-3 py-2 rounded-lg text-xs font-mono resize-none",
                 "bg-[var(--bg-tertiary)] text-[var(--text-primary)]",
                 "border border-[var(--border-color)]",
                 "placeholder:text-[var(--text-muted)]",
@@ -394,20 +387,22 @@ export function ProjectModal() {
             />
           </div>
         ) : (
-          <div className="grid grid-cols-2 gap-4">
-            <Input
-              label="Host"
-              placeholder="localhost"
-              value={form.host}
-              onChange={(e) => updateField("host", e.target.value)}
-            />
+          <div className="grid grid-cols-4 gap-3">
+            <div className="col-span-3">
+              <Input
+                label="Host"
+                placeholder="localhost"
+                value={form.host}
+                onChange={(e) => updateField("host", e.target.value)}
+              />
+            </div>
             <Input
               label="Port"
               placeholder="5432"
               value={form.port}
               onChange={(e) => updateField("port", e.target.value)}
             />
-            <div className="col-span-2">
+            <div className="col-span-4">
               <Input
                 label="Database"
                 placeholder="my_database"
@@ -415,31 +410,73 @@ export function ProjectModal() {
                 onChange={(e) => updateField("database", e.target.value)}
               />
             </div>
-            <Input
-              label="Username"
-              placeholder="postgres"
-              value={form.username}
-              onChange={(e) => updateField("username", e.target.value)}
-            />
-            <Input
-              label="Password"
-              type="password"
-              placeholder="********"
-              value={form.password}
-              onChange={(e) => updateField("password", e.target.value)}
-            />
+            <div className="col-span-2">
+              <Input
+                label="Username"
+                placeholder="postgres"
+                value={form.username}
+                onChange={(e) => updateField("username", e.target.value)}
+              />
+            </div>
+            <div className="col-span-2">
+              <Input
+                label="Password"
+                type="password"
+                placeholder="********"
+                value={form.password}
+                onChange={(e) => updateField("password", e.target.value)}
+              />
+            </div>
           </div>
         )}
 
-        {/* SSL Toggle */}
+        {/* SSL toggle — part of connection config */}
         <Toggle
           checked={form.ssl}
           onChange={(checked) => updateField("ssl", checked)}
-          label="Enable SSL"
+          label="Use SSL"
         />
 
-        {/* Test Connection */}
-        <div className="flex items-center gap-4">
+        {/* Project Options */}
+        <div className="flex flex-col gap-1.5">
+          <label className="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider">
+            Options
+          </label>
+          <div className="flex items-center gap-6">
+            <Toggle
+              checked={form.instantCommit}
+              onChange={(checked) => updateField("instantCommit", checked)}
+              label="Instant Commit"
+            />
+            <Toggle
+              checked={form.readOnly}
+              onChange={(checked) => updateField("readOnly", checked)}
+              label="Read-only Mode"
+            />
+          </div>
+        </div>
+
+        {/* Test result message */}
+        {testResult && (
+          <div
+            className={cn(
+              "flex items-center gap-2 px-3 py-2 rounded-lg text-xs",
+              testResult.success
+                ? "bg-green-500/10 text-green-400 border border-green-500/20"
+                : "bg-red-500/10 text-red-400 border border-red-500/20"
+            )}
+          >
+            {testResult.success ? (
+              <Check className="w-3.5 h-3.5 shrink-0" />
+            ) : (
+              <Plug className="w-3.5 h-3.5 shrink-0" />
+            )}
+            <span className="truncate">{testResult.message}</span>
+          </div>
+        )}
+
+        {/* Footer — Test on left, Cancel + Save on right */}
+        <div className="flex items-center justify-between pt-4 mt-1">
           <Button
             variant="secondary"
             size="sm"
@@ -447,82 +484,23 @@ export function ProjectModal() {
             loading={testing}
             disabled={!isValid}
           >
-            Test Connection
+            {testing ? "Testing..." : "Test Connection"}
           </Button>
-          {testResult && (
-            <span
-              className={cn(
-                "text-sm",
-                testResult.success ? "text-green-500" : "text-red-500"
-              )}
+
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="sm" onClick={closeProjectModal}>
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={handleSave}
+              loading={saving}
+              disabled={!isValid}
             >
-              {testResult.message}
-            </span>
-          )}
-        </div>
-
-        {/* Settings Section */}
-        <div className="pt-4 border-t border-[var(--border-color)]">
-          <button
-            type="button"
-            onClick={() => setSettingsExpanded(!settingsExpanded)}
-            className={cn(
-              "w-full flex items-center gap-2 py-2 -my-2 rounded-md",
-              "text-sm font-medium text-[var(--text-secondary)]",
-              "hover:text-[var(--text-primary)] transition-colors duration-150"
-            )}
-          >
-            <ChevronRight
-              className={cn(
-                "w-4 h-4 transition-transform duration-200",
-                settingsExpanded && "rotate-90"
-              )}
-            />
-            <span>Advanced Settings</span>
-            {(form.instantCommit || form.readOnly) && (
-              <span className="ml-auto text-xs text-[var(--text-muted)]">
-                {[form.instantCommit && "Instant Commit", form.readOnly && "Read-only"]
-                  .filter(Boolean)
-                  .join(", ")}
-              </span>
-            )}
-          </button>
-          <div
-            className={cn(
-              "grid transition-all duration-200 ease-out",
-              settingsExpanded ? "grid-rows-[1fr] opacity-100 mt-4" : "grid-rows-[0fr] opacity-0"
-            )}
-          >
-            <div className="overflow-hidden">
-              <div className="space-y-3 pl-6">
-                <Toggle
-                  checked={form.instantCommit}
-                  onChange={(checked) => updateField("instantCommit", checked)}
-                  label="Instant Commit (apply changes immediately)"
-                />
-                <Toggle
-                  checked={form.readOnly}
-                  onChange={(checked) => updateField("readOnly", checked)}
-                  label="Read-only Mode (prevent modifications)"
-                />
-              </div>
-            </div>
+              {isEditing ? "Save Changes" : "Create Project"}
+            </Button>
           </div>
-        </div>
-
-        {/* Actions */}
-        <div className="flex justify-end gap-3 pt-4">
-          <Button variant="ghost" onClick={closeProjectModal}>
-            Cancel
-          </Button>
-          <Button
-            variant="primary"
-            onClick={handleSave}
-            loading={saving}
-            disabled={!isValid}
-          >
-            {isEditing ? "Save Changes" : "Create Project"}
-          </Button>
         </div>
       </div>
     </Modal>

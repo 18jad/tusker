@@ -213,57 +213,90 @@ impl DataOperations {
         let page_size = page_size.unwrap_or(DEFAULT_PAGE_SIZE);
         let offset = (page - 1) * page_size;
 
-        let order_clause = match order_by {
-            Some(columns) if !columns.is_empty() => {
-                let directions = order_direction.cloned().unwrap_or_default();
-                let parts: Vec<String> = columns
-                    .iter()
-                    .enumerate()
-                    .map(|(i, col)| {
-                        let dir = directions
-                            .get(i)
-                            .map(|d| {
-                                if d.to_uppercase() == "DESC" {
-                                    "DESC"
-                                } else {
-                                    "ASC"
-                                }
-                            })
-                            .unwrap_or("ASC");
-                        format!("{} {}", quote_identifier(col), dir)
-                    })
-                    .collect();
-                format!("ORDER BY {}", parts.join(", "))
-            }
-            _ => String::new(),
-        };
+        let has_explicit_order = matches!(order_by, Some(columns) if !columns.is_empty());
 
         let where_clause = filters
             .filter(|f| !f.is_empty())
             .map(|f| build_where_clause(f))
             .unwrap_or_default();
 
-        // Get total count
+        let qualified_table = format!(
+            "{}.{}",
+            quote_identifier(schema),
+            quote_identifier(table)
+        );
+
         let count_query = format!(
-            "SELECT COUNT(*) FROM {}.{} {}",
-            quote_identifier(schema),
-            quote_identifier(table),
-            where_clause
+            "SELECT COUNT(*) FROM {} {}",
+            qualified_table, where_clause
         );
-        let total_count: (i64,) = sqlx::query_as(&count_query).fetch_one(pool).await?;
-        let total_count = total_count.0;
 
-        // Fetch data
+        if has_explicit_order {
+            // Explicit sort provided — build order clause and run COUNT + SELECT concurrently
+            let columns = order_by.unwrap();
+            let directions = order_direction.cloned().unwrap_or_default();
+            let parts: Vec<String> = columns
+                .iter()
+                .enumerate()
+                .map(|(i, col)| {
+                    let dir = directions
+                        .get(i)
+                        .map(|d| if d.to_uppercase() == "DESC" { "DESC" } else { "ASC" })
+                        .unwrap_or("ASC");
+                    format!("{} {}", quote_identifier(col), dir)
+                })
+                .collect();
+            let order_clause = format!("ORDER BY {}", parts.join(", "));
+
+            let data_query = format!(
+                "SELECT * FROM {} {} {} LIMIT {} OFFSET {}",
+                qualified_table, where_clause, order_clause, page_size, offset
+            );
+
+            let (count_result, data_result) = tokio::join!(
+                sqlx::query_as::<_, (i64,)>(&count_query).fetch_one(pool),
+                sqlx::query(&data_query).fetch_all(pool),
+            );
+
+            let total_count = count_result?.0;
+            let rows = data_result?;
+
+            let (rows, columns) = rows_to_json(&rows);
+            let total_pages = (total_count as f64 / page_size as f64).ceil() as i64;
+
+            return Ok(PaginatedResult {
+                rows, total_count, page, page_size, total_pages, columns,
+            });
+        }
+
+        // No explicit sort — run PK detection + COUNT concurrently, then SELECT
+        let (pk_result, count_result) = tokio::join!(
+            sqlx::query_scalar::<_, String>(
+                r#"
+                SELECT a.attname
+                FROM pg_index i
+                JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = i.indkey[0]
+                WHERE i.indrelid = (quote_ident($1) || '.' || quote_ident($2))::regclass
+                  AND i.indisprimary
+                LIMIT 1
+                "#,
+            )
+            .bind(schema)
+            .bind(table)
+            .fetch_optional(pool),
+            sqlx::query_as::<_, (i64,)>(&count_query).fetch_one(pool),
+        );
+
+        let total_count = count_result?.0;
+        let order_clause = match pk_result.ok().flatten() {
+            Some(col) => format!("ORDER BY {} ASC", quote_identifier(&col)),
+            None => String::new(),
+        };
+
         let data_query = format!(
-            "SELECT * FROM {}.{} {} {} LIMIT {} OFFSET {}",
-            quote_identifier(schema),
-            quote_identifier(table),
-            where_clause,
-            order_clause,
-            page_size,
-            offset
+            "SELECT * FROM {} {} {} LIMIT {} OFFSET {}",
+            qualified_table, where_clause, order_clause, page_size, offset
         );
-
         let rows = sqlx::query(&data_query).fetch_all(pool).await?;
 
         let (rows, columns) = rows_to_json(&rows);

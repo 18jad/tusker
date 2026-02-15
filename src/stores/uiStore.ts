@@ -58,6 +58,32 @@ interface UIState {
     rowCount: number | null;
   };
 
+  // Delete project modal
+  deleteProjectModal: {
+    isOpen: boolean;
+    projectId: string | null;
+  };
+
+  // Schema info modal
+  schemaInfoModal: {
+    isOpen: boolean;
+    schema: string | null;
+  };
+
+  // Create schema modal
+  createSchemaModalOpen: boolean;
+
+  // Drop schema modal
+  dropSchemaModal: {
+    isOpen: boolean;
+    schema: string | null;
+    tableCount: number | null;
+  };
+
+  // Export/Import connections modals
+  exportModalOpen: boolean;
+  importModalOpen: boolean;
+
   // Help modal
   helpModalOpen: boolean;
 
@@ -98,6 +124,18 @@ interface UIState {
   reorderTabs: (fromIndex: number, toIndex: number) => void;
   pinTab: (id: string) => void;
   unpinTab: (id: string) => void;
+  openDeleteProjectModal: (projectId: string) => void;
+  closeDeleteProjectModal: () => void;
+  openSchemaInfoModal: (schema: string) => void;
+  closeSchemaInfoModal: () => void;
+  openCreateSchemaModal: () => void;
+  closeCreateSchemaModal: () => void;
+  openDropSchemaModal: (schema: string, tableCount?: number) => void;
+  closeDropSchemaModal: () => void;
+  openExportModal: () => void;
+  closeExportModal: () => void;
+  openImportModal: () => void;
+  closeImportModal: () => void;
   openHelpModal: () => void;
   closeHelpModal: () => void;
   showToast: (message: string, type?: "success" | "error" | "info") => void;
@@ -147,6 +185,22 @@ export const useUIStore = create<UIState>((set, get) => ({
     table: null,
     rowCount: null,
   },
+  deleteProjectModal: {
+    isOpen: false,
+    projectId: null,
+  },
+  schemaInfoModal: {
+    isOpen: false,
+    schema: null,
+  },
+  createSchemaModalOpen: false,
+  dropSchemaModal: {
+    isOpen: false,
+    schema: null,
+    tableCount: null,
+  },
+  exportModalOpen: false,
+  importModalOpen: false,
   helpModalOpen: false,
   toasts: [],
   theme: "dark",
@@ -435,6 +489,44 @@ export const useUIStore = create<UIState>((set, get) => ({
       const unpinned = state.tabs.filter((t) => !t.pinned);
       return { tabs: [...pinned, { ...tab, pinned: false }, ...unpinned] };
     }),
+
+  openDeleteProjectModal: (projectId) =>
+    set({ deleteProjectModal: { isOpen: true, projectId } }),
+
+  closeDeleteProjectModal: () =>
+    set({ deleteProjectModal: { isOpen: false, projectId: null } }),
+
+  openSchemaInfoModal: (schema) =>
+    set({ schemaInfoModal: { isOpen: true, schema } }),
+
+  closeSchemaInfoModal: () =>
+    set({ schemaInfoModal: { isOpen: false, schema: null } }),
+
+  openCreateSchemaModal: () => set({ createSchemaModalOpen: true }),
+  closeCreateSchemaModal: () => set({ createSchemaModalOpen: false }),
+
+  openDropSchemaModal: (schema, tableCount) =>
+    set({
+      dropSchemaModal: {
+        isOpen: true,
+        schema,
+        tableCount: tableCount ?? null,
+      },
+    }),
+
+  closeDropSchemaModal: () =>
+    set({
+      dropSchemaModal: {
+        isOpen: false,
+        schema: null,
+        tableCount: null,
+      },
+    }),
+
+  openExportModal: () => set({ exportModalOpen: true }),
+  closeExportModal: () => set({ exportModalOpen: false }),
+  openImportModal: () => set({ importModalOpen: true }),
+  closeImportModal: () => set({ importModalOpen: false }),
 
   openHelpModal: () => set({ helpModalOpen: true }),
 

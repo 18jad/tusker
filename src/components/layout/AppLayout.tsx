@@ -2,23 +2,23 @@ import { useState, useRef, useEffect } from "react";
 import {
   ChevronDown,
   Database,
-  Settings,
   Plug,
   Unplug,
   Loader2,
   ArrowLeftRight,
-  Plus,
   X,
   Download,
-  RefreshCw
+  RefreshCw,
+  Pencil,
+  Trash2,
 } from "lucide-react";
 import { Sidebar } from "./Sidebar";
 import { TabBar } from "./TabBar";
 import { StatusBar } from "./StatusBar";
 import { TabContent } from "./TabContent";
+import { HomePage } from "./HomePage";
 import { useProjectStore } from "../../stores/projectStore";
 import { useUIStore } from "../../stores/uiStore";
-import { useChangesStore } from "../../stores/changesStore";
 import { useConnect, useDisconnect } from "../../hooks/useDatabase";
 import { useGlobalKeyboardShortcuts } from "../../hooks/useKeyboard";
 import { useConnectionHealthCheck } from "../../hooks/useConnectionHealthCheck";
@@ -33,6 +33,7 @@ function ProjectMenu() {
   const activeProjectId = useProjectStore((state) => state.activeProjectId);
   const connectionStatus = useProjectStore((state) => state.connectionStatus);
   const openProjectModal = useUIStore((state) => state.openProjectModal);
+  const openDeleteProjectModal = useUIStore((state) => state.openDeleteProjectModal);
 
   const connect = useConnect();
   const disconnect = useDisconnect();
@@ -143,6 +144,8 @@ function ProjectMenu() {
             </button>
           ) : null}
 
+          <div className="my-1 h-px bg-[var(--border-color)]" />
+
           <button
             onClick={() => {
               openProjectModal(activeProject.id);
@@ -154,8 +157,23 @@ function ProjectMenu() {
               "text-sm text-[var(--text-secondary)]"
             )}
           >
-            <Settings className="w-4 h-4" />
-            <span>Project Settings</span>
+            <Pencil className="w-4 h-4" />
+            <span>Edit Project</span>
+          </button>
+
+          <button
+            onClick={() => {
+              setIsOpen(false);
+              openDeleteProjectModal(activeProject.id);
+            }}
+            className={cn(
+              "w-full flex items-center gap-2 px-3 py-2",
+              "hover:bg-red-500/10 transition-colors duration-150",
+              "text-sm text-red-400"
+            )}
+          >
+            <Trash2 className="w-4 h-4" />
+            <span>Delete Project</span>
           </button>
         </div>
       )}
@@ -325,6 +343,7 @@ export function AppLayout({ children }: AppLayoutProps) {
   const toggleSidebar = useUIStore((state) => state.toggleSidebar);
   const setSidebarWidth = useUIStore((state) => state.setSidebarWidth);
   const activeTabId = useUIStore((state) => state.activeTabId);
+  const activeProjectId = useProjectStore((state) => state.activeProjectId);
   const connectionStatus = useProjectStore((state) => state.connectionStatus);
 
   // Global keyboard shortcuts (Cmd+W to close tab, Cmd+K for command palette, etc.)
@@ -346,24 +365,30 @@ export function AppLayout({ children }: AppLayoutProps) {
 
       {/* Main Content Area */}
       <div className="flex-1 flex overflow-hidden">
-        {/* Sidebar */}
-        <Sidebar
-          isCollapsed={sidebarCollapsed}
-          width={sidebarWidth}
-          onToggle={toggleSidebar}
-          onWidthChange={setSidebarWidth}
-        />
+        {activeProjectId ? (
+          <>
+            {/* Sidebar */}
+            <Sidebar
+              isCollapsed={sidebarCollapsed}
+              width={sidebarWidth}
+              onToggle={toggleSidebar}
+              onWidthChange={setSidebarWidth}
+            />
 
-        {/* Content Area */}
-        <main className="flex-1 flex flex-col overflow-hidden">
-          {/* Tab Bar */}
-          <TabBar />
+            {/* Content Area */}
+            <main className="flex-1 flex flex-col overflow-hidden">
+              {/* Tab Bar */}
+              <TabBar />
 
-          {/* Content */}
-          <div className="flex-1 overflow-hidden bg-[var(--bg-primary)]">
-            {children || (showTabContent ? <TabContent /> : <EmptyState />)}
-          </div>
-        </main>
+              {/* Content */}
+              <div className="flex-1 overflow-hidden bg-[var(--bg-primary)]">
+                {children || (showTabContent ? <TabContent /> : <EmptyState />)}
+              </div>
+            </main>
+          </>
+        ) : (
+          <HomePage />
+        )}
       </div>
 
       {/* Status Bar */}
@@ -373,131 +398,18 @@ export function AppLayout({ children }: AppLayoutProps) {
 }
 
 function EmptyState() {
-  const openProjectModal = useUIStore((state) => state.openProjectModal);
-  const closeAllTabs = useUIStore((state) => state.closeAllTabs);
   const projects = useProjectStore((state) => state.projects);
   const activeProjectId = useProjectStore((state) => state.activeProjectId);
-  const setActiveProject = useProjectStore((state) => state.setActiveProject);
   const connectionStatus = useProjectStore((state) => state.connectionStatus);
   const error = useProjectStore((state) => state.error);
-  const clearChanges = useChangesStore((state) => state.clearChanges);
   const activeProject = projects.find((p) => p.id === activeProjectId);
 
   const connect = useConnect();
-  const disconnect = useDisconnect();
 
   const handleConnect = () => {
     if (!activeProject) return;
     connect.mutate(activeProject.connection);
   };
-
-  const handleQuickSelect = async (projectId: string) => {
-    const project = projects.find((p) => p.id === projectId);
-    if (!project) return;
-
-    if (connectionStatus === "connected") {
-      await disconnect.mutateAsync();
-    }
-
-    closeAllTabs();
-    clearChanges();
-    setActiveProject(projectId);
-    connect.mutate(project.connection);
-  };
-
-  if (projects.length === 0) {
-    return (
-      <div className="h-full flex flex-col items-center justify-center text-center p-8">
-        <Database className="w-16 h-16 text-[var(--text-muted)] mb-4" />
-        <h2 className="text-xl font-medium text-[var(--text-primary)] mb-2">
-          Welcome to Tusker
-        </h2>
-        <p className="text-[var(--text-secondary)] mb-6 max-w-md">
-          Connect to your PostgreSQL database to browse tables, run queries, and
-          manage your data with ease.
-        </p>
-        <button
-          onClick={() => openProjectModal()}
-          className={cn(
-            "flex items-center gap-2 px-4 py-2 rounded-md",
-            "bg-[var(--accent)] hover:bg-[var(--accent-hover)]",
-            "text-white font-medium",
-            "transition-colors duration-150"
-          )}
-        >
-          <Plus className="w-4 h-4" />
-          Create Your First Project
-        </button>
-      </div>
-    );
-  }
-
-  if (!activeProjectId) {
-    const recentProjects = projects.slice(0, 5);
-
-    return (
-      <div className="h-full flex flex-col items-center justify-center text-center p-8">
-        <Database className="w-12 h-12 text-[var(--text-muted)] mb-4" />
-        <h2 className="text-lg font-medium text-[var(--text-primary)] mb-2">
-          Select a Project
-        </h2>
-        <p className="text-sm text-[var(--text-muted)] mb-6">
-          Choose a project to connect to your database
-        </p>
-
-        {/* Recent projects list */}
-        <div className="w-full max-w-md space-y-2">
-          {recentProjects.map((project) => {
-            const colorConfig = PROJECT_COLORS[project.color];
-            return (
-              <button
-                key={project.id}
-                onClick={() => handleQuickSelect(project.id)}
-                disabled={connect.isPending}
-                className={cn(
-                  "w-full flex items-center gap-3 px-4 py-3 rounded-lg cursor-pointer",
-                  "bg-[var(--bg-secondary)] border border-[var(--border-color)]",
-                  "hover:bg-[var(--bg-tertiary)] hover:border-[var(--accent)]/50",
-                  "transition-all duration-150 text-left",
-                  "disabled:opacity-50 disabled:cursor-not-allowed"
-                )}
-              >
-                <div
-                  className={cn(
-                    "w-3 h-3 rounded-full shrink-0",
-                    colorConfig.dot
-                  )}
-                />
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm font-medium text-[var(--text-primary)] truncate">
-                    {project.name}
-                  </div>
-                  <div className="text-xs text-[var(--text-muted)] truncate">
-                    {project.connection.host}:{project.connection.port}/
-                    {project.connection.database}
-                  </div>
-                </div>
-                <ChevronDown className="w-4 h-4 text-[var(--text-muted)] -rotate-90" />
-              </button>
-            );
-          })}
-        </div>
-
-        {/* New project button */}
-        <button
-          onClick={() => openProjectModal()}
-          className={cn(
-            "mt-4 flex items-center gap-2 px-4 py-2 rounded-md cursor-pointer",
-            "text-sm text-[var(--text-secondary)]",
-            "hover:bg-[var(--bg-tertiary)] transition-colors duration-150"
-          )}
-        >
-          <Plus className="w-4 h-4" />
-          New Project
-        </button>
-      </div>
-    );
-  }
 
   // Project selected but not connected
   if (connectionStatus === "disconnected" || connectionStatus === "error") {

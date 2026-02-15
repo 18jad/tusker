@@ -1,6 +1,7 @@
 pub mod commit_store;
 pub mod connection;
 pub mod data;
+pub mod export;
 pub mod schema;
 
 pub use commit_store::{
@@ -17,5 +18,5 @@ pub use data::{
 };
 pub use schema::{
     ColumnInfo, ConstraintInfo, ConstraintType, ForeignKeyInfo, IndexInfo, SchemaInfo,
-    SchemaIntrospector, TableInfo, TableType,
+    SchemaIntrospector, SchemaWithTables, TableInfo, TableType,
 };

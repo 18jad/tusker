@@ -3,8 +3,10 @@ use crate::db::{
     ConnectionInfo, ConnectionManager, ConstraintInfo, CredentialStorage, DataOperations,
     DeleteRequest, FilterCondition, IndexInfo, InsertRequest, MigrationOperations,
     MigrationRequest, MigrationResult, PaginatedResult, QueryResult, SaveCommitChange,
-    SaveCommitRequest, SchemaInfo, SchemaIntrospector, SslMode, TableInfo, UpdateRequest,
+    SaveCommitRequest, SchemaInfo, SchemaIntrospector, SchemaWithTables, SslMode, TableInfo,
+    UpdateRequest,
 };
+use crate::db::export::{self, ExportedProject};
 use crate::error::Result;
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
@@ -220,6 +222,16 @@ pub async fn get_schemas(state: State<'_, AppState>, connection_id: String) -> R
     let connection_manager = state.connection_manager.read().await;
     let pool = connection_manager.get_pool(&connection_id).await?;
     SchemaIntrospector::get_schemas(&pool).await
+}
+
+#[tauri::command]
+pub async fn get_schemas_with_tables(
+    state: State<'_, AppState>,
+    connection_id: String,
+) -> Result<Vec<SchemaWithTables>> {
+    let connection_manager = state.connection_manager.read().await;
+    let pool = connection_manager.get_pool(&connection_id).await?;
+    SchemaIntrospector::get_schemas_with_tables(&pool).await
 }
 
 #[tauri::command]
@@ -510,4 +522,106 @@ pub fn get_commits(project_id: String) -> Result<Vec<Commit>> {
 pub fn get_commit_detail(project_id: String, commit_id: String) -> Result<CommitDetail> {
     CommitStore::get_commit_detail(&project_id, &commit_id)
         .map_err(|e| crate::error::DbViewerError::Configuration(e))
+}
+
+// ============================================================================
+// Export/Import Commands
+// ============================================================================
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct ProjectForExport {
+    pub id: String,
+    pub name: String,
+    pub color: String,
+    pub host: String,
+    pub port: u16,
+    pub database: String,
+    pub username: String,
+    pub ssl: bool,
+    pub instant_commit: bool,
+    pub read_only: bool,
+    pub last_connected: Option<String>,
+    pub created_at: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ImportedProject {
+    pub id: String,
+    pub name: String,
+    pub color: String,
+    pub host: String,
+    pub port: u16,
+    pub database: String,
+    pub username: String,
+    pub ssl: bool,
+    pub instant_commit: bool,
+    pub read_only: bool,
+    pub last_connected: Option<String>,
+    pub created_at: String,
+}
+
+#[tauri::command]
+pub fn export_connections(
+    projects: Vec<ProjectForExport>,
+    password: String,
+    file_path: String,
+) -> Result<()> {
+    let exported: Vec<ExportedProject> = projects
+        .into_iter()
+        .map(|p| {
+            let db_password = CredentialStorage::get_password(&p.id).unwrap_or_default();
+            ExportedProject {
+                name: p.name,
+                color: p.color,
+                host: p.host,
+                port: p.port,
+                database: p.database,
+                username: p.username,
+                password: db_password,
+                ssl: p.ssl,
+                instant_commit: p.instant_commit,
+                read_only: p.read_only,
+                last_connected: p.last_connected,
+                created_at: p.created_at,
+            }
+        })
+        .collect();
+
+    export::encrypt_and_write(exported, &password, &file_path)
+}
+
+#[tauri::command]
+pub fn import_connections(
+    password: String,
+    file_path: String,
+) -> Result<Vec<ImportedProject>> {
+    let payload = export::read_and_decrypt(&file_path, &password)?;
+
+    let mut imported = Vec::new();
+
+    for project in payload.projects {
+        let new_id = uuid::Uuid::new_v4().to_string();
+
+        // Save password to keychain
+        if !project.password.is_empty() {
+            CredentialStorage::save_password(&new_id, &project.password)?;
+        }
+
+        imported.push(ImportedProject {
+            id: new_id,
+            name: project.name,
+            color: project.color,
+            host: project.host,
+            port: project.port,
+            database: project.database,
+            username: project.username,
+            ssl: project.ssl,
+            instant_commit: project.instant_commit,
+            read_only: project.read_only,
+            last_connected: project.last_connected,
+            created_at: project.created_at,
+        });
+    }
+
+    Ok(imported)
 }

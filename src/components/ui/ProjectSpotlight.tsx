@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { Search, Database, Plus, Loader2, AlertTriangle } from "lucide-react";
+import { Search, Database, Plus, Loader2, AlertTriangle, Pencil, Trash2 } from "lucide-react";
 import { useUIStore } from "../../stores/uiStore";
 import { useProjectStore } from "../../stores/projectStore";
 import { useChangesStore } from "../../stores/changesStore";
@@ -20,6 +20,7 @@ export function ProjectSpotlight() {
   const [query, setQuery] = useState("");
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [pendingProject, setPendingProject] = useState<Project | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
@@ -100,6 +101,24 @@ export function ProjectSpotlight() {
     closeProjectSpotlight();
   }, [openProjectModal, closeProjectSpotlight]);
 
+  const handleEditProject = useCallback(
+    (e: React.MouseEvent, projectId: string) => {
+      e.stopPropagation();
+      openProjectModal(projectId);
+      closeProjectSpotlight();
+    },
+    [openProjectModal, closeProjectSpotlight]
+  );
+
+  const handleDeleteProject = useCallback(
+    (projectId: string) => {
+      setConfirmDeleteId(null);
+      closeProjectSpotlight();
+      useUIStore.getState().openDeleteProjectModal(projectId);
+    },
+    [closeProjectSpotlight]
+  );
+
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
       if (!projectSpotlightOpen) return;
@@ -148,6 +167,7 @@ export function ProjectSpotlight() {
       setQuery("");
       setSelectedIndex(0);
       setPendingProject(null);
+      setConfirmDeleteId(null);
       setTimeout(() => inputRef.current?.focus(), 0);
     }
   }, [projectSpotlightOpen]);
@@ -279,55 +299,128 @@ export function ProjectSpotlight() {
               const isSelected = index === selectedIndex;
               const isActive = project.id === activeProjectId;
               const colorClasses = PROJECT_COLORS[project.color];
+              const isConfirmingDelete = confirmDeleteId === project.id;
+
+              if (isConfirmingDelete) {
+                return (
+                  <div
+                    key={project.id}
+                    data-index={index}
+                    className="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-red-500/10 border border-red-500/20"
+                  >
+                    <AlertTriangle className="w-4 h-4 text-red-400 flex-shrink-0" />
+                    <span className="flex-1 text-sm text-[var(--text-primary)] truncate">
+                      Delete <span className="font-medium">"{project.name}"</span>?
+                    </span>
+                    <div className="flex items-center gap-1.5 flex-shrink-0">
+                      <button
+                        onClick={() => handleDeleteProject(project.id)}
+                        className={cn(
+                          "px-2.5 py-1 text-xs rounded-md",
+                          "bg-red-500 text-white hover:bg-red-600",
+                          "transition-colors"
+                        )}
+                      >
+                        Delete
+                      </button>
+                      <button
+                        onClick={() => setConfirmDeleteId(null)}
+                        className={cn(
+                          "px-2.5 py-1 text-xs rounded-md",
+                          "text-[var(--text-secondary)] hover:text-[var(--text-primary)]",
+                          "hover:bg-[var(--bg-tertiary)] transition-colors"
+                        )}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                );
+              }
 
               return (
-                <button
+                <div
                   key={project.id}
                   data-index={index}
-                  onClick={() => handleSelectProject(project)}
                   onMouseEnter={() => setSelectedIndex(index)}
-                  disabled={isConnecting}
                   className={cn(
-                    "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg",
+                    "group/project w-full flex items-center gap-3 px-3 py-2.5 rounded-lg",
                     "text-left transition-all duration-75",
-                    "disabled:opacity-50 disabled:cursor-not-allowed",
+                    isConnecting && "opacity-50 cursor-not-allowed",
                     isSelected
                       ? "bg-[var(--bg-tertiary)]"
                       : "text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)]/50"
                   )}
                 >
-                  {/* Color indicator */}
-                  <div
-                    className={cn(
-                      "rounded-full flex-shrink-0 transition-all ring-2",
-                      colorClasses.dot,
-                      isSelected
-                        ? "w-3.5 h-3.5 ring-white/20"
-                        : "w-2.5 h-2.5 ring-transparent"
-                    )}
-                  />
-
-                  {/* Project info */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium truncate">{project.name}</span>
-                      {isActive && (
-                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--accent)]/20 text-[var(--accent)]">
-                          Active
-                        </span>
-                      )}
+                  {/* Clickable area for selecting */}
+                  <button
+                    onClick={() => handleSelectProject(project)}
+                    disabled={isConnecting}
+                    className="flex items-center gap-3 flex-1 min-w-0 text-left"
+                  >
+                    {/* Color indicator */}
+                    <div className="w-3.5 h-3.5 flex items-center justify-center flex-shrink-0">
+                      <div
+                        className={cn(
+                          "rounded-full transition-all ring-2",
+                          colorClasses.dot,
+                          isSelected
+                            ? "w-3.5 h-3.5 ring-white/20"
+                            : "w-2.5 h-2.5 ring-transparent"
+                        )}
+                      />
                     </div>
-                    <div className="text-xs truncate text-[var(--text-muted)]">
-                      {project.connection.host}:{project.connection.port}/
-                      {project.connection.database}
-                    </div>
-                  </div>
 
-                  {/* Loading indicator when connecting */}
-                  {isConnecting && isActive && (
+                    {/* Project info */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium truncate">{project.name}</span>
+                        {isActive && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--accent)]/20 text-[var(--accent)]">
+                            Active
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-xs truncate text-[var(--text-muted)]">
+                        {project.connection.host}:{project.connection.port}/
+                        {project.connection.database}
+                      </div>
+                    </div>
+                  </button>
+
+                  {/* Action buttons (visible on hover) */}
+                  {isConnecting && isActive ? (
                     <Loader2 className="w-4 h-4 animate-spin flex-shrink-0" />
+                  ) : (
+                    <div className="flex items-center gap-0.5 flex-shrink-0 opacity-0 group-hover/project:opacity-100 transition-opacity">
+                      <button
+                        onClick={(e) => handleEditProject(e, project.id)}
+                        className={cn(
+                          "p-1.5 rounded-md",
+                          "text-[var(--text-muted)] hover:text-[var(--text-primary)]",
+                          "hover:bg-[var(--bg-secondary)] transition-colors"
+                        )}
+                        title="Edit project"
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setConfirmDeleteId(project.id);
+                        }}
+                        className={cn(
+                          "p-1.5 rounded-md",
+                          "text-[var(--text-muted)] hover:text-red-400",
+                          "hover:bg-red-500/10 transition-colors"
+                        )}
+                        title="Delete project"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   )}
-                </button>
+                </div>
               );
             })
           )}

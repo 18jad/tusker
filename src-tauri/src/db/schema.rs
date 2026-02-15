@@ -112,13 +112,13 @@ impl SchemaIntrospector {
         let schemas = sqlx::query_as::<_, (String, Option<String>)>(
             r#"
             SELECT
-                schema_name,
-                schema_owner
-            FROM information_schema.schemata
-            WHERE schema_name NOT IN ('pg_catalog', 'information_schema', 'pg_toast')
-              AND schema_name NOT LIKE 'pg_temp_%'
-              AND schema_name NOT LIKE 'pg_toast_temp_%'
-            ORDER BY schema_name
+                n.nspname,
+                pg_catalog.pg_get_userbyid(n.nspowner)
+            FROM pg_catalog.pg_namespace n
+            WHERE n.nspname NOT IN ('pg_catalog', 'information_schema', 'pg_toast')
+              AND n.nspname NOT LIKE 'pg_temp_%'
+              AND n.nspname NOT LIKE 'pg_toast_temp_%'
+            ORDER BY n.nspname
             "#,
         )
         .fetch_all(pool)
@@ -132,277 +132,175 @@ impl SchemaIntrospector {
 
     /// Get all tables in a schema
     pub async fn get_tables(pool: &PgPool, schema: &str) -> Result<Vec<TableInfo>> {
-        let tables = sqlx::query_as::<_, (String, String, String, Option<i64>, Option<String>)>(
+        // Single pg_catalog query covers tables, views, mat views, and foreign tables
+        let rows = sqlx::query_as::<_, (String, String, String, Option<i64>, Option<String>)>(
             r#"
             SELECT
-                t.table_schema,
-                t.table_name,
-                t.table_type,
-                (
-                    SELECT reltuples::bigint
-                    FROM pg_class c
-                    JOIN pg_namespace n ON n.oid = c.relnamespace
-                    WHERE n.nspname = t.table_schema AND c.relname = t.table_name
-                ) as estimated_row_count,
-                obj_description(
-                    (quote_ident(t.table_schema) || '.' || quote_ident(t.table_name))::regclass,
-                    'pg_class'
-                ) as description
-            FROM information_schema.tables t
-            WHERE t.table_schema = $1
-              AND t.table_type IN ('BASE TABLE', 'VIEW')
-            ORDER BY t.table_name
+                n.nspname,
+                c.relname,
+                CASE c.relkind
+                    WHEN 'r' THEN 'BASE TABLE'
+                    WHEN 'v' THEN 'VIEW'
+                    WHEN 'm' THEN 'MATERIALIZED VIEW'
+                    WHEN 'f' THEN 'FOREIGN TABLE'
+                    ELSE 'BASE TABLE'
+                END,
+                c.reltuples::bigint,
+                obj_description(c.oid, 'pg_class')
+            FROM pg_class c
+            JOIN pg_namespace n ON n.oid = c.relnamespace
+            WHERE n.nspname = $1
+              AND c.relkind IN ('r', 'v', 'm', 'f')
+            ORDER BY c.relname
             "#,
         )
         .bind(schema)
         .fetch_all(pool)
         .await?;
 
-        // Also get materialized views
-        let mat_views = sqlx::query_as::<_, (String, String, Option<i64>, Option<String>)>(
-            r#"
-            SELECT
-                schemaname,
-                matviewname,
-                (
-                    SELECT reltuples::bigint
-                    FROM pg_class c
-                    JOIN pg_namespace n ON n.oid = c.relnamespace
-                    WHERE n.nspname = schemaname AND c.relname = matviewname
-                ) as estimated_row_count,
-                obj_description(
-                    (quote_ident(schemaname) || '.' || quote_ident(matviewname))::regclass,
-                    'pg_class'
-                ) as description
-            FROM pg_matviews
-            WHERE schemaname = $1
-            ORDER BY matviewname
-            "#,
-        )
-        .bind(schema)
-        .fetch_all(pool)
-        .await?;
-
-        let mut result: Vec<TableInfo> = tables
+        Ok(rows
             .into_iter()
-            .map(
-                |(schema, name, table_type, estimated_row_count, description)| TableInfo {
-                    schema,
-                    name,
-                    table_type: table_type.into(),
-                    estimated_row_count,
-                    description,
-                },
-            )
-            .collect();
-
-        result.extend(mat_views.into_iter().map(
-            |(schema, name, estimated_row_count, description)| TableInfo {
+            .map(|(schema, name, table_type, estimated_row_count, description)| TableInfo {
                 schema,
                 name,
-                table_type: TableType::MaterializedView,
+                table_type: table_type.into(),
                 estimated_row_count,
                 description,
-            },
-        ));
-
-        result.sort_by(|a, b| a.name.cmp(&b.name));
-        Ok(result)
+            })
+            .collect())
     }
 
     /// Get columns for a table
     pub async fn get_columns(pool: &PgPool, schema: &str, table: &str) -> Result<Vec<ColumnInfo>> {
-        // Get primary key columns
-        let pk_columns: Vec<String> = sqlx::query_scalar(
-            r#"
-            SELECT a.attname
-            FROM pg_index i
-            JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = ANY(i.indkey)
-            WHERE i.indrelid = (quote_ident($1) || '.' || quote_ident($2))::regclass
-              AND i.indisprimary
-            "#,
-        )
-        .bind(schema)
-        .bind(table)
-        .fetch_all(pool)
-        .await?;
-
-        // Get unique columns
-        let unique_columns: Vec<String> = sqlx::query_scalar(
-            r#"
-            SELECT a.attname
-            FROM pg_index i
-            JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = ANY(i.indkey)
-            WHERE i.indrelid = (quote_ident($1) || '.' || quote_ident($2))::regclass
-              AND i.indisunique
-              AND NOT i.indisprimary
-            "#,
-        )
-        .bind(schema)
-        .bind(table)
-        .fetch_all(pool)
-        .await?;
-
-        // Get foreign key columns with their references
-        let fk_info: Vec<(String, String, String, String, String)> = sqlx::query_as(
-            r#"
-            SELECT
-                kcu.column_name,
-                tc.constraint_name,
-                ccu.table_schema AS referenced_schema,
-                ccu.table_name AS referenced_table,
-                ccu.column_name AS referenced_column
-            FROM information_schema.table_constraints tc
-            JOIN information_schema.key_column_usage kcu
-                ON tc.constraint_name = kcu.constraint_name
-                AND tc.table_schema = kcu.table_schema
-            JOIN information_schema.constraint_column_usage ccu
-                ON ccu.constraint_name = tc.constraint_name
-                AND ccu.table_schema = tc.table_schema
-            WHERE tc.constraint_type = 'FOREIGN KEY'
-              AND tc.table_schema = $1
-              AND tc.table_name = $2
-            "#,
-        )
-        .bind(schema)
-        .bind(table)
-        .fetch_all(pool)
-        .await?;
-
-        let fk_map: std::collections::HashMap<String, ForeignKeyInfo> = fk_info
-            .into_iter()
-            .map(
-                |(col, constraint_name, ref_schema, ref_table, ref_col)| {
-                    (
-                        col,
-                        ForeignKeyInfo {
-                            constraint_name,
-                            referenced_schema: ref_schema,
-                            referenced_table: ref_table,
-                            referenced_column: ref_col,
-                        },
-                    )
-                },
-            )
-            .collect();
-
-        // Get column details
-        let columns = sqlx::query_as::<_, (String, String, String, String, Option<String>, Option<i32>, Option<i32>, Option<i32>, i32)>(
-            r#"
-            SELECT
-                c.column_name,
-                c.data_type,
-                c.udt_name,
-                c.is_nullable,
-                c.column_default,
-                c.character_maximum_length,
-                c.numeric_precision,
-                c.numeric_scale,
-                c.ordinal_position
-            FROM information_schema.columns c
-            WHERE c.table_schema = $1
-              AND c.table_name = $2
-            ORDER BY c.ordinal_position
-            "#,
-        )
-        .bind(schema)
-        .bind(table)
-        .fetch_all(pool)
-        .await?;
-
-        // Get column descriptions
-        let descriptions: Vec<(String, Option<String>)> = sqlx::query_as(
-            r#"
-            SELECT
-                a.attname,
-                col_description(a.attrelid, a.attnum)
-            FROM pg_attribute a
-            JOIN pg_class c ON a.attrelid = c.oid
-            JOIN pg_namespace n ON c.relnamespace = n.oid
-            WHERE n.nspname = $1
-              AND c.relname = $2
-              AND a.attnum > 0
-              AND NOT a.attisdropped
-            "#,
-        )
-        .bind(schema)
-        .bind(table)
-        .fetch_all(pool)
-        .await?;
-
-        let desc_map: std::collections::HashMap<String, Option<String>> =
-            descriptions.into_iter().collect();
-
-        // Find all enum types used in this table (USER-DEFINED data_type indicates enum or composite)
-        let enum_udt_names: Vec<String> = columns
-            .iter()
-            .filter(|(_, data_type, _, _, _, _, _, _, _)| data_type == "USER-DEFINED")
-            .map(|(_, _, udt_name, _, _, _, _, _, _)| udt_name.clone())
-            .collect::<std::collections::HashSet<_>>()
-            .into_iter()
-            .collect();
-
-        // Fetch enum values for each enum type
-        let mut enum_values_map: std::collections::HashMap<String, Vec<String>> =
-            std::collections::HashMap::new();
-
-        for udt_name in enum_udt_names {
-            let enum_values: Vec<(String,)> = sqlx::query_as(
+        // Two queries instead of six: one big pg_catalog query for all column metadata,
+        // and one for enum values. Both run concurrently.
+        let (columns_result, enums_result) = tokio::join!(
+            // Single query: columns + PK/unique/FK info + descriptions via pg_catalog
+            sqlx::query_as::<_, (
+                String, String, String, bool, Option<String>,
+                Option<i32>, Option<i32>, Option<i32>, i16,
+                Option<String>, bool, bool,
+                Option<String>, Option<String>, Option<String>, Option<String>,
+            )>(
                 r#"
-                SELECT e.enumlabel
-                FROM pg_enum e
-                JOIN pg_type t ON e.enumtypid = t.oid
-                WHERE t.typname = $1
-                ORDER BY e.enumsortorder
+                WITH rel AS (
+                    SELECT c.oid, c.relname
+                    FROM pg_class c
+                    JOIN pg_namespace n ON n.oid = c.relnamespace
+                    WHERE n.nspname = $1 AND c.relname = $2
+                ),
+                pk_cols AS (
+                    SELECT a.attnum
+                    FROM pg_index i
+                    JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = ANY(i.indkey)
+                    WHERE i.indrelid = (SELECT oid FROM rel) AND i.indisprimary
+                ),
+                uq_cols AS (
+                    SELECT DISTINCT a.attnum
+                    FROM pg_index i
+                    JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = ANY(i.indkey)
+                    WHERE i.indrelid = (SELECT oid FROM rel) AND i.indisunique AND NOT i.indisprimary
+                ),
+                fk_info AS (
+                    SELECT
+                        unnest(con.conkey) AS attnum,
+                        con.conname,
+                        rn.nspname AS ref_schema,
+                        rc.relname AS ref_table,
+                        ra.attname AS ref_column
+                    FROM pg_constraint con
+                    JOIN pg_class rc ON rc.oid = con.confrelid
+                    JOIN pg_namespace rn ON rn.oid = rc.relnamespace
+                    JOIN LATERAL unnest(con.confkey) WITH ORDINALITY AS fk(attnum, ord) ON true
+                    JOIN pg_attribute ra ON ra.attrelid = con.confrelid AND ra.attnum = fk.attnum
+                    WHERE con.conrelid = (SELECT oid FROM rel) AND con.contype = 'f'
+                )
+                SELECT
+                    a.attname,
+                    format_type(a.atttypid, a.atttypmod) AS data_type,
+                    t.typname AS udt_name,
+                    NOT a.attnotnull AS is_nullable,
+                    pg_get_expr(ad.adbin, ad.adrelid) AS default_value,
+                    information_schema._pg_char_max_length(a.atttypid, a.atttypmod)::int4,
+                    information_schema._pg_numeric_precision(a.atttypid, a.atttypmod)::int4,
+                    information_schema._pg_numeric_scale(a.atttypid, a.atttypmod)::int4,
+                    a.attnum,
+                    col_description(a.attrelid, a.attnum) AS description,
+                    (a.attnum IN (SELECT attnum FROM pk_cols)) AS is_pk,
+                    (a.attnum IN (SELECT attnum FROM uq_cols)) AS is_unique,
+                    fk.conname AS fk_constraint,
+                    fk.ref_schema,
+                    fk.ref_table,
+                    fk.ref_column
+                FROM pg_attribute a
+                JOIN pg_type t ON t.oid = a.atttypid
+                LEFT JOIN pg_attrdef ad ON ad.adrelid = a.attrelid AND ad.adnum = a.attnum
+                LEFT JOIN fk_info fk ON fk.attnum = a.attnum
+                WHERE a.attrelid = (SELECT oid FROM rel)
+                  AND a.attnum > 0
+                  AND NOT a.attisdropped
+                ORDER BY a.attnum
                 "#,
             )
-            .bind(&udt_name)
-            .fetch_all(pool)
-            .await
-            .unwrap_or_default();
+            .bind(schema)
+            .bind(table)
+            .fetch_all(pool),
 
-            if !enum_values.is_empty() {
-                enum_values_map.insert(
-                    udt_name,
-                    enum_values.into_iter().map(|(v,)| v).collect(),
-                );
-            }
+            // Enum values (only for types used in this database)
+            sqlx::query_as::<_, (String, String)>(
+                r#"
+                SELECT t.typname, e.enumlabel
+                FROM pg_enum e
+                JOIN pg_type t ON e.enumtypid = t.oid
+                ORDER BY t.typname, e.enumsortorder
+                "#,
+            )
+            .fetch_all(pool),
+        );
+
+        let columns = columns_result?;
+        let all_enums = enums_result.unwrap_or_default();
+
+        // Build enum values map
+        let mut enum_values_map: std::collections::HashMap<String, Vec<String>> =
+            std::collections::HashMap::new();
+        for (type_name, label) in all_enums {
+            enum_values_map.entry(type_name).or_default().push(label);
         }
 
         Ok(columns
             .into_iter()
-            .map(
-                |(
+            .map(|(
+                name, data_type, udt_name, is_nullable, default_value,
+                char_max_len, num_precision, num_scale, ordinal_position,
+                description, is_pk, is_unique,
+                fk_constraint, fk_ref_schema, fk_ref_table, fk_ref_column,
+            )| {
+                let foreign_key_info = fk_constraint.map(|constraint_name| ForeignKeyInfo {
+                    constraint_name,
+                    referenced_schema: fk_ref_schema.unwrap_or_default(),
+                    referenced_table: fk_ref_table.unwrap_or_default(),
+                    referenced_column: fk_ref_column.unwrap_or_default(),
+                });
+                let enum_values = enum_values_map.get(&udt_name).cloned();
+                ColumnInfo {
+                    is_primary_key: is_pk,
+                    is_unique,
+                    is_foreign_key: foreign_key_info.is_some(),
+                    foreign_key_info,
+                    description,
                     name,
                     data_type,
                     udt_name,
                     is_nullable,
                     default_value,
-                    char_max_len,
-                    num_precision,
-                    num_scale,
-                    ordinal_position,
-                )| {
-                    let enum_values = enum_values_map.get(&udt_name).cloned();
-                    ColumnInfo {
-                        is_primary_key: pk_columns.contains(&name),
-                        is_unique: unique_columns.contains(&name),
-                        is_foreign_key: fk_map.contains_key(&name),
-                        foreign_key_info: fk_map.get(&name).cloned(),
-                        description: desc_map.get(&name).cloned().flatten(),
-                        name,
-                        data_type,
-                        udt_name,
-                        is_nullable: is_nullable == "YES",
-                        default_value,
-                        character_maximum_length: char_max_len,
-                        numeric_precision: num_precision,
-                        numeric_scale: num_scale,
-                        ordinal_position,
-                        enum_values,
-                    }
-                },
-            )
+                    character_maximum_length: char_max_len,
+                    numeric_precision: num_precision,
+                    numeric_scale: num_scale,
+                    ordinal_position: ordinal_position as i32,
+                    enum_values,
+                }
+            })
             .collect())
     }
 
@@ -467,21 +365,28 @@ impl SchemaIntrospector {
         let constraints = sqlx::query_as::<_, (String, String, Vec<String>, Option<String>)>(
             r#"
             SELECT
-                tc.constraint_name,
-                tc.constraint_type,
-                ARRAY_AGG(kcu.column_name ORDER BY kcu.ordinal_position) AS columns,
-                pg_get_constraintdef(pgc.oid) AS definition
-            FROM information_schema.table_constraints tc
-            LEFT JOIN information_schema.key_column_usage kcu
-                ON tc.constraint_name = kcu.constraint_name
-                AND tc.table_schema = kcu.table_schema
-            LEFT JOIN pg_constraint pgc
-                ON pgc.conname = tc.constraint_name
-                AND pgc.connamespace = (SELECT oid FROM pg_namespace WHERE nspname = tc.table_schema)
-            WHERE tc.table_schema = $1
-              AND tc.table_name = $2
-            GROUP BY tc.constraint_name, tc.constraint_type, pgc.oid
-            ORDER BY tc.constraint_name
+                con.conname,
+                CASE con.contype
+                    WHEN 'p' THEN 'PRIMARY KEY'
+                    WHEN 'f' THEN 'FOREIGN KEY'
+                    WHEN 'u' THEN 'UNIQUE'
+                    WHEN 'c' THEN 'CHECK'
+                    WHEN 'x' THEN 'EXCLUSION'
+                    ELSE 'CHECK'
+                END,
+                ARRAY(
+                    SELECT a.attname
+                    FROM unnest(con.conkey) WITH ORDINALITY AS k(attnum, ord)
+                    JOIN pg_attribute a ON a.attrelid = con.conrelid AND a.attnum = k.attnum
+                    ORDER BY k.ord
+                ),
+                pg_get_constraintdef(con.oid)
+            FROM pg_constraint con
+            JOIN pg_class c ON c.oid = con.conrelid
+            JOIN pg_namespace n ON n.oid = c.relnamespace
+            WHERE n.nspname = $1
+              AND c.relname = $2
+            ORDER BY con.conname
             "#,
         )
         .bind(schema)
@@ -496,6 +401,111 @@ impl SchemaIntrospector {
                 constraint_type: constraint_type.into(),
                 columns,
                 definition,
+            })
+            .collect())
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SchemaWithTables {
+    pub name: String,
+    pub owner: Option<String>,
+    pub tables: Vec<TableInfo>,
+}
+
+impl SchemaIntrospector {
+    /// Get all schemas with their tables in a single operation
+    pub async fn get_schemas_with_tables(pool: &PgPool) -> Result<Vec<SchemaWithTables>> {
+        // Run all three queries concurrently
+        let (schemas_result, tables_result, mat_views_result) = tokio::join!(
+            Self::get_schemas(pool),
+            // Fetch tables for ALL schemas at once using pg_catalog (faster than information_schema)
+            sqlx::query_as::<_, (String, String, String, Option<i64>, Option<String>)>(
+                r#"
+                SELECT
+                    n.nspname AS table_schema,
+                    c.relname AS table_name,
+                    CASE c.relkind
+                        WHEN 'r' THEN 'BASE TABLE'
+                        WHEN 'v' THEN 'VIEW'
+                        WHEN 'f' THEN 'FOREIGN TABLE'
+                        ELSE 'BASE TABLE'
+                    END AS table_type,
+                    c.reltuples::bigint AS estimated_row_count,
+                    obj_description(c.oid, 'pg_class') AS description
+                FROM pg_class c
+                JOIN pg_namespace n ON n.oid = c.relnamespace
+                WHERE n.nspname NOT IN ('pg_catalog', 'information_schema', 'pg_toast')
+                  AND n.nspname NOT LIKE 'pg_temp_%'
+                  AND n.nspname NOT LIKE 'pg_toast_temp_%'
+                  AND c.relkind IN ('r', 'v', 'f')
+                ORDER BY n.nspname, c.relname
+                "#,
+            )
+            .fetch_all(pool),
+            // Materialized views
+            sqlx::query_as::<_, (String, String, Option<i64>, Option<String>)>(
+                r#"
+                SELECT
+                    n.nspname,
+                    c.relname,
+                    c.reltuples::bigint,
+                    obj_description(c.oid, 'pg_class')
+                FROM pg_class c
+                JOIN pg_namespace n ON n.oid = c.relnamespace
+                WHERE c.relkind = 'm'
+                  AND n.nspname NOT IN ('pg_catalog', 'information_schema', 'pg_toast')
+                ORDER BY n.nspname, c.relname
+                "#,
+            )
+            .fetch_all(pool),
+        );
+
+        let schemas = schemas_result?;
+        let all_tables = tables_result?;
+        let mat_views = mat_views_result.unwrap_or_default();
+
+        // Group tables by schema
+        let mut tables_by_schema: std::collections::HashMap<String, Vec<TableInfo>> =
+            std::collections::HashMap::new();
+
+        for (schema, name, table_type, estimated_row_count, description) in all_tables {
+            tables_by_schema
+                .entry(schema.clone())
+                .or_default()
+                .push(TableInfo {
+                    schema,
+                    name,
+                    table_type: table_type.into(),
+                    estimated_row_count,
+                    description,
+                });
+        }
+
+        for (schema, name, estimated_row_count, description) in mat_views {
+            tables_by_schema
+                .entry(schema.clone())
+                .or_default()
+                .push(TableInfo {
+                    schema,
+                    name,
+                    table_type: TableType::MaterializedView,
+                    estimated_row_count,
+                    description,
+                });
+        }
+
+        // Sort tables within each schema
+        for tables in tables_by_schema.values_mut() {
+            tables.sort_by(|a, b| a.name.cmp(&b.name));
+        }
+
+        Ok(schemas
+            .into_iter()
+            .map(|s| SchemaWithTables {
+                tables: tables_by_schema.remove(&s.name).unwrap_or_default(),
+                name: s.name,
+                owner: s.owner,
             })
             .collect())
     }
