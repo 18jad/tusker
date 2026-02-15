@@ -70,6 +70,9 @@ interface UIState {
     schema: string | null;
   };
 
+  // Create schema modal
+  createSchemaModalOpen: boolean;
+
   // Drop schema modal
   dropSchemaModal: {
     isOpen: boolean;
@@ -125,6 +128,8 @@ interface UIState {
   closeDeleteProjectModal: () => void;
   openSchemaInfoModal: (schema: string) => void;
   closeSchemaInfoModal: () => void;
+  openCreateSchemaModal: () => void;
+  closeCreateSchemaModal: () => void;
   openDropSchemaModal: (schema: string, tableCount?: number) => void;
   closeDropSchemaModal: () => void;
   openExportModal: () => void;
@@ -188,6 +193,7 @@ export const useUIStore = create<UIState>((set, get) => ({
     isOpen: false,
     schema: null,
   },
+  createSchemaModalOpen: false,
   dropSchemaModal: {
     isOpen: false,
     schema: null,
@@ -495,6 +501,9 @@ export const useUIStore = create<UIState>((set, get) => ({
 
   closeSchemaInfoModal: () =>
     set({ schemaInfoModal: { isOpen: false, schema: null } }),
+
+  openCreateSchemaModal: () => set({ createSchemaModalOpen: true }),
+  closeCreateSchemaModal: () => set({ createSchemaModalOpen: false }),
 
   openDropSchemaModal: (schema, tableCount) =>
     set({

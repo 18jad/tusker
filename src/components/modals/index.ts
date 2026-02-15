@@ -6,5 +6,6 @@ export { HelpModal } from "./HelpModal";
 export { SchemaInfoModal } from "./SchemaInfoModal";
 export { DeleteProjectModal } from "./DeleteProjectModal";
 export { DropSchemaModal } from "./DropSchemaModal";
+export { CreateSchemaModal } from "./CreateSchemaModal";
 export { ExportConnectionsModal } from "./ExportConnectionsModal";
 export { ImportConnectionsModal } from "./ImportConnectionsModal";

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import {
   ChevronRight,
   ChevronDown,
@@ -6,6 +6,7 @@ import {
   Table2,
   FolderClosed,
   FolderOpen,
+  FolderPlus,
   Plus,
   PanelLeftClose,
   PanelLeft,
@@ -33,7 +34,7 @@ import { useUIStore } from "../../stores/uiStore";
 import { cn, generateId, PROJECT_COLORS, modKey } from "../../lib/utils";
 import { exportTable } from "../../lib/exportTable";
 import { ContextMenu } from "../ui";
-import { useConnect, useDisconnect } from "../../hooks/useDatabase";
+import { useConnect, useDisconnect, useExecuteSQL } from "../../hooks/useDatabase";
 import type { Schema, Table } from "../../types";
 
 interface TreeItemProps {
@@ -374,6 +375,38 @@ function ProjectTree() {
   const showToast = useUIStore((state) => state.showToast);
   const queryClient = useQueryClient();
   const [isExpanded, setIsExpanded] = useState(true);
+  const [isCreatingSchema, setIsCreatingSchema] = useState(false);
+  const [newSchemaName, setNewSchemaName] = useState("");
+  const [schemaError, setSchemaError] = useState<string | null>(null);
+  const executeSQL = useExecuteSQL();
+  const schemaInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (isCreatingSchema) {
+      // Small delay to let the DOM render
+      requestAnimationFrame(() => schemaInputRef.current?.focus());
+    }
+  }, [isCreatingSchema]);
+
+  const handleCreateSchema = async () => {
+    const trimmed = newSchemaName.trim();
+    if (!trimmed) return;
+    setSchemaError(null);
+    try {
+      await executeSQL.mutateAsync({ sql: `CREATE SCHEMA "${trimmed}"` });
+      setIsCreatingSchema(false);
+      setNewSchemaName("");
+      showToast(`Created schema "${trimmed}"`);
+    } catch (err) {
+      setSchemaError(err instanceof Error ? err.message : "Failed to create schema");
+    }
+  };
+
+  const cancelCreateSchema = () => {
+    setIsCreatingSchema(false);
+    setNewSchemaName("");
+    setSchemaError(null);
+  };
 
   const connect = useConnect();
   const disconnect = useDisconnect();
@@ -438,6 +471,16 @@ function ProjectTree() {
             },
           },
           {
+            label: "Create Schema",
+            icon: <FolderPlus className="w-4 h-4" />,
+            onClick: () => {
+              setIsCreatingSchema(true);
+              setNewSchemaName("");
+              setSchemaError(null);
+              if (!isExpanded) setIsExpanded(true);
+            },
+          },
+          {
             label: "Refresh All Schemas",
             icon: <RefreshCw className="w-4 h-4" />,
             onClick: () => {
@@ -483,6 +526,27 @@ function ProjectTree() {
           level={0}
           isExpanded={isExpanded}
           onToggle={() => setIsExpanded(!isExpanded)}
+          action={
+            connectionStatus === "connected" ? (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsCreatingSchema(true);
+                  setNewSchemaName("");
+                  setSchemaError(null);
+                  if (!isExpanded) setIsExpanded(true);
+                }}
+                className={cn(
+                  "p-0.5 rounded hover:bg-[var(--bg-tertiary)]",
+                  "text-[var(--text-muted)] hover:text-[var(--accent)]",
+                  "transition-colors duration-150"
+                )}
+                title="Create schema"
+              >
+                <Plus className="w-3.5 h-3.5" />
+              </button>
+            ) : undefined
+          }
         >
           {connectionStatus === "connecting" ? (
             <div className="text-xs text-[var(--text-muted)] py-1 pl-12">
@@ -493,14 +557,71 @@ function ProjectTree() {
               <div className="text-xs text-[var(--text-muted)] py-1 pl-12">
                 Loading schemas...
               </div>
-            ) : schemas.length > 0 ? (
-              schemas.map((schema) => (
-                <SchemaTree key={schema.name} schema={schema} level={1} />
-              ))
             ) : (
-              <div className="text-xs text-[var(--text-muted)] py-1 pl-12">
-                No schemas found
-              </div>
+              <>
+                {schemas.length > 0 ? (
+                  schemas.map((schema) => (
+                    <SchemaTree key={schema.name} schema={schema} level={1} />
+                  ))
+                ) : !isCreatingSchema ? (
+                  <div className="text-xs text-[var(--text-muted)] py-1 pl-12">
+                    No schemas found
+                  </div>
+                ) : null}
+                {isCreatingSchema && (
+                  <div className="select-none" ref={(el) => el?.scrollIntoView({ block: "nearest", behavior: "smooth" })}>
+                    <div
+                      className="w-full flex items-center gap-2 h-7 text-sm bg-[var(--bg-tertiary)]"
+                      style={{ paddingLeft: 12 + 1 * 16 }}
+                    >
+                      <span className="w-4 h-4 shrink-0" />
+                      <FolderClosed className="w-4 h-4 text-[var(--warning)] shrink-0" />
+                      <input
+                        ref={schemaInputRef}
+                        type="text"
+                        value={newSchemaName}
+                        onChange={(e) => {
+                          setNewSchemaName(e.target.value);
+                          setSchemaError(null);
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            handleCreateSchema();
+                          } else if (e.key === "Escape") {
+                            cancelCreateSchema();
+                          }
+                        }}
+                        onBlur={() => {
+                          if (!newSchemaName.trim() && !schemaError) {
+                            cancelCreateSchema();
+                          }
+                        }}
+                        placeholder="schema name"
+                        spellCheck={false}
+                        autoComplete="off"
+                        className={cn(
+                          "flex-1 min-w-0 bg-transparent text-sm",
+                          "text-[var(--text-primary)] placeholder:text-[var(--text-muted)]/50",
+                          "focus:outline-none",
+                          schemaError
+                            ? "border-b border-red-500"
+                            : "border-none"
+                        )}
+                      />
+                    </div>
+                    {schemaError && (
+                      <div
+                        className="text-[11px] text-red-400 py-0.5 pr-2 truncate"
+                        style={{ paddingLeft: 12 + 1 * 16 + 24 }}
+                        title={schemaError}
+                      >
+                        {schemaError}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </>
             )
           ) : (
             <div className="text-xs text-[var(--text-muted)] py-1 pl-12">
