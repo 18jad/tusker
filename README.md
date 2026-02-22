@@ -1,7 +1,7 @@
 <p align="center">                                                                      
     <img 
   src="https://github.com/user-attachments/assets/498af48e-be77-46b8-a240-b6ee2bc2016f"   
-  width="128" height="128" alt="Tuskter Icon">                                          
+  width="160" height="160" alt="Tuskter Icon">                                          
   </p>
 
   <h1 align="center">Tusker</h1>
