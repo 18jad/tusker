@@ -15,7 +15,7 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { invoke } from "@tauri-apps/api/core";
-import { Loader2 } from "lucide-react";
+import { Database, Loader2 } from "lucide-react";
 import { toPng } from "html-to-image";
 import { useProjectStore } from "../../stores/projectStore";
 import { useUIStore } from "../../stores/uiStore";
@@ -289,25 +289,58 @@ function DiagramCanvas() {
   }, [schemaNames]);
 
   if (loading) {
+    const progress = loadProgress.total > 0
+      ? Math.round((loadProgress.loaded / loadProgress.total) * 100)
+      : 0;
+
     return (
-      <div className="flex-1 flex flex-col items-center justify-center gap-3 text-[var(--text-muted)]">
-        <Loader2 className="w-6 h-6 animate-spin" />
-        <div className="text-sm">
-          Loading schema diagram...
-          {loadProgress.total > 0 && (
-            <span className="ml-1 tabular-nums">
-              ({loadProgress.loaded}/{loadProgress.total} tables)
+      <div className="h-full flex flex-col items-center justify-center gap-5">
+        <div className="relative">
+          <div className="w-16 h-16 rounded-2xl bg-[var(--accent)]/10 flex items-center justify-center">
+            <Database className="w-7 h-7 text-[var(--accent)]" />
+          </div>
+          <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-[var(--bg-primary)] flex items-center justify-center border border-[var(--border-color)]">
+            <Loader2 className="w-3.5 h-3.5 text-[var(--accent)] animate-spin" />
+          </div>
+        </div>
+        <div className="flex flex-col items-center gap-2">
+          <span className="text-sm font-medium text-[var(--text-primary)]">
+            Building schema diagram
+          </span>
+          {loadProgress.total > 0 ? (
+            <span className="text-xs text-[var(--text-muted)] tabular-nums">
+              Loading table metadata... {loadProgress.loaded} of {loadProgress.total}
+            </span>
+          ) : (
+            <span className="text-xs text-[var(--text-muted)]">
+              Discovering tables...
             </span>
           )}
         </div>
+        {loadProgress.total > 0 && (
+          <div className="w-48">
+            <div className="h-1.5 rounded-full bg-[var(--bg-tertiary)] overflow-hidden">
+              <div
+                className="h-full rounded-full bg-[var(--accent)] transition-all duration-300 ease-out"
+                style={{ width: `${progress}%` }}
+              />
+            </div>
+          </div>
+        )}
       </div>
     );
   }
 
   if (allNodesRef.current.length === 0) {
     return (
-      <div className="flex-1 flex items-center justify-center text-[var(--text-muted)] text-sm">
-        No tables found in the database.
+      <div className="h-full flex flex-col items-center justify-center gap-4">
+        <div className="w-14 h-14 rounded-2xl bg-[var(--bg-tertiary)] flex items-center justify-center">
+          <Database className="w-6 h-6 text-[var(--text-muted)]" />
+        </div>
+        <div className="flex flex-col items-center gap-1">
+          <span className="text-sm font-medium text-[var(--text-primary)]">No tables found</span>
+          <span className="text-xs text-[var(--text-muted)]">This database has no tables to visualize.</span>
+        </div>
       </div>
     );
   }
