@@ -57,15 +57,14 @@ function TableNodeComponent({ data }: NodeProps) {
               col.isForeignKey && "bg-[var(--accent)]/[0.04]",
             )}
           >
-            {/* Target handle for PK columns (left side) */}
-            {col.isPrimaryKey && (
-              <Handle
-                type="target"
-                position={Position.Left}
-                id={`${schema}.${table}-${col.name}-target`}
-                className="!w-2 !h-2 !bg-yellow-500 !border-yellow-600"
-              />
-            )}
+            {/* Target handle for columns that may be FK targets */}
+            <Handle
+              type="target"
+              position={Position.Left}
+              id={`${schema}.${table}-${col.name}-target`}
+              className="!w-2 !h-2 !bg-yellow-500 !border-yellow-600"
+              style={{ opacity: col.isPrimaryKey ? 1 : 0, pointerEvents: 'none' }}
+            />
 
             {/* Icon */}
             <span className="w-4 shrink-0 flex items-center justify-center">

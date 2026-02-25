@@ -1,4 +1,4 @@
-import type { Node, Edge, MarkerType } from "@xyflow/react";
+import { MarkerType, type Node, type Edge } from "@xyflow/react";
 
 // Schema color palette — each schema gets a consistent color
 const SCHEMA_COLORS = [
@@ -100,13 +100,14 @@ export function buildEdges(
 ): Edge<SchemaEdgeData>[] {
   const edges: Edge<SchemaEdgeData>[] = [];
   const edgeIds = new Set<string>();
+  const nodeIds = new Set(nodes.map((n) => n.id));
 
   for (const node of nodes) {
     const data = node.data;
     for (const col of data.columns) {
       if (col.isForeignKey && col.foreignKeyTarget) {
         const targetId = `${col.foreignKeyTarget.schema}.${col.foreignKeyTarget.table}`;
-        if (nodes.some((n) => n.id === targetId)) {
+        if (nodeIds.has(targetId)) {
           const edgeId = `${node.id}.${col.name}->${targetId}.${col.foreignKeyTarget.column}`;
           if (!edgeIds.has(edgeId)) {
             edgeIds.add(edgeId);
@@ -124,7 +125,7 @@ export function buildEdges(
                 schemaColor: data.schemaColor.accent,
               },
               markerEnd: {
-                type: "arrowclosed" as unknown as MarkerType,
+                type: MarkerType.ArrowClosed,
                 width: 16,
                 height: 16,
               },

@@ -90,6 +90,7 @@ function DiagramCanvas() {
     let cancelled = false;
 
     async function loadDiagram() {
+      setLoading(true);
       const allTables: { schema: string; table: string }[] = [];
       for (const schema of schemas) {
         for (const table of schema.tables) {
@@ -175,14 +176,19 @@ function DiagramCanvas() {
       (e) => visibleNodeIds.has(e.source) && visibleNodeIds.has(e.target),
     );
 
+    // Pre-compute connected nodes for hover highlighting
+    const connectedNodeIds = new Set<string>();
+    if (hoveredNodeId) {
+      for (const e of filteredEdges) {
+        if (e.source === hoveredNodeId) connectedNodeIds.add(e.target);
+        if (e.target === hoveredNodeId) connectedNodeIds.add(e.source);
+      }
+    }
+
     const styledNodes = filteredNodes.map((node) => {
       if (!hoveredNodeId) return { ...node, style: { ...node.style, opacity: 1, transition: "opacity 0.2s" } };
       const isHovered = node.id === hoveredNodeId;
-      const isConnected = filteredEdges.some(
-        (e) =>
-          (e.source === hoveredNodeId && e.target === node.id) ||
-          (e.target === hoveredNodeId && e.source === node.id),
-      );
+      const isConnected = connectedNodeIds.has(node.id);
       return {
         ...node,
         style: {
@@ -253,7 +259,7 @@ function DiagramCanvas() {
       if (!flowElement) return;
 
       const dataUrl = await toPng(flowElement, {
-        backgroundColor: "#1a1a2e",
+        backgroundColor: getComputedStyle(document.documentElement).getPropertyValue('--bg-primary').trim() || "#1a1a2e",
         quality: 1,
       });
 
