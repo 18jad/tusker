@@ -441,3 +441,41 @@ button:not(:disabled) {
 .react-datepicker-popper {
   z-index: 100 !important;
 }
+
+/* React Flow dark theme overrides */
+.react-flow {
+  --xy-background-color: var(--bg-primary);
+  --xy-node-border-radius: 8px;
+}
+
+.react-flow__minimap {
+  border-radius: 8px;
+}
+
+.react-flow__controls {
+  border-radius: 8px;
+}
+
+.react-flow__controls button {
+  border-radius: 4px;
+}
+
+.react-flow__controls button:hover {
+  background-color: var(--bg-tertiary);
+}
+
+.react-flow__attribution {
+  display: none;
+}
+
+.react-flow__edge-path {
+  transition: stroke 0.15s, stroke-width 0.15s;
+}
+
+.react-flow__node {
+  cursor: pointer;
+}
+
+.react-flow__minimap-mask {
+  fill: rgba(0, 0, 0, 0.6);
+}
