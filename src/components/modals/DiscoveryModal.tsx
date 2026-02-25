@@ -320,7 +320,7 @@ export function DiscoveryModal() {
             ssl: false,
           },
           settings: {
-            instantCommit: false,
+            instantCommit: true,
             readOnly: false,
           },
           createdAt: new Date().toISOString(),
@@ -357,6 +357,11 @@ export function DiscoveryModal() {
   const hasSelectedDbs =
     databases.filter((db) => selected.has(dbKey(db)) && !db.already_imported)
       .length > 0;
+  const canImport =
+    hasSelectedDbs &&
+    Array.from(needPasswordServers).every(
+      (sk) => passwords[sk] && passwords[sk].length > 0
+    );
 
   return (
     <Modal
@@ -614,7 +619,7 @@ export function DiscoveryModal() {
               {databases.length > 0 && (
                 <button
                   onClick={handleImport}
-                  disabled={!hasSelectedDbs}
+                  disabled={!canImport}
                   className={cn(
                     "flex-1 h-9 px-4 rounded-lg text-sm font-medium",
                     "flex items-center justify-center gap-2",

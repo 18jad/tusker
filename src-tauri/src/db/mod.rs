@@ -17,7 +17,7 @@ pub use data::{
     InsertRequest, MigrationOperations, MigrationRequest, MigrationResult, PaginatedResult,
     QueryResult, UpdateRequest,
 };
-pub use discovery::{AuthStatus, DiscoveredDatabase, DiscoveredServer};
+pub use discovery::{AuthStatus, DiscoveredDatabase};
 pub use schema::{
     ColumnInfo, ConstraintInfo, ConstraintType, ForeignKeyInfo, IndexInfo, SchemaInfo,
     SchemaIntrospector, SchemaWithTables, TableInfo, TableType,
