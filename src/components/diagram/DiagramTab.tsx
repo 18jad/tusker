@@ -72,6 +72,7 @@ function DiagramCanvas() {
 
   const allNodesRef = useRef<Node<TableNodeData>[]>([]);
   const allEdgesRef = useRef<Edge[]>([]);
+  const loadedRef = useRef(false);
 
   const schemaNames = useMemo(() => schemas.map((s) => s.name), [schemas]);
 
@@ -79,20 +80,10 @@ function DiagramCanvas() {
     setVisibleSchemas(new Set(schemaNames));
   }, [schemaNames]);
 
-  // Stable refs for functions that change identity across renders
-  const setNodesRef = useRef(setNodes);
-  const setEdgesRef = useRef(setEdges);
-  const fitViewRef = useRef(fitView);
-  const getLayoutRef = useRef(getLayoutedElements);
+  // Fetch all column data and build diagram — runs once when schemas are available
   useEffect(() => {
-    setNodesRef.current = setNodes;
-    setEdgesRef.current = setEdges;
-    fitViewRef.current = fitView;
-    getLayoutRef.current = getLayoutedElements;
-  });
+    if (loadedRef.current) return; // Already loaded, skip
 
-  // Fetch all column data and build diagram
-  useEffect(() => {
     const connectionId = getCurrentConnectionId();
     if (!connectionId || schemas.length === 0) {
       setLoading(false);
@@ -102,9 +93,10 @@ function DiagramCanvas() {
     let cancelled = false;
 
     async function loadDiagram() {
-      setLoading(true);
+      const currentSchemas = schemas;
+      const currentSchemaNames = currentSchemas.map((s) => s.name);
       const allTables: { schema: string; table: string }[] = [];
-      for (const schema of schemas) {
+      for (const schema of currentSchemas) {
         for (const table of schema.tables) {
           allTables.push({ schema: schema.name, table: table.name });
         }
@@ -144,28 +136,31 @@ function DiagramCanvas() {
 
       if (cancelled) return;
 
-      const schemaColorMap = getSchemaColorMap(schemaNames);
-      const builtNodes = buildNodes(schemas, columnsMap, schemaColorMap);
+      const schemaColorMap = getSchemaColorMap(currentSchemaNames);
+      const builtNodes = buildNodes(currentSchemas, columnsMap, schemaColorMap);
       const builtEdges = buildEdges(builtNodes);
 
-      const { nodes: layoutedNodes, edges: layoutedEdges } = getLayoutRef.current(
+      const { nodes: layoutedNodes, edges: layoutedEdges } = getLayoutedElements(
         builtNodes,
         builtEdges,
       );
 
+      if (cancelled) return;
+
+      loadedRef.current = true;
       allNodesRef.current = layoutedNodes;
       allEdgesRef.current = layoutedEdges;
 
-      setNodesRef.current(layoutedNodes);
-      setEdgesRef.current(layoutedEdges);
+      setNodes(layoutedNodes);
+      setEdges(layoutedEdges);
       setLoading(false);
 
-      setTimeout(() => fitViewRef.current({ padding: 0.1 }), 100);
+      setTimeout(() => fitView({ padding: 0.1 }), 100);
     }
 
     loadDiagram();
     return () => { cancelled = true; };
-  }, [schemas, schemaNames]);
+  }); // No deps — runs every render but bails early via loadedRef
 
   // Apply search, schema filters, and hover highlighting
   useEffect(() => {
