@@ -79,6 +79,18 @@ function DiagramCanvas() {
     setVisibleSchemas(new Set(schemaNames));
   }, [schemaNames]);
 
+  // Stable refs for functions that change identity across renders
+  const setNodesRef = useRef(setNodes);
+  const setEdgesRef = useRef(setEdges);
+  const fitViewRef = useRef(fitView);
+  const getLayoutRef = useRef(getLayoutedElements);
+  useEffect(() => {
+    setNodesRef.current = setNodes;
+    setEdgesRef.current = setEdges;
+    fitViewRef.current = fitView;
+    getLayoutRef.current = getLayoutedElements;
+  });
+
   // Fetch all column data and build diagram
   useEffect(() => {
     const connectionId = getCurrentConnectionId();
@@ -136,7 +148,7 @@ function DiagramCanvas() {
       const builtNodes = buildNodes(schemas, columnsMap, schemaColorMap);
       const builtEdges = buildEdges(builtNodes);
 
-      const { nodes: layoutedNodes, edges: layoutedEdges } = getLayoutedElements(
+      const { nodes: layoutedNodes, edges: layoutedEdges } = getLayoutRef.current(
         builtNodes,
         builtEdges,
       );
@@ -144,16 +156,16 @@ function DiagramCanvas() {
       allNodesRef.current = layoutedNodes;
       allEdgesRef.current = layoutedEdges;
 
-      setNodes(layoutedNodes);
-      setEdges(layoutedEdges);
+      setNodesRef.current(layoutedNodes);
+      setEdgesRef.current(layoutedEdges);
       setLoading(false);
 
-      setTimeout(() => fitView({ padding: 0.1 }), 100);
+      setTimeout(() => fitViewRef.current({ padding: 0.1 }), 100);
     }
 
     loadDiagram();
     return () => { cancelled = true; };
-  }, [schemas, schemaNames, getLayoutedElements, setNodes, setEdges, fitView]);
+  }, [schemas, schemaNames]);
 
   // Apply search, schema filters, and hover highlighting
   useEffect(() => {
