@@ -468,6 +468,12 @@ button:not(:disabled) {
   display: none;
 }
 
+@keyframes dashFlow {
+  to {
+    stroke-dashoffset: -9;
+  }
+}
+
 .react-flow__edge-path {
   transition: stroke 0.15s, stroke-width 0.15s;
 }

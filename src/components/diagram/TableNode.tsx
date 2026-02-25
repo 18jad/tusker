@@ -95,7 +95,10 @@ function TableNodeComponent({ data }: NodeProps) {
             <span className="flex-1" />
 
             {/* Data type */}
-            <span className="font-mono text-[11px] text-[var(--text-muted)] truncate max-w-[100px]">
+            <span
+              className="font-mono text-[11px] text-[var(--text-muted)] truncate max-w-[100px]"
+              title={col.enumValues?.length ? `Enum: ${col.enumValues.join(", ")}` : undefined}
+            >
               {col.dataType}
             </span>
 

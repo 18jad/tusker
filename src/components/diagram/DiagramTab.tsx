@@ -351,6 +351,10 @@ function DiagramCanvas() {
             nodeStrokeWidth={3}
             zoomable
             pannable
+            nodeColor={(node) => {
+              const data = node.data as TableNodeData;
+              return data?.schemaColor?.accent ?? "#6b7280";
+            }}
             className="!bg-[var(--bg-secondary)] !border-[var(--border-color)]"
           />
         </ReactFlow>

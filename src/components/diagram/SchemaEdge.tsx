@@ -48,10 +48,12 @@ function SchemaEdgeComponent({
         markerEnd={markerEnd}
         style={{
           ...style,
-          stroke: hovered ? "var(--accent)" : "var(--text-muted)",
+          stroke: hovered ? "var(--accent)" : (edgeData?.schemaColor || "var(--text-muted)"),
           strokeWidth: hovered ? 2 : 1,
           opacity: hovered ? 1 : 0.4,
           transition: "stroke 0.15s, stroke-width 0.15s, opacity 0.15s",
+          strokeDasharray: hovered ? "6 3" : "none",
+          animation: hovered ? "dashFlow 0.5s linear infinite" : "none",
         }}
       />
       {hovered && edgeData && (

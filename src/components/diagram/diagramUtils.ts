@@ -55,6 +55,7 @@ export interface SchemaEdgeData {
   constraintName: string;
   sourceColumn: string;
   targetColumn: string;
+  schemaColor: string;
   [key: string]: unknown;
 }
 
@@ -120,6 +121,7 @@ export function buildEdges(
                 constraintName: "",
                 sourceColumn: col.name,
                 targetColumn: col.foreignKeyTarget.column,
+                schemaColor: data.schemaColor.accent,
               },
               markerEnd: {
                 type: "arrowclosed" as unknown as MarkerType,

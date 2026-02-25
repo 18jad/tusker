@@ -37,6 +37,22 @@ export function useAutoLayout() {
         g.setEdge(edge.source, edge.target);
       }
 
+      // Add same-schema clustering edges for dagre layout
+      const tablesBySchema = new Map<string, string[]>();
+      for (const node of nodes) {
+        const data = node.data as TableNodeData;
+        if (!tablesBySchema.has(data.schema)) {
+          tablesBySchema.set(data.schema, []);
+        }
+        tablesBySchema.get(data.schema)!.push(node.id);
+      }
+
+      for (const [, tableIds] of tablesBySchema) {
+        for (let i = 0; i < tableIds.length - 1; i++) {
+          g.setEdge(tableIds[i], tableIds[i + 1], { weight: 0.1 });
+        }
+      }
+
       dagre.layout(g);
 
       const layoutedNodes = nodes.map((node) => {
