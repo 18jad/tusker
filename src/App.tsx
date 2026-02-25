@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AppLayout } from "./components/layout";
-import { ProjectModal, DeleteTableModal, TruncateTableModal, ExportTableModal, HelpModal, SchemaInfoModal, DeleteProjectModal, DropSchemaModal, ExportConnectionsModal, ImportConnectionsModal } from "./components/modals";
+import { ProjectModal, DeleteTableModal, TruncateTableModal, ExportTableModal, HelpModal, SchemaInfoModal, DeleteProjectModal, DropSchemaModal, ExportConnectionsModal, ImportConnectionsModal, DiscoveryModal } from "./components/modals";
 import { CommandPalette, ProjectSpotlight, Toast } from "./components/ui";
 import { OnboardingPage } from "./components/OnboardingOverlay";
 import { useOnboardingStore } from "./stores";
@@ -36,6 +36,7 @@ function App() {
       <DropSchemaModal />
       <ExportConnectionsModal />
       <ImportConnectionsModal />
+      <DiscoveryModal />
       <CommandPalette />
       <ProjectSpotlight />
       <Toast />

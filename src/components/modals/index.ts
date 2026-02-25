@@ -9,3 +9,4 @@ export { DropSchemaModal } from "./DropSchemaModal";
 export { CreateSchemaModal } from "./CreateSchemaModal";
 export { ExportConnectionsModal } from "./ExportConnectionsModal";
 export { ImportConnectionsModal } from "./ImportConnectionsModal";
+export { DiscoveryModal } from "./DiscoveryModal";
