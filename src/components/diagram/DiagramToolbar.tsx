@@ -3,12 +3,16 @@ import {
   Search,
   RotateCcw,
   Maximize2,
-  Camera,
+  Download,
   ChevronDown,
   Check,
   X,
+  Image,
+  FileCode,
 } from "lucide-react";
 import { cn } from "../../lib/utils";
+
+export type ExportFormat = "png" | "svg";
 
 interface DiagramToolbarProps {
   schemaNames: string[];
@@ -19,7 +23,7 @@ interface DiagramToolbarProps {
   onSearchChange: (query: string) => void;
   onResetLayout: () => void;
   onFitView: () => void;
-  onExportPng: () => void;
+  onExport: (format: ExportFormat) => void;
 }
 
 export function DiagramToolbar({
@@ -31,22 +35,27 @@ export function DiagramToolbar({
   onSearchChange,
   onResetLayout,
   onFitView,
-  onExportPng,
+  onExport,
 }: DiagramToolbarProps) {
   const [filterOpen, setFilterOpen] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
   const filterRef = useRef<HTMLDivElement>(null);
+  const exportRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
       if (filterRef.current && !filterRef.current.contains(e.target as Node)) {
         setFilterOpen(false);
       }
+      if (exportRef.current && !exportRef.current.contains(e.target as Node)) {
+        setExportOpen(false);
+      }
     }
-    if (filterOpen) {
+    if (filterOpen || exportOpen) {
       document.addEventListener("mousedown", handleClick);
       return () => document.removeEventListener("mousedown", handleClick);
     }
-  }, [filterOpen]);
+  }, [filterOpen, exportOpen]);
 
   const allVisible = visibleSchemas.size === schemaNames.length;
 
@@ -150,17 +159,58 @@ export function DiagramToolbar({
       >
         <Maximize2 className="w-4 h-4" />
       </button>
-      <button
-        onClick={onExportPng}
-        title="Export as PNG"
-        className={cn(
-          "p-1.5 rounded-lg text-[var(--text-muted)]",
-          "hover:text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)]",
-          "transition-colors",
+
+      {/* Export dropdown */}
+      <div ref={exportRef} className="relative">
+        <button
+          onClick={() => setExportOpen(!exportOpen)}
+          title="Export diagram"
+          className={cn(
+            "flex items-center gap-1 p-1.5 rounded-lg text-[var(--text-muted)]",
+            "hover:text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)]",
+            "transition-colors",
+          )}
+        >
+          <Download className="w-4 h-4" />
+          <ChevronDown className="w-3 h-3" />
+        </button>
+        {exportOpen && (
+          <div className="absolute top-full mt-1 right-0 z-50 w-44 rounded-lg border border-[var(--border-color)] bg-[var(--bg-secondary)] shadow-xl py-1">
+            <button
+              onClick={() => {
+                setExportOpen(false);
+                onExport("svg");
+              }}
+              className={cn(
+                "w-full flex items-center gap-2.5 px-3 py-1.5 text-xs text-left",
+                "hover:bg-[var(--bg-tertiary)] transition-colors text-[var(--text-secondary)]",
+              )}
+            >
+              <FileCode className="w-3.5 h-3.5" />
+              <div>
+                <div className="text-[var(--text-primary)]">SVG</div>
+                <div className="text-[10px] text-[var(--text-muted)]">Vector, best quality</div>
+              </div>
+            </button>
+            <button
+              onClick={() => {
+                setExportOpen(false);
+                onExport("png");
+              }}
+              className={cn(
+                "w-full flex items-center gap-2.5 px-3 py-1.5 text-xs text-left",
+                "hover:bg-[var(--bg-tertiary)] transition-colors text-[var(--text-secondary)]",
+              )}
+            >
+              <Image className="w-3.5 h-3.5" />
+              <div>
+                <div className="text-[var(--text-primary)]">PNG</div>
+                <div className="text-[10px] text-[var(--text-muted)]">Raster, 2x resolution</div>
+              </div>
+            </button>
+          </div>
         )}
-      >
-        <Camera className="w-4 h-4" />
-      </button>
+      </div>
     </div>
   );
 }
