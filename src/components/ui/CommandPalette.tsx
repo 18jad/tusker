@@ -22,7 +22,7 @@ const CATEGORY_ICONS: Record<CommandCategory, React.ReactNode> = {
 };
 
 export function CommandPalette() {
-  const { commandPaletteOpen, toggleCommandPalette, openProjectModal, addTab } =
+  const { commandPaletteOpen, toggleCommandPalette, openProjectModal, addTab, addDiagramTab } =
     useUIStore();
   const { projects, schemas, connectionStatus, setActiveProject } = useProjectStore();
 
@@ -56,6 +56,13 @@ export function CommandPalette() {
             queryContent: "",
           }),
         category: "query",
+      });
+      cmds.push({
+        id: "schema-diagram",
+        label: "Open Schema Diagram",
+        shortcut: "\u2318\u21E7D",
+        action: () => addDiagramTab(),
+        category: "navigation",
       });
     }
 
@@ -95,7 +102,7 @@ export function CommandPalette() {
     });
 
     return cmds;
-  }, [projects, schemas, connectionStatus, openProjectModal, addTab, setActiveProject]);
+  }, [projects, schemas, connectionStatus, openProjectModal, addTab, addDiagramTab, setActiveProject]);
 
   const filteredCommands = useMemo(() => {
     if (!query.trim()) return commands;

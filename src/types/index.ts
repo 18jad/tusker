@@ -117,7 +117,7 @@ export interface FilterCondition {
 // Tab types
 export interface Tab {
   id: string;
-  type: "table" | "query" | "create-table" | "edit-table" | "import-data" | "history" | "staged-changes";
+  type: "table" | "query" | "create-table" | "edit-table" | "import-data" | "history" | "staged-changes" | "diagram";
   title: string;
   schema?: string;
   table?: string;

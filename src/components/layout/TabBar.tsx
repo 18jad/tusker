@@ -1,5 +1,5 @@
 import { useRef, useState, useEffect, useCallback } from "react";
-import { X, Table2, FileCode, ChevronLeft, ChevronRight, Database, FileUp, Pencil, XCircle, Pin, PinOff } from "lucide-react";
+import { X, Table2, FileCode, ChevronLeft, ChevronRight, Database, FileUp, Pencil, XCircle, Pin, PinOff, Workflow } from "lucide-react";
 import { useUIStore } from "../../stores/uiStore";
 import { ContextMenu } from "../ui/ContextMenu";
 import { cn } from "../../lib/utils";
@@ -15,6 +15,8 @@ function getTabIcon(type: Tab["type"]) {
       return Database;
     case "import-data":
       return FileUp;
+    case "diagram":
+      return Workflow;
     default:
       return FileCode;
   }

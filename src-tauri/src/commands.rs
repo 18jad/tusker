@@ -1,10 +1,10 @@
 use crate::db::{
     BulkInsertRequest, ColumnInfo, Commit, CommitDetail, CommitStore, ConnectionConfig,
     ConnectionInfo, ConnectionManager, ConstraintInfo, CredentialStorage, DataOperations,
-    DeleteRequest, FilterCondition, IndexInfo, InsertRequest, MigrationOperations,
-    MigrationRequest, MigrationResult, PaginatedResult, QueryResult, SaveCommitChange,
-    SaveCommitRequest, SchemaInfo, SchemaIntrospector, SchemaWithTables, SslMode, TableInfo,
-    UpdateRequest,
+    DeleteRequest, DiscoveredDatabase, FilterCondition, IndexInfo, InsertRequest,
+    MigrationOperations, MigrationRequest, MigrationResult, PaginatedResult, QueryResult,
+    SaveCommitChange, SaveCommitRequest, SchemaInfo, SchemaIntrospector, SchemaWithTables,
+    SslMode, TableColumnsInfo, TableInfo, UpdateRequest,
 };
 use crate::db::export::{self, ExportedProject};
 use crate::error::Result;
@@ -255,6 +255,17 @@ pub async fn get_columns(
     let connection_manager = state.connection_manager.read().await;
     let pool = connection_manager.get_pool(&connection_id).await?;
     SchemaIntrospector::get_columns(&pool, &schema, &table).await
+}
+
+#[tauri::command]
+pub async fn get_all_columns(
+    state: State<'_, AppState>,
+    connection_id: String,
+    schemas: Vec<String>,
+) -> Result<Vec<TableColumnsInfo>> {
+    let connection_manager = state.connection_manager.read().await;
+    let pool = connection_manager.get_pool(&connection_id).await?;
+    SchemaIntrospector::get_all_columns(&pool, &schemas).await
 }
 
 #[tauri::command]
@@ -624,4 +635,32 @@ pub fn import_connections(
     }
 
     Ok(imported)
+}
+
+// ============================================================================
+// Discovery Commands
+// ============================================================================
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct ExistingConnection {
+    pub host: String,
+    pub port: u16,
+    pub database: String,
+}
+
+#[tauri::command]
+pub async fn discover_local_databases(
+    existing: Vec<ExistingConnection>,
+) -> Result<Vec<DiscoveredDatabase>> {
+    let existing_tuples: Vec<(String, u16, String)> = existing
+        .into_iter()
+        .map(|e| (e.host, e.port, e.database))
+        .collect();
+
+    Ok(crate::db::discovery::discover_local_databases(existing_tuples).await)
+}
+
+#[tauri::command]
+pub fn get_current_username() -> String {
+    crate::db::discovery::get_current_username()
 }

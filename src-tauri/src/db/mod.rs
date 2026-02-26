@@ -1,6 +1,7 @@
 pub mod commit_store;
 pub mod connection;
 pub mod data;
+pub mod discovery;
 pub mod export;
 pub mod schema;
 
@@ -16,7 +17,8 @@ pub use data::{
     InsertRequest, MigrationOperations, MigrationRequest, MigrationResult, PaginatedResult,
     QueryResult, UpdateRequest,
 };
+pub use discovery::{AuthStatus, DiscoveredDatabase};
 pub use schema::{
     ColumnInfo, ConstraintInfo, ConstraintType, ForeignKeyInfo, IndexInfo, SchemaInfo,
-    SchemaIntrospector, SchemaWithTables, TableInfo, TableType,
+    SchemaIntrospector, SchemaWithTables, TableColumnsInfo, TableInfo, TableType,
 };

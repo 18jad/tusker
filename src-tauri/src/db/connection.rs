@@ -77,6 +77,17 @@ impl ConnectionConfig {
             self.ssl_mode
         )
     }
+
+    pub fn connection_string_no_password(&self) -> String {
+        format!(
+            "postgres://{}@{}:{}/{}?sslmode={}",
+            urlencoding::encode(&self.username),
+            self.host,
+            self.port,
+            urlencoding::encode(&self.database),
+            self.ssl_mode
+        )
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -111,7 +122,11 @@ impl ConnectionManager {
     }
 
     pub async fn connect(&self, config: ConnectionConfig, password: &str) -> Result<String> {
-        let connection_string = config.connection_string(password);
+        let connection_string = if password.is_empty() {
+            config.connection_string_no_password()
+        } else {
+            config.connection_string(password)
+        };
         let connection_id = config.id.clone();
 
         // Check if already connected
@@ -177,7 +192,11 @@ impl ConnectionManager {
     }
 
     pub async fn test_connection(config: &ConnectionConfig, password: &str) -> Result<()> {
-        let connection_string = config.connection_string(password);
+        let connection_string = if password.is_empty() {
+            config.connection_string_no_password()
+        } else {
+            config.connection_string(password)
+        };
 
         let pool = PgPoolOptions::new()
             .max_connections(1)

@@ -26,6 +26,7 @@ import {
   ArrowLeftRight,
   Info,
   Pencil,
+  Workflow,
 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useProjectStore } from "../../stores/projectStore";
@@ -123,6 +124,7 @@ function SchemaTree({ schema, level }: SchemaTreeProps) {
   const addImportDataTab = useUIStore((state) => state.addImportDataTab);
   const openSchemaInfoModal = useUIStore((state) => state.openSchemaInfoModal);
   const openDropSchemaModal = useUIStore((state) => state.openDropSchemaModal);
+  const addDiagramTab = useUIStore((state) => state.addDiagramTab);
   const showToast = useUIStore((state) => state.showToast);
   const isExpanded = useUIStore((state) => state.expandedSchemas.has(schema.name));
   const toggleSchemaExpanded = useUIStore((state) => state.toggleSchemaExpanded);
@@ -159,6 +161,11 @@ function SchemaTree({ schema, level }: SchemaTreeProps) {
           label: "Schema Info",
           icon: <Info className="w-4 h-4" />,
           onClick: () => openSchemaInfoModal(schema.name),
+        },
+        {
+          label: "Schema Diagram",
+          icon: <Workflow className="w-4 h-4" />,
+          onClick: () => addDiagramTab(schema.name),
         },
         {
           type: "separator" as const,
@@ -373,6 +380,7 @@ function ProjectTree() {
   const openDeleteProjectModal = useUIStore((state) => state.openDeleteProjectModal);
   const toggleProjectSpotlight = useUIStore((state) => state.toggleProjectSpotlight);
   const showToast = useUIStore((state) => state.showToast);
+  const addDiagramTab = useUIStore((state) => state.addDiagramTab);
   const queryClient = useQueryClient();
   const [isExpanded, setIsExpanded] = useState(true);
   const [isCreatingSchema, setIsCreatingSchema] = useState(false);
@@ -470,6 +478,15 @@ function ProjectTree() {
               showToast(`Copied "${activeProject.connection.database}" to clipboard`);
             },
           },
+          ...(connectionStatus === "connected"
+            ? [
+                {
+                  label: "Schema Diagram",
+                  icon: <Workflow className="w-4 h-4" />,
+                  onClick: () => addDiagramTab(),
+                },
+              ]
+            : []),
           {
             label: "Create Schema",
             icon: <FolderPlus className="w-4 h-4" />,

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Plus, Pencil, Trash2, Download, Upload, Loader2, Check, ArrowRight } from "lucide-react";
+import { Plus, Pencil, Trash2, Download, Upload, Loader2, Check, ArrowRight, Search } from "lucide-react";
 import { getVersion } from "@tauri-apps/api/app";
 import { useProjectStore } from "../../stores/projectStore";
 import { useUIStore } from "../../stores/uiStore";
@@ -209,6 +209,7 @@ export function HomePage() {
   const openProjectModal = useUIStore((s) => s.openProjectModal);
   const openExportModal = useUIStore((s) => s.openExportModal);
   const openImportModal = useUIStore((s) => s.openImportModal);
+  const openDiscoveryModal = useUIStore((s) => s.openDiscoveryModal);
 
   const hasProjects = projects.length > 0;
 
@@ -248,6 +249,18 @@ export function HomePage() {
             </h2>
 
             <div className="flex items-center gap-2">
+              <button
+                onClick={openDiscoveryModal}
+                className={cn(
+                  "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium",
+                  "text-[var(--text-secondary)] hover:text-[var(--text-primary)]",
+                  "hover:bg-[var(--bg-tertiary)]",
+                  "transition-colors"
+                )}
+              >
+                <Search className="w-3.5 h-3.5" />
+                Auto-Detect
+              </button>
               <button
                 onClick={openImportModal}
                 className={cn(

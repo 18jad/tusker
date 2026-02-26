@@ -70,6 +70,7 @@ pub fn run() {
             commands::get_schemas_with_tables,
             commands::get_tables,
             commands::get_columns,
+            commands::get_all_columns,
             commands::get_row_count,
             commands::get_indexes,
             commands::get_constraints,
@@ -90,6 +91,9 @@ pub fn run() {
             // Export/Import commands
             commands::export_connections,
             commands::import_connections,
+            // Discovery commands
+            commands::discover_local_databases,
+            commands::get_current_username,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

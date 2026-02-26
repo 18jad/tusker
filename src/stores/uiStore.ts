@@ -84,6 +84,9 @@ interface UIState {
   exportModalOpen: boolean;
   importModalOpen: boolean;
 
+  // Discovery modal
+  discoveryModalOpen: boolean;
+
   // Help modal
   helpModalOpen: boolean;
 
@@ -121,6 +124,7 @@ interface UIState {
   addQueryTab: (initialSql?: string) => void;
   addHistoryTab: () => void;
   addStagedChangesTab: () => void;
+  addDiagramTab: (schema?: string) => void;
   reorderTabs: (fromIndex: number, toIndex: number) => void;
   pinTab: (id: string) => void;
   unpinTab: (id: string) => void;
@@ -136,6 +140,8 @@ interface UIState {
   closeExportModal: () => void;
   openImportModal: () => void;
   closeImportModal: () => void;
+  openDiscoveryModal: () => void;
+  closeDiscoveryModal: () => void;
   openHelpModal: () => void;
   closeHelpModal: () => void;
   showToast: (message: string, type?: "success" | "error" | "info") => void;
@@ -201,6 +207,7 @@ export const useUIStore = create<UIState>((set, get) => ({
   },
   exportModalOpen: false,
   importModalOpen: false,
+  discoveryModalOpen: false,
   helpModalOpen: false,
   toasts: [],
   theme: "dark",
@@ -461,6 +468,26 @@ export const useUIStore = create<UIState>((set, get) => ({
       };
     }),
 
+  addDiagramTab: (schema?: string) =>
+    set((state) => {
+      const existing = state.tabs.find(
+        (t) => t.type === "diagram" && t.schema === schema,
+      );
+      if (existing) {
+        return { activeTabId: existing.id };
+      }
+      const newTab: Tab = {
+        id: `diagram-${Date.now()}`,
+        type: "diagram",
+        title: schema ? `${schema} Diagram` : "Schema Diagram",
+        schema,
+      };
+      return {
+        tabs: [...state.tabs, newTab],
+        activeTabId: newTab.id,
+      };
+    }),
+
   reorderTabs: (fromIndex, toIndex) =>
     set((state) => {
       if (fromIndex === toIndex) return state;
@@ -527,6 +554,8 @@ export const useUIStore = create<UIState>((set, get) => ({
   closeExportModal: () => set({ exportModalOpen: false }),
   openImportModal: () => set({ importModalOpen: true }),
   closeImportModal: () => set({ importModalOpen: false }),
+  openDiscoveryModal: () => set({ discoveryModalOpen: true }),
+  closeDiscoveryModal: () => set({ discoveryModalOpen: false }),
 
   openHelpModal: () => set({ helpModalOpen: true }),
 

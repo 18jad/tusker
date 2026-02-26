@@ -40,6 +40,7 @@ export function useGlobalKeyboardShortcuts() {
   const closeTab = useUIStore((state) => state.closeTab);
   const addCreateTableTab = useUIStore((state) => state.addCreateTableTab);
   const addQueryTab = useUIStore((state) => state.addQueryTab);
+  const addDiagramTab = useUIStore((state) => state.addDiagramTab);
 
   // Get state inside handlers to avoid stale closures
   const getActiveTabId = () => useUIStore.getState().activeTabId;
@@ -109,6 +110,27 @@ export function useGlobalKeyboardShortcuts() {
       handler: () => {
         if (getConnectionStatus() === "connected") {
           addQueryTab();
+        }
+      },
+    },
+    // Cmd/Ctrl+Shift+D - Open schema diagram (only when connected)
+    {
+      key: "d",
+      meta: true,
+      shift: true,
+      handler: () => {
+        if (getConnectionStatus() === "connected") {
+          addDiagramTab();
+        }
+      },
+    },
+    {
+      key: "d",
+      ctrl: true,
+      shift: true,
+      handler: () => {
+        if (getConnectionStatus() === "connected") {
+          addDiagramTab();
         }
       },
     },

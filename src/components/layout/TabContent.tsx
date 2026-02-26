@@ -68,6 +68,7 @@ import { ImportDataTab } from "../tabs/ImportDataTab";
 import { QueryTab } from "../tabs/QueryTab";
 import { CommitHistoryTab } from "../tabs/CommitHistoryTab";
 import { StagedChangesTab } from "../tabs/StagedChangesTab";
+import { DiagramTab } from "../diagram";
 import type { CellValue, Row, Column, Tab, SortColumn, FilterCondition } from "../../types";
 
 const EMPTY_SORTS: SortColumn[] = [];
@@ -3881,6 +3882,8 @@ export function TabContent() {
           content = <CommitHistoryTab key={tab.id} tab={tab} />;
         } else if (tab.type === "staged-changes") {
           content = <StagedChangesTab key={tab.id} tab={tab} />;
+        } else if (tab.type === "diagram") {
+          content = <DiagramTab key={tab.id} schema={tab.schema} />;
         }
 
         if (!content) return null;
