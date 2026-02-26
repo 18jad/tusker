@@ -9,20 +9,25 @@ import {
   useEdgesState,
   useReactFlow,
   ReactFlowProvider,
+  getNodesBounds,
+  getViewportForBounds,
   type Node,
   type Edge,
   type NodeMouseHandler,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { invoke } from "@tauri-apps/api/core";
+import { save } from "@tauri-apps/plugin-dialog";
+import { writeFile } from "@tauri-apps/plugin-fs";
 import { Database, Loader2 } from "lucide-react";
-import { toPng } from "html-to-image";
+import { toPng, toSvg } from "html-to-image";
 import { useProjectStore } from "../../stores/projectStore";
 import { useUIStore } from "../../stores/uiStore";
-import { getCurrentConnectionId, type FullColumnInfo } from "../../hooks/useDatabase";
+import { getCurrentConnectionId } from "../../hooks/useDatabase";
 import { TableNode } from "./TableNode";
+import { SchemaLabelNode } from "./SchemaLabelNode";
 import { SchemaEdge } from "./SchemaEdge";
-import { DiagramToolbar } from "./DiagramToolbar";
+import { DiagramToolbar, type ExportFormat } from "./DiagramToolbar";
 import { useAutoLayout } from "./useAutoLayout";
 import {
   buildNodes,
@@ -32,47 +37,74 @@ import {
   type TableNodeData,
 } from "./diagramUtils";
 
-const nodeTypes = { tableNode: TableNode };
+const nodeTypes = { tableNode: TableNode, schemaLabel: SchemaLabelNode };
 const edgeTypes = { schemaEdge: SchemaEdge };
 
-function convertColumns(raw: FullColumnInfo[]): DiagramColumn[] {
-  return raw.map((c) => ({
-    name: c.name,
-    dataType: c.data_type,
-    isPrimaryKey: c.is_primary_key,
-    isForeignKey: c.is_foreign_key,
-    isNullable: c.is_nullable,
-    isUnique: c.is_unique,
-    foreignKeyTarget: c.foreign_key_info
-      ? {
-          schema: c.foreign_key_info.referenced_schema,
-          table: c.foreign_key_info.referenced_table,
-          column: c.foreign_key_info.referenced_column,
-        }
-      : undefined,
-    enumValues: c.enum_values ?? undefined,
-  }));
+interface TableColumnsResult {
+  schema: string;
+  table: string;
+  columns: Array<{
+    name: string;
+    data_type: string;
+    is_primary_key: boolean;
+    is_foreign_key: boolean;
+    is_nullable: boolean;
+    is_unique: boolean;
+    foreign_key_info: {
+      constraint_name: string;
+      referenced_schema: string;
+      referenced_table: string;
+      referenced_column: string;
+    } | null;
+    enum_values: string[] | null;
+  }>;
 }
 
-function DiagramCanvas() {
-  const schemas = useProjectStore((s) => s.schemas);
+interface DiagramCanvasProps {
+  schema?: string;
+}
+
+function DiagramCanvas({ schema: singleSchema }: DiagramCanvasProps) {
+  const allSchemas = useProjectStore((s) => s.schemas);
+  const schemas = useMemo(
+    () => singleSchema ? allSchemas.filter((s) => s.name === singleSchema) : allSchemas,
+    [allSchemas, singleSchema],
+  );
   const addTab = useUIStore((s) => s.addTab);
-  const { fitView } = useReactFlow();
+  const { fitView, getNodes } = useReactFlow();
   const { getLayoutedElements } = useAutoLayout();
 
-  const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
+  const [nodes, setNodes, onNodesChangeBase] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
 
+  // Sync dragged positions back to allNodesRef so the filter effect doesn't reset them
+  const onNodesChange = useCallback(
+    (changes: Parameters<typeof onNodesChangeBase>[0]) => {
+      onNodesChangeBase(changes);
+      for (const change of changes) {
+        if (change.type === "position" && change.position) {
+          const ref = allNodesRef.current.find((n) => n.id === change.id);
+          if (ref) {
+            ref.position = change.position;
+          }
+        }
+      }
+    },
+    [onNodesChangeBase],
+  );
+
   const [loading, setLoading] = useState(true);
-  const [loadProgress, setLoadProgress] = useState({ loaded: 0, total: 0 });
+  const [error, setError] = useState<string | null>(null);
 
   const [searchQuery, setSearchQuery] = useState("");
   const [visibleSchemas, setVisibleSchemas] = useState<Set<string>>(new Set());
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
 
-  const allNodesRef = useRef<Node<TableNodeData>[]>([]);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const allNodesRef = useRef<Node[]>([]);
   const allEdgesRef = useRef<Edge[]>([]);
   const loadedRef = useRef(false);
+  const loadingInProgressRef = useRef(false);
 
   const schemaNames = useMemo(() => schemas.map((s) => s.name), [schemas]);
 
@@ -80,9 +112,9 @@ function DiagramCanvas() {
     setVisibleSchemas(new Set(schemaNames));
   }, [schemaNames]);
 
-  // Fetch all column data and build diagram — runs once when schemas are available
+  // Fetch all column data in a single query and build diagram
   useEffect(() => {
-    if (loadedRef.current) return; // Already loaded, skip
+    if (loadedRef.current || loadingInProgressRef.current) return;
 
     const connectionId = getCurrentConnectionId();
     if (!connectionId || schemas.length === 0) {
@@ -90,85 +122,84 @@ function DiagramCanvas() {
       return;
     }
 
-    let cancelled = false;
+    loadingInProgressRef.current = true;
 
     async function loadDiagram() {
-      const currentSchemas = schemas;
-      const currentSchemaNames = currentSchemas.map((s) => s.name);
-      const allTables: { schema: string; table: string }[] = [];
-      for (const schema of currentSchemas) {
-        for (const table of schema.tables) {
-          allTables.push({ schema: schema.name, table: table.name });
+      try {
+        const currentSchemas = schemas;
+        const currentSchemaNames = currentSchemas.map((s) => s.name);
+
+        // Single IPC call fetches all columns for all tables across all schemas
+        const allTableColumns = await invoke<TableColumnsResult[]>("get_all_columns", {
+          connectionId,
+          schemas: currentSchemaNames,
+        });
+
+        const columnsMap = new Map<string, DiagramColumn[]>();
+        for (const tc of allTableColumns) {
+          const key = `${tc.schema}.${tc.table}`;
+          columnsMap.set(key, tc.columns.map((c) => ({
+            name: c.name,
+            dataType: c.data_type,
+            isPrimaryKey: c.is_primary_key,
+            isForeignKey: c.is_foreign_key,
+            isNullable: c.is_nullable,
+            isUnique: c.is_unique,
+            foreignKeyTarget: c.foreign_key_info
+              ? {
+                  schema: c.foreign_key_info.referenced_schema,
+                  table: c.foreign_key_info.referenced_table,
+                  column: c.foreign_key_info.referenced_column,
+                }
+              : undefined,
+            enumValues: c.enum_values ?? undefined,
+          })));
         }
-      }
 
-      setLoadProgress({ loaded: 0, total: allTables.length });
+        const schemaColorMap = getSchemaColorMap(currentSchemaNames);
+        const builtNodes = buildNodes(currentSchemas, columnsMap, schemaColorMap);
+        const builtEdges = buildEdges(builtNodes);
 
-      const columnsMap = new Map<string, DiagramColumn[]>();
-      const BATCH_SIZE = 10;
-
-      for (let i = 0; i < allTables.length; i += BATCH_SIZE) {
-        if (cancelled) return;
-        const batch = allTables.slice(i, i + BATCH_SIZE);
-        const results = await Promise.allSettled(
-          batch.map((t) =>
-            invoke<FullColumnInfo[]>("get_columns", {
-              connectionId,
-              schema: t.schema,
-              table: t.table,
-            }).then((cols) => ({
-              key: `${t.schema}.${t.table}`,
-              columns: convertColumns(cols),
-            })),
-          ),
+        const { nodes: layoutedNodes, edges: layoutedEdges } = getLayoutedElements(
+          builtNodes,
+          builtEdges,
+          schemaColorMap,
         );
 
-        for (const result of results) {
-          if (result.status === "fulfilled") {
-            columnsMap.set(result.value.key, result.value.columns);
-          }
-        }
+        loadedRef.current = true;
+        allNodesRef.current = layoutedNodes;
+        allEdgesRef.current = layoutedEdges;
 
-        if (!cancelled) {
-          setLoadProgress({ loaded: Math.min(i + BATCH_SIZE, allTables.length), total: allTables.length });
-        }
+        setNodes(layoutedNodes);
+        setEdges(layoutedEdges);
+        setLoading(false);
+
+        setTimeout(() => fitView({ padding: 0.1 }), 100);
+      } catch (err) {
+        console.error("Failed to load diagram:", err);
+        setError(String(err));
+        setLoading(false);
+      } finally {
+        loadingInProgressRef.current = false;
       }
-
-      if (cancelled) return;
-
-      const schemaColorMap = getSchemaColorMap(currentSchemaNames);
-      const builtNodes = buildNodes(currentSchemas, columnsMap, schemaColorMap);
-      const builtEdges = buildEdges(builtNodes);
-
-      const { nodes: layoutedNodes, edges: layoutedEdges } = getLayoutedElements(
-        builtNodes,
-        builtEdges,
-      );
-
-      if (cancelled) return;
-
-      loadedRef.current = true;
-      allNodesRef.current = layoutedNodes;
-      allEdgesRef.current = layoutedEdges;
-
-      setNodes(layoutedNodes);
-      setEdges(layoutedEdges);
-      setLoading(false);
-
-      setTimeout(() => fitView({ padding: 0.1 }), 100);
     }
 
     loadDiagram();
-    return () => { cancelled = true; };
-  }); // No deps — runs every render but bails early via loadedRef
+  }); // No deps — runs every render but bails early via refs
 
-  // Apply search, schema filters, and hover highlighting
+  // Apply search and schema filters (rebuilds node list — only on filter changes, NOT hover)
   useEffect(() => {
     if (loading) return;
 
     const lowerSearch = searchQuery.toLowerCase();
 
     const filteredNodes = allNodesRef.current.filter((node) => {
+      if (node.type === "schemaLabel") {
+        const schemaName = (node.data as { label: string }).label;
+        if (!visibleSchemas.has(schemaName)) return false;
+        if (lowerSearch) return false;
+        return true;
+      }
       const data = node.data as TableNodeData;
       if (!visibleSchemas.has(data.schema)) return false;
       if (lowerSearch && !`${data.schema}.${data.table}`.toLowerCase().includes(lowerSearch)) {
@@ -183,46 +214,51 @@ function DiagramCanvas() {
       (e) => visibleNodeIds.has(e.source) && visibleNodeIds.has(e.target),
     );
 
-    // Pre-compute connected nodes for hover highlighting
-    const connectedNodeIds = new Set<string>();
-    if (hoveredNodeId) {
-      for (const e of filteredEdges) {
-        if (e.source === hoveredNodeId) connectedNodeIds.add(e.target);
-        if (e.target === hoveredNodeId) connectedNodeIds.add(e.source);
+    setNodes(filteredNodes.map((n) => ({ ...n, style: { ...n.style, opacity: 1, transition: "opacity 0.2s" } })));
+    setEdges(filteredEdges.map((e) => ({ ...e, style: { ...e.style, opacity: undefined } })));
+  }, [searchQuery, visibleSchemas, loading, setNodes, setEdges]);
+
+  // Hover highlighting — updates styles in-place without replacing node objects
+  useEffect(() => {
+    if (loading) return;
+
+    setNodes((currentNodes) => {
+      // Compute connected set from current edges
+      const connectedNodeIds = new Set<string>();
+      if (hoveredNodeId) {
+        for (const e of allEdgesRef.current) {
+          if (e.source === hoveredNodeId) connectedNodeIds.add(e.target);
+          if (e.target === hoveredNodeId) connectedNodeIds.add(e.source);
+        }
       }
-    }
 
-    const styledNodes = filteredNodes.map((node) => {
-      if (!hoveredNodeId) return { ...node, style: { ...node.style, opacity: 1, transition: "opacity 0.2s" } };
-      const isHovered = node.id === hoveredNodeId;
-      const isConnected = connectedNodeIds.has(node.id);
-      return {
-        ...node,
-        style: {
-          ...node.style,
-          opacity: isHovered || isConnected ? 1 : 0.25,
-          transition: "opacity 0.2s",
-        },
-      };
+      return currentNodes.map((node) => {
+        if (node.type === "schemaLabel") return node;
+        if (!hoveredNodeId) {
+          return node.style?.opacity === 1 ? node : { ...node, style: { ...node.style, opacity: 1, transition: "opacity 0.2s" } };
+        }
+        const isHighlighted = node.id === hoveredNodeId || connectedNodeIds.has(node.id);
+        const targetOpacity = isHighlighted ? 1 : 0.25;
+        return node.style?.opacity === targetOpacity ? node : { ...node, style: { ...node.style, opacity: targetOpacity, transition: "opacity 0.2s" } };
+      });
     });
 
-    const styledEdges = filteredEdges.map((edge) => {
-      if (!hoveredNodeId) return { ...edge, style: { ...edge.style, opacity: undefined } };
-      const isConnected = edge.source === hoveredNodeId || edge.target === hoveredNodeId;
-      return {
-        ...edge,
-        style: {
-          ...edge.style,
-          opacity: isConnected ? 1 : 0.1,
-        },
-      };
+    setEdges((currentEdges) => {
+      if (!hoveredNodeId) {
+        return currentEdges.map((e) =>
+          e.style?.opacity === undefined ? e : { ...e, style: { ...e.style, opacity: undefined } },
+        );
+      }
+      return currentEdges.map((e) => {
+        const isConnected = e.source === hoveredNodeId || e.target === hoveredNodeId;
+        const targetOpacity = isConnected ? 1 : 0.1;
+        return e.style?.opacity === targetOpacity ? e : { ...e, style: { ...e.style, opacity: targetOpacity } };
+      });
     });
-
-    setNodes(styledNodes);
-    setEdges(styledEdges);
-  }, [searchQuery, visibleSchemas, hoveredNodeId, loading, setNodes, setEdges]);
+  }, [hoveredNodeId, loading, setNodes, setEdges]);
 
   const handleNodeMouseEnter: NodeMouseHandler = useCallback((_event, node) => {
+    if (node.type === "schemaLabel") return;
     setHoveredNodeId(node.id);
   }, []);
 
@@ -232,6 +268,7 @@ function DiagramCanvas() {
 
   const handleNodeClick: NodeMouseHandler = useCallback(
     (_event, node) => {
+      if (node.type === "schemaLabel") return;
       const data = node.data as TableNodeData;
       addTab({
         id: crypto.randomUUID(),
@@ -244,40 +281,102 @@ function DiagramCanvas() {
     [addTab],
   );
 
+  const schemaColorMap = useMemo(() => getSchemaColorMap(schemaNames), [schemaNames]);
+
   const handleResetLayout = useCallback(() => {
+    // Filter out schema label nodes — layout regenerates them
+    const tableNodes = allNodesRef.current.filter(
+      (n) => n.type === "tableNode",
+    ) as Node<TableNodeData>[];
     const { nodes: layoutedNodes, edges: layoutedEdges } = getLayoutedElements(
-      allNodesRef.current,
+      tableNodes,
       allEdgesRef.current,
+      schemaColorMap,
     );
     allNodesRef.current = layoutedNodes;
     allEdgesRef.current = layoutedEdges;
     setNodes(layoutedNodes);
     setEdges(layoutedEdges);
     setTimeout(() => fitView({ padding: 0.1 }), 50);
-  }, [getLayoutedElements, setNodes, setEdges, fitView]);
+  }, [getLayoutedElements, setNodes, setEdges, fitView, schemaColorMap]);
 
   const handleFitView = useCallback(() => {
     fitView({ padding: 0.1, duration: 300 });
   }, [fitView]);
 
-  const handleExportPng = useCallback(async () => {
+  const handleExport = useCallback(async (format: ExportFormat) => {
     try {
-      const flowElement = document.querySelector(".react-flow") as HTMLElement;
-      if (!flowElement) return;
+      const viewport = containerRef.current?.querySelector(".react-flow__viewport") as HTMLElement;
+      if (!viewport) return;
 
-      const dataUrl = await toPng(flowElement, {
-        backgroundColor: getComputedStyle(document.documentElement).getPropertyValue('--bg-primary').trim() || "#1a1a2e",
-        quality: 1,
-      });
+      const currentNodes = getNodes();
+      if (currentNodes.length === 0) return;
 
-      const link = document.createElement("a");
-      link.download = "schema-diagram.png";
-      link.href = dataUrl;
-      link.click();
+      const bounds = getNodesBounds(currentNodes);
+      const padding = 40;
+      const imageWidth = Math.max(1024, bounds.width + padding * 2);
+      const imageHeight = Math.max(768, bounds.height + padding * 2);
+
+      const { x, y, zoom } = getViewportForBounds(
+        bounds,
+        imageWidth,
+        imageHeight,
+        0.5,
+        2,
+        0.1,
+      );
+
+      const bgColor =
+        getComputedStyle(document.documentElement)
+          .getPropertyValue("--bg-primary")
+          .trim() || "#1a1a2e";
+
+      const commonOptions = {
+        backgroundColor: bgColor,
+        width: imageWidth,
+        height: imageHeight,
+        style: {
+          width: `${imageWidth}px`,
+          height: `${imageHeight}px`,
+          transform: `translate(${x}px, ${y}px) scale(${zoom})`,
+        },
+      };
+
+      if (format === "svg") {
+        const dataUrl = await toSvg(viewport, commonOptions);
+
+        const filePath = await save({
+          defaultPath: "schema-diagram.svg",
+          filters: [{ name: "SVG Image", extensions: ["svg"] }],
+        });
+        if (!filePath) return;
+
+        const svgContent = decodeURIComponent(dataUrl.split(",")[1]);
+        await writeFile(filePath, new TextEncoder().encode(svgContent));
+      } else {
+        // 2x resolution for crisp PNG
+        const scale = 2;
+        const dataUrl = await toPng(viewport, {
+          ...commonOptions,
+          width: imageWidth * scale,
+          height: imageHeight * scale,
+          pixelRatio: scale,
+        });
+
+        const filePath = await save({
+          defaultPath: "schema-diagram.png",
+          filters: [{ name: "PNG Image", extensions: ["png"] }],
+        });
+        if (!filePath) return;
+
+        const base64 = dataUrl.split(",")[1];
+        const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
+        await writeFile(filePath, bytes);
+      }
     } catch (err) {
       console.error("Failed to export diagram:", err);
     }
-  }, []);
+  }, [getNodes]);
 
   const handleToggleSchema = useCallback((schema: string) => {
     setVisibleSchemas((prev) => {
@@ -296,10 +395,6 @@ function DiagramCanvas() {
   }, [schemaNames]);
 
   if (loading) {
-    const progress = loadProgress.total > 0
-      ? Math.round((loadProgress.loaded / loadProgress.total) * 100)
-      : 0;
-
     return (
       <div className="h-full flex flex-col items-center justify-center gap-5">
         <div className="relative">
@@ -314,26 +409,24 @@ function DiagramCanvas() {
           <span className="text-sm font-medium text-[var(--text-primary)]">
             Building schema diagram
           </span>
-          {loadProgress.total > 0 ? (
-            <span className="text-xs text-[var(--text-muted)] tabular-nums">
-              Loading table metadata... {loadProgress.loaded} of {loadProgress.total}
-            </span>
-          ) : (
-            <span className="text-xs text-[var(--text-muted)]">
-              Discovering tables...
-            </span>
-          )}
+          <span className="text-xs text-[var(--text-muted)]">
+            Loading table metadata...
+          </span>
         </div>
-        {loadProgress.total > 0 && (
-          <div className="w-48">
-            <div className="h-1.5 rounded-full bg-[var(--bg-tertiary)] overflow-hidden">
-              <div
-                className="h-full rounded-full bg-[var(--accent)] transition-all duration-300 ease-out"
-                style={{ width: `${progress}%` }}
-              />
-            </div>
-          </div>
-        )}
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="h-full flex flex-col items-center justify-center gap-4">
+        <div className="w-14 h-14 rounded-2xl bg-red-500/10 flex items-center justify-center">
+          <Database className="w-6 h-6 text-red-400" />
+        </div>
+        <div className="flex flex-col items-center gap-1">
+          <span className="text-sm font-medium text-[var(--text-primary)]">Failed to load diagram</span>
+          <span className="text-xs text-[var(--text-muted)] max-w-md text-center">{error}</span>
+        </div>
       </div>
     );
   }
@@ -353,7 +446,7 @@ function DiagramCanvas() {
   }
 
   return (
-    <div className="flex-1 flex flex-col h-full">
+    <div ref={containerRef} className="flex-1 flex flex-col h-full">
       <DiagramToolbar
         schemaNames={schemaNames}
         visibleSchemas={visibleSchemas}
@@ -363,7 +456,7 @@ function DiagramCanvas() {
         onSearchChange={setSearchQuery}
         onResetLayout={handleResetLayout}
         onFitView={handleFitView}
-        onExportPng={handleExportPng}
+        onExport={handleExport}
       />
       <div className="flex-1">
         <ReactFlow
@@ -398,6 +491,7 @@ function DiagramCanvas() {
             zoomable
             pannable
             nodeColor={(node) => {
+              if (node.type === "schemaLabel") return "transparent";
               const data = node.data as TableNodeData;
               return data?.schemaColor?.accent ?? "#6b7280";
             }}
@@ -409,10 +503,10 @@ function DiagramCanvas() {
   );
 }
 
-export function DiagramTab() {
+export function DiagramTab({ schema }: { schema?: string }) {
   return (
     <ReactFlowProvider>
-      <DiagramCanvas />
+      <DiagramCanvas schema={schema} />
     </ReactFlowProvider>
   );
 }
