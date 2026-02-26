@@ -231,7 +231,7 @@ export function ContextMenu({ items, children, disabled }: ContextMenuProps) {
 
   return (
     <>
-      <div ref={containerRef} onContextMenu={handleContextMenu}>
+      <div ref={containerRef} onContextMenu={handleContextMenu} data-context-menu>
         {children}
       </div>
 

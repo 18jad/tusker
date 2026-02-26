@@ -1,6 +1,6 @@
 [package]
 name = "tusker"
-version = "0.5.0"
+version = "0.5.1"
 description = "A modern PostgreSQL database client"
 authors = ["Jad"]
 edition = "2021"
