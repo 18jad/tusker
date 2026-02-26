@@ -27,6 +27,7 @@ import {
   Info,
   Pencil,
   Workflow,
+  MoreHorizontal,
 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useProjectStore } from "../../stores/projectStore";
@@ -227,17 +228,40 @@ function SchemaTree({ schema, level }: SchemaTreeProps) {
         isExpanded={isExpanded}
         onToggle={() => toggleSchemaExpanded(schema.name)}
         action={
-          <button
-            onClick={handleCreateTable}
-            className={cn(
-              "p-0.5 rounded hover:bg-[var(--bg-tertiary)]",
-              "text-[var(--text-muted)] hover:text-purple-400",
-              "transition-colors duration-150"
-            )}
-            title={`Create table in ${schema.name}`}
-          >
-            <Plus className="w-3.5 h-3.5" />
-          </button>
+          <span className="flex items-center gap-0.5">
+            <button
+              onClick={handleCreateTable}
+              className={cn(
+                "p-0.5 rounded hover:bg-[var(--bg-tertiary)]",
+                "text-[var(--text-muted)] hover:text-purple-400",
+                "transition-colors duration-150"
+              )}
+              title={`Create table in ${schema.name}`}
+            >
+              <Plus className="w-3.5 h-3.5" />
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                const rect = e.currentTarget.getBoundingClientRect();
+                e.currentTarget.closest("[data-context-menu]")?.dispatchEvent(
+                  new MouseEvent("contextmenu", {
+                    bubbles: true,
+                    clientX: rect.left,
+                    clientY: rect.bottom,
+                  })
+                );
+              }}
+              className={cn(
+                "p-0.5 rounded hover:bg-[var(--bg-tertiary)]",
+                "text-[var(--text-muted)] hover:text-[var(--text-primary)]",
+                "transition-colors duration-150"
+              )}
+              title="More actions"
+            >
+              <MoreHorizontal className="w-3.5 h-3.5" />
+            </button>
+          </span>
         }
       >
         {schema.tables.map((table) => (
@@ -355,6 +379,29 @@ function SchemaTree({ schema, level }: SchemaTreeProps) {
               level={level + 1}
               onClick={() => handleTableClick(table)}
               isActive={isTableActive(table.name)}
+              action={
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    e.currentTarget.closest("[data-context-menu]")?.dispatchEvent(
+                      new MouseEvent("contextmenu", {
+                        bubbles: true,
+                        clientX: rect.left,
+                        clientY: rect.bottom,
+                      })
+                    );
+                  }}
+                  className={cn(
+                    "p-0.5 rounded hover:bg-[var(--bg-tertiary)]",
+                    "text-[var(--text-muted)] hover:text-[var(--text-primary)]",
+                    "transition-colors duration-150"
+                  )}
+                  title="More actions"
+                >
+                  <MoreHorizontal className="w-3.5 h-3.5" />
+                </button>
+              }
             />
           </ContextMenu>
         ))}
@@ -544,25 +591,48 @@ function ProjectTree() {
           isExpanded={isExpanded}
           onToggle={() => setIsExpanded(!isExpanded)}
           action={
-            connectionStatus === "connected" ? (
+            <span className="flex items-center gap-0.5">
+              {connectionStatus === "connected" && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIsCreatingSchema(true);
+                    setNewSchemaName("");
+                    setSchemaError(null);
+                    if (!isExpanded) setIsExpanded(true);
+                  }}
+                  className={cn(
+                    "p-0.5 rounded hover:bg-[var(--bg-tertiary)]",
+                    "text-[var(--text-muted)] hover:text-[var(--accent)]",
+                    "transition-colors duration-150"
+                  )}
+                  title="Create schema"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                </button>
+              )}
               <button
                 onClick={(e) => {
                   e.stopPropagation();
-                  setIsCreatingSchema(true);
-                  setNewSchemaName("");
-                  setSchemaError(null);
-                  if (!isExpanded) setIsExpanded(true);
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  e.currentTarget.closest("[data-context-menu]")?.dispatchEvent(
+                    new MouseEvent("contextmenu", {
+                      bubbles: true,
+                      clientX: rect.left,
+                      clientY: rect.bottom,
+                    })
+                  );
                 }}
                 className={cn(
                   "p-0.5 rounded hover:bg-[var(--bg-tertiary)]",
-                  "text-[var(--text-muted)] hover:text-[var(--accent)]",
+                  "text-[var(--text-muted)] hover:text-[var(--text-primary)]",
                   "transition-colors duration-150"
                 )}
-                title="Create schema"
+                title="More actions"
               >
-                <Plus className="w-3.5 h-3.5" />
+                <MoreHorizontal className="w-3.5 h-3.5" />
               </button>
-            ) : undefined
+            </span>
           }
         >
           {connectionStatus === "connecting" ? (

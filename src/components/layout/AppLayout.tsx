@@ -11,6 +11,7 @@ import {
   RefreshCw,
   Pencil,
   Trash2,
+  Workflow,
 } from "lucide-react";
 import { Sidebar } from "./Sidebar";
 import { TabBar } from "./TabBar";
@@ -184,9 +185,11 @@ function ProjectMenu() {
 function TitleBar() {
   const projects = useProjectStore((state) => state.projects);
   const activeProjectId = useProjectStore((state) => state.activeProjectId);
+  const connectionStatus = useProjectStore((state) => state.connectionStatus);
   const toggleProjectSpotlight = useUIStore(
     (state) => state.toggleProjectSpotlight
   );
+  const addDiagramTab = useUIStore((state) => state.addDiagramTab);
 
   const activeProject = projects.find((p) => p.id === activeProjectId);
 
@@ -262,6 +265,25 @@ function TitleBar() {
       >
         Tusker
       </div>
+
+      {/* Right-side actions */}
+      {connectionStatus === "connected" && (
+        <button
+          onClick={() => addDiagramTab()}
+          className={cn(
+            "flex items-center gap-1.5 px-2 h-8 rounded",
+            "hover:bg-[var(--bg-tertiary)] transition-colors duration-150",
+            "text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+          )}
+          title="Schema Diagram"
+        >
+          <Workflow className="w-3.5 h-3.5" />
+          <span>Diagram</span>
+        </button>
+      )}
+
+      {/* Right spacer to balance macOS traffic lights */}
+      <div className="w-[12px] shrink-0" />
     </header>
   );
 }
