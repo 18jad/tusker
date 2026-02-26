@@ -124,7 +124,7 @@ interface UIState {
   addQueryTab: (initialSql?: string) => void;
   addHistoryTab: () => void;
   addStagedChangesTab: () => void;
-  addDiagramTab: () => void;
+  addDiagramTab: (schema?: string) => void;
   reorderTabs: (fromIndex: number, toIndex: number) => void;
   pinTab: (id: string) => void;
   unpinTab: (id: string) => void;
@@ -468,16 +468,19 @@ export const useUIStore = create<UIState>((set, get) => ({
       };
     }),
 
-  addDiagramTab: () =>
+  addDiagramTab: (schema?: string) =>
     set((state) => {
-      const existing = state.tabs.find((t) => t.type === "diagram");
+      const existing = state.tabs.find(
+        (t) => t.type === "diagram" && t.schema === schema,
+      );
       if (existing) {
         return { activeTabId: existing.id };
       }
       const newTab: Tab = {
         id: `diagram-${Date.now()}`,
         type: "diagram",
-        title: "Schema Diagram",
+        title: schema ? `${schema} Diagram` : "Schema Diagram",
+        schema,
       };
       return {
         tabs: [...state.tabs, newTab],

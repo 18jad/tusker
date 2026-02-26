@@ -165,7 +165,7 @@ function SchemaTree({ schema, level }: SchemaTreeProps) {
         {
           label: "Schema Diagram",
           icon: <Workflow className="w-4 h-4" />,
-          onClick: () => addDiagramTab(),
+          onClick: () => addDiagramTab(schema.name),
         },
         {
           type: "separator" as const,
@@ -380,6 +380,7 @@ function ProjectTree() {
   const openDeleteProjectModal = useUIStore((state) => state.openDeleteProjectModal);
   const toggleProjectSpotlight = useUIStore((state) => state.toggleProjectSpotlight);
   const showToast = useUIStore((state) => state.showToast);
+  const addDiagramTab = useUIStore((state) => state.addDiagramTab);
   const queryClient = useQueryClient();
   const [isExpanded, setIsExpanded] = useState(true);
   const [isCreatingSchema, setIsCreatingSchema] = useState(false);
@@ -477,6 +478,15 @@ function ProjectTree() {
               showToast(`Copied "${activeProject.connection.database}" to clipboard`);
             },
           },
+          ...(connectionStatus === "connected"
+            ? [
+                {
+                  label: "Schema Diagram",
+                  icon: <Workflow className="w-4 h-4" />,
+                  onClick: () => addDiagramTab(),
+                },
+              ]
+            : []),
           {
             label: "Create Schema",
             icon: <FolderPlus className="w-4 h-4" />,
