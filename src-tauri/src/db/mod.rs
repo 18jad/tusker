@@ -20,5 +20,5 @@ pub use data::{
 pub use discovery::{AuthStatus, DiscoveredDatabase};
 pub use schema::{
     ColumnInfo, ConstraintInfo, ConstraintType, ForeignKeyInfo, IndexInfo, SchemaInfo,
-    SchemaIntrospector, SchemaWithTables, TableInfo, TableType,
+    SchemaIntrospector, SchemaWithTables, TableColumnsInfo, TableInfo, TableType,
 };

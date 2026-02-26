@@ -65,6 +65,13 @@ pub struct ForeignKeyInfo {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TableColumnsInfo {
+    pub schema: String,
+    pub table: String,
+    pub columns: Vec<ColumnInfo>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct IndexInfo {
     pub name: String,
     pub is_unique: bool,
@@ -508,6 +515,164 @@ impl SchemaIntrospector {
                 owner: s.owner,
             })
             .collect())
+    }
+}
+
+impl SchemaIntrospector {
+    /// Get all columns for all tables across given schemas in a single query.
+    /// Returns a flat list of (schema, table, columns) tuples — no N+1 queries.
+    pub async fn get_all_columns(
+        pool: &PgPool,
+        schema_names: &[String],
+    ) -> Result<Vec<TableColumnsInfo>> {
+        use sqlx::Row;
+
+        let columns_future = sqlx::query(
+                r#"
+                WITH pk_cols AS (
+                    SELECT i.indrelid, a.attnum
+                    FROM pg_index i
+                    JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = ANY(i.indkey)
+                    JOIN pg_class c ON c.oid = i.indrelid
+                    JOIN pg_namespace n ON n.oid = c.relnamespace
+                    WHERE i.indisprimary
+                      AND n.nspname = ANY($1)
+                      AND c.relkind IN ('r', 'v', 'm', 'f')
+                ),
+                uq_cols AS (
+                    SELECT DISTINCT i.indrelid, a.attnum
+                    FROM pg_index i
+                    JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = ANY(i.indkey)
+                    JOIN pg_class c ON c.oid = i.indrelid
+                    JOIN pg_namespace n ON n.oid = c.relnamespace
+                    WHERE i.indisunique AND NOT i.indisprimary
+                      AND n.nspname = ANY($1)
+                      AND c.relkind IN ('r', 'v', 'm', 'f')
+                ),
+                fk_info AS (
+                    SELECT
+                        con.conrelid,
+                        unnest(con.conkey) AS attnum,
+                        con.conname,
+                        rn.nspname AS ref_schema,
+                        rc.relname AS ref_table,
+                        ra.attname AS ref_column
+                    FROM pg_constraint con
+                    JOIN pg_class rc ON rc.oid = con.confrelid
+                    JOIN pg_namespace rn ON rn.oid = rc.relnamespace
+                    JOIN pg_class sc ON sc.oid = con.conrelid
+                    JOIN pg_namespace sn ON sn.oid = sc.relnamespace
+                    JOIN LATERAL unnest(con.confkey) WITH ORDINALITY AS fk(attnum, ord) ON true
+                    JOIN pg_attribute ra ON ra.attrelid = con.confrelid AND ra.attnum = fk.attnum
+                    WHERE con.contype = 'f'
+                      AND sn.nspname = ANY($1)
+                )
+                SELECT
+                    n.nspname AS schema_name,
+                    c.relname AS table_name,
+                    a.attname AS col_name,
+                    format_type(a.atttypid, a.atttypmod) AS data_type,
+                    t.typname AS udt_name,
+                    NOT a.attnotnull AS is_nullable,
+                    pg_get_expr(ad.adbin, ad.adrelid) AS default_value,
+                    information_schema._pg_char_max_length(a.atttypid, a.atttypmod)::int4 AS char_max_len,
+                    information_schema._pg_numeric_precision(a.atttypid, a.atttypmod)::int4 AS num_precision,
+                    information_schema._pg_numeric_scale(a.atttypid, a.atttypmod)::int4 AS num_scale,
+                    a.attnum AS ordinal_position,
+                    col_description(a.attrelid, a.attnum) AS description,
+                    (EXISTS (SELECT 1 FROM pk_cols pk WHERE pk.indrelid = a.attrelid AND pk.attnum = a.attnum)) AS is_pk,
+                    (EXISTS (SELECT 1 FROM uq_cols uq WHERE uq.indrelid = a.attrelid AND uq.attnum = a.attnum)) AS is_unique,
+                    fk.conname AS fk_constraint,
+                    fk.ref_schema,
+                    fk.ref_table,
+                    fk.ref_column
+                FROM pg_attribute a
+                JOIN pg_class c ON c.oid = a.attrelid
+                JOIN pg_namespace n ON n.oid = c.relnamespace
+                JOIN pg_type t ON t.oid = a.atttypid
+                LEFT JOIN pg_attrdef ad ON ad.adrelid = a.attrelid AND ad.adnum = a.attnum
+                LEFT JOIN fk_info fk ON fk.conrelid = a.attrelid AND fk.attnum = a.attnum
+                WHERE n.nspname = ANY($1)
+                  AND c.relkind IN ('r', 'v', 'm', 'f')
+                  AND a.attnum > 0
+                  AND NOT a.attisdropped
+                ORDER BY n.nspname, c.relname, a.attnum
+                "#,
+            )
+            .bind(schema_names)
+            .fetch_all(pool);
+
+        let enums_future = sqlx::query_as::<_, (String, String)>(
+                r#"
+                SELECT t.typname, e.enumlabel
+                FROM pg_enum e
+                JOIN pg_type t ON e.enumtypid = t.oid
+                ORDER BY t.typname, e.enumsortorder
+                "#,
+            )
+            .fetch_all(pool);
+
+        let (columns_result, enums_result) = tokio::join!(columns_future, enums_future);
+
+        let rows = columns_result?;
+        let all_enums = enums_result.unwrap_or_default();
+
+        let mut enum_values_map: std::collections::HashMap<String, Vec<String>> =
+            std::collections::HashMap::new();
+        for (type_name, label) in all_enums {
+            enum_values_map.entry(type_name).or_default().push(label);
+        }
+
+        // Group rows by (schema, table)
+        let mut tables: Vec<TableColumnsInfo> = Vec::new();
+        let mut current_key: Option<(String, String)> = None;
+
+        for row in rows {
+            let schema_name: String = row.get("schema_name");
+            let table_name: String = row.get("table_name");
+            let udt_name: String = row.get("udt_name");
+            let fk_constraint: Option<String> = row.get("fk_constraint");
+
+            let foreign_key_info = fk_constraint.map(|constraint_name| ForeignKeyInfo {
+                constraint_name,
+                referenced_schema: row.get::<Option<String>, _>("ref_schema").unwrap_or_default(),
+                referenced_table: row.get::<Option<String>, _>("ref_table").unwrap_or_default(),
+                referenced_column: row.get::<Option<String>, _>("ref_column").unwrap_or_default(),
+            });
+            let enum_values = enum_values_map.get(&udt_name).cloned();
+
+            let col = ColumnInfo {
+                name: row.get("col_name"),
+                data_type: row.get("data_type"),
+                udt_name,
+                is_nullable: row.get("is_nullable"),
+                is_primary_key: row.get("is_pk"),
+                is_unique: row.get("is_unique"),
+                is_foreign_key: foreign_key_info.is_some(),
+                default_value: row.get("default_value"),
+                character_maximum_length: row.get("char_max_len"),
+                numeric_precision: row.get("num_precision"),
+                numeric_scale: row.get("num_scale"),
+                ordinal_position: row.get::<i16, _>("ordinal_position") as i32,
+                description: row.get("description"),
+                foreign_key_info,
+                enum_values,
+            };
+
+            let key = (schema_name.clone(), table_name.clone());
+            if current_key.as_ref() != Some(&key) {
+                tables.push(TableColumnsInfo {
+                    schema: schema_name,
+                    table: table_name,
+                    columns: vec![col],
+                });
+                current_key = Some(key);
+            } else {
+                tables.last_mut().unwrap().columns.push(col);
+            }
+        }
+
+        Ok(tables)
     }
 }
 

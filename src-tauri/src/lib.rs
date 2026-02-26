@@ -70,6 +70,7 @@ pub fn run() {
             commands::get_schemas_with_tables,
             commands::get_tables,
             commands::get_columns,
+            commands::get_all_columns,
             commands::get_row_count,
             commands::get_indexes,
             commands::get_constraints,
