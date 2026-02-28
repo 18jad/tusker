@@ -1,7 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { save } from "@tauri-apps/plugin-dialog";
 import { writeTextFile } from "@tauri-apps/plugin-fs";
-import { getCurrentConnectionId } from "../hooks/useDatabase";
 import type { Row } from "../types";
 
 type ExportFormat = "csv" | "json";
@@ -12,6 +11,7 @@ interface PaginatedResult {
 }
 
 export async function exportTable(
+  connectionId: string,
   schema: string,
   table: string,
   format: ExportFormat,
@@ -19,8 +19,6 @@ export async function exportTable(
   onError: (message: string) => void
 ) {
   try {
-    const connectionId = getCurrentConnectionId();
-    if (!connectionId) throw new Error("Not connected");
 
     const defaultFilename = format === "csv"
       ? `${schema}_${table}.csv`

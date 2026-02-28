@@ -5,6 +5,14 @@ import { useProjectStore } from "../stores/projectStore";
 import { useUIStore } from "../stores/uiStore";
 import { useChangesStore } from "../stores/changesStore";
 
+/**
+ * Compatibility shim: derives the active connection ID from the currently active tab.
+ * Prefer receiving connectionId as a prop where possible.
+ */
+export function getCurrentConnectionId(): string | undefined {
+  return useUIStore.getState().getActiveConnectionId();
+}
+
 interface ConnectRequest {
   name: string;
   host: string;

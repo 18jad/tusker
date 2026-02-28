@@ -322,6 +322,7 @@ function SchemaTree({ projectId, connectionId, schema, projectColor: _projectCol
                     icon: <FileSpreadsheet className="w-4 h-4" />,
                     onClick: () => {
                       exportTable(
+                        connectionId,
                         schema.name,
                         table.name,
                         "csv",
@@ -335,6 +336,7 @@ function SchemaTree({ projectId, connectionId, schema, projectColor: _projectCol
                     icon: <FileJson className="w-4 h-4" />,
                     onClick: () => {
                       exportTable(
+                        connectionId,
                         schema.name,
                         table.name,
                         "json",

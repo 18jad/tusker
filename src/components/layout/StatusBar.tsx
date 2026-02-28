@@ -50,9 +50,8 @@ function getActiveTableRowCount(
 }
 
 export function StatusBar() {
-  const connectionStatus = useProjectStore((state) => state.connectionStatus);
-  const error = useProjectStore((state) => state.error);
-  const activeProject = useProjectStore((state) => state.getActiveProject());
+  const projects = useProjectStore((state) => state.projects);
+  const connections = useProjectStore((state) => state.connections);
   const tabs = useUIStore((state) => state.tabs);
   const activeTabId = useUIStore((state) => state.activeTabId);
   const addStagedChangesTab = useUIStore((state) => state.addStagedChangesTab);
@@ -62,6 +61,15 @@ export function StatusBar() {
   const connect = useConnect();
   const disconnect = useDisconnect();
 
+  // Derive active project/connection from the active tab
+  const activeTab = activeTabId ? tabs.find((t) => t.id === activeTabId) : undefined;
+  const activeProjectId = activeTab?.projectId;
+  const activeConnectionId = activeTab?.connectionId;
+  const activeProject = activeProjectId ? projects.find((p) => p.id === activeProjectId) : undefined;
+  const activeConn = activeProjectId ? connections[activeProjectId] : undefined;
+
+  const connectionStatus: ConnectionStatus = activeConn?.status ?? "disconnected";
+  const error = activeConn?.error ?? null;
   const statusConfig = CONNECTION_STATUS_CONFIG[connectionStatus];
   const rowCount = getActiveTableRowCount(tabs, activeTabId);
   const changesCount = changes.length;
@@ -69,10 +77,10 @@ export function StatusBar() {
   const handleConnectionClick = () => {
     if (!activeProject) return;
 
-    if (connectionStatus === "connected") {
-      disconnect.mutate();
+    if (connectionStatus === "connected" && activeProjectId && activeConnectionId) {
+      disconnect.mutate({ projectId: activeProjectId, connectionId: activeConnectionId });
     } else if (connectionStatus === "disconnected" || connectionStatus === "error") {
-      connect.mutate(activeProject.connection);
+      connect.mutate({ project: activeProject });
     }
   };
 
@@ -135,9 +143,9 @@ export function StatusBar() {
 
       {/* Right section - History & Staged changes */}
       <div className="flex items-center gap-3">
-        {connectionStatus === "connected" && (
+        {connectionStatus === "connected" && activeConnectionId && activeProjectId && (
           <button
-            onClick={addHistoryTab}
+            onClick={() => addHistoryTab(activeConnectionId, activeProjectId)}
             className={cn(
               "flex items-center gap-1.5 px-2 py-0.5 rounded",
               "text-[var(--text-secondary)] hover:text-[var(--text-primary)]",
@@ -150,9 +158,9 @@ export function StatusBar() {
             <span>History</span>
           </button>
         )}
-        {changesCount > 0 && (
+        {changesCount > 0 && activeConnectionId && activeProjectId && (
           <button
-            onClick={addStagedChangesTab}
+            onClick={() => addStagedChangesTab(activeConnectionId, activeProjectId)}
             className={cn(
               "flex items-center gap-1.5 px-2 py-0.5 rounded",
               "text-[var(--warning)] hover:bg-[var(--bg-tertiary)]",

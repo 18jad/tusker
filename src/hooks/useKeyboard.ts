@@ -44,7 +44,14 @@ export function useGlobalKeyboardShortcuts() {
 
   // Get state inside handlers to avoid stale closures
   const getActiveTabId = () => useUIStore.getState().activeTabId;
-  const getConnectionStatus = () => useProjectStore.getState().connectionStatus;
+  const getActiveIds = () => ({
+    connectionId: useUIStore.getState().getActiveConnectionId(),
+    projectId: useUIStore.getState().getActiveProjectId(),
+  });
+  const getIsAnyConnected = () =>
+    Object.values(useProjectStore.getState().connections).some(
+      (c) => c.status === "connected"
+    );
 
   const bindings: KeyBinding[] = [
     // Cmd/Ctrl+B - Toggle sidebar
@@ -80,8 +87,9 @@ export function useGlobalKeyboardShortcuts() {
       key: "n",
       meta: true,
       handler: () => {
-        if (getConnectionStatus() === "connected") {
-          addCreateTableTab();
+        const ids = getActiveIds();
+        if (getIsAnyConnected() && ids.connectionId && ids.projectId) {
+          addCreateTableTab(ids.connectionId, ids.projectId);
         }
       },
     },
@@ -89,8 +97,9 @@ export function useGlobalKeyboardShortcuts() {
       key: "n",
       ctrl: true,
       handler: () => {
-        if (getConnectionStatus() === "connected") {
-          addCreateTableTab();
+        const ids = getActiveIds();
+        if (getIsAnyConnected() && ids.connectionId && ids.projectId) {
+          addCreateTableTab(ids.connectionId, ids.projectId);
         }
       },
     },
@@ -99,8 +108,9 @@ export function useGlobalKeyboardShortcuts() {
       key: "t",
       meta: true,
       handler: () => {
-        if (getConnectionStatus() === "connected") {
-          addQueryTab();
+        const ids = getActiveIds();
+        if (getIsAnyConnected() && ids.connectionId && ids.projectId) {
+          addQueryTab(ids.connectionId, ids.projectId);
         }
       },
     },
@@ -108,8 +118,9 @@ export function useGlobalKeyboardShortcuts() {
       key: "t",
       ctrl: true,
       handler: () => {
-        if (getConnectionStatus() === "connected") {
-          addQueryTab();
+        const ids = getActiveIds();
+        if (getIsAnyConnected() && ids.connectionId && ids.projectId) {
+          addQueryTab(ids.connectionId, ids.projectId);
         }
       },
     },
@@ -119,8 +130,9 @@ export function useGlobalKeyboardShortcuts() {
       meta: true,
       shift: true,
       handler: () => {
-        if (getConnectionStatus() === "connected") {
-          addDiagramTab();
+        const ids = getActiveIds();
+        if (getIsAnyConnected() && ids.connectionId && ids.projectId) {
+          addDiagramTab(ids.connectionId, ids.projectId);
         }
       },
     },
@@ -129,8 +141,9 @@ export function useGlobalKeyboardShortcuts() {
       ctrl: true,
       shift: true,
       handler: () => {
-        if (getConnectionStatus() === "connected") {
-          addDiagramTab();
+        const ids = getActiveIds();
+        if (getIsAnyConnected() && ids.connectionId && ids.projectId) {
+          addDiagramTab(ids.connectionId, ids.projectId);
         }
       },
     },

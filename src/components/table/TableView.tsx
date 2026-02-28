@@ -28,6 +28,7 @@ import { useUIStore } from "../../stores/uiStore";
 import { exportTable } from "../../lib/exportTable";
 
 interface TableViewProps {
+  connectionId?: string;
   tableKey: string;
   schemaName: string;
   tableName: string;
@@ -119,6 +120,7 @@ function SkeletonTable() {
 }
 
 export function TableView({
+  connectionId,
   tableKey,
   schemaName,
   tableName,
@@ -536,7 +538,9 @@ export function TableView({
                 label: "Export as CSV",
                 icon: <FileSpreadsheet className="w-3.5 h-3.5" />,
                 onClick: () => {
+                  if (!connectionId) return;
                   exportTable(
+                    connectionId,
                     schemaName,
                     tableName,
                     "csv",
@@ -549,7 +553,9 @@ export function TableView({
                 label: "Export as JSON",
                 icon: <FileJson className="w-3.5 h-3.5" />,
                 onClick: () => {
+                  if (!connectionId) return;
                   exportTable(
+                    connectionId,
                     schemaName,
                     tableName,
                     "json",

@@ -3,10 +3,17 @@ import { useUIStore } from "../../stores/uiStore";
 import { useProjectStore } from "../../stores/projectStore";
 import { Modal } from "../ui";
 import { cn } from "../../lib/utils";
+import type { Schema } from "../../types";
+
+const EMPTY_SCHEMAS: Schema[] = [];
 
 export function SchemaInfoModal() {
   const { schemaInfoModal, closeSchemaInfoModal } = useUIStore();
-  const schemas = useProjectStore((state) => state.schemas);
+  const getActiveProjectId = useUIStore((state) => state.getActiveProjectId);
+  const activeProjectId = getActiveProjectId();
+  const schemas = useProjectStore((state) =>
+    activeProjectId ? state.connections[activeProjectId]?.schemas ?? EMPTY_SCHEMAS : EMPTY_SCHEMAS
+  );
 
   const schema = schemas.find((s) => s.name === schemaInfoModal.schema);
 

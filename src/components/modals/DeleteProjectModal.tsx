@@ -10,26 +10,27 @@ import { cn } from "../../lib/utils";
 export function DeleteProjectModal() {
   const { deleteProjectModal, closeDeleteProjectModal, closeAllTabs, showToast } = useUIStore();
   const { isOpen, projectId } = deleteProjectModal;
-  const { projects, activeProjectId, connectionStatus, deleteProject } = useProjectStore();
-  const { clearChanges } = useChangesStore();
+  const { projects, connections, deleteProject } = useProjectStore();
+  const { clearChangesForConnection } = useChangesStore();
   const disconnect = useDisconnect();
   const [isDeleting, setIsDeleting] = useState(false);
 
   const project = projects.find((p) => p.id === projectId);
-  const isActive = projectId === activeProjectId;
+  const conn = projectId ? connections[projectId] : undefined;
+  const isConnected = conn?.status === "connected";
 
   const handleDelete = async () => {
     if (!projectId || !project) return;
 
     setIsDeleting(true);
     try {
-      if (isActive && connectionStatus === "connected") {
-        await disconnect.mutateAsync();
+      if (isConnected && conn) {
+        await disconnect.mutateAsync({ projectId, connectionId: conn.connectionId });
       }
 
-      if (isActive) {
+      if (conn) {
         closeAllTabs();
-        clearChanges();
+        clearChangesForConnection(conn.connectionId);
       }
 
       deleteProject(projectId);
@@ -61,7 +62,7 @@ export function DeleteProjectModal() {
               {project?.name}
             </span>{" "}
             and its saved credentials.
-            {isActive && " You will be disconnected from the database."}
+            {isConnected && " You will be disconnected from the database."}
           </p>
         </div>
 

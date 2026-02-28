@@ -4,10 +4,12 @@ import { useProjectStore } from "../stores/projectStore";
 
 export function WelcomeScreen() {
   const { openProjectModal } = useUIStore();
-  const { projects, connectionStatus } = useProjectStore();
+  const { projects, connections } = useProjectStore();
 
   const hasProjects = projects.length > 0;
-  const isConnected = connectionStatus === "connected";
+  const isConnected = Object.values(connections).some(
+    (c) => c.status === "connected"
+  );
 
   return (
     <div className="flex h-full items-center justify-center">
