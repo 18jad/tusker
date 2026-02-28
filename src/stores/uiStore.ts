@@ -16,13 +16,13 @@ interface UIState {
   tabs: Tab[];
   activeTabId: string | null;
 
-  // Column widths per table (key: "schema.table")
+  // Column widths per table (key: "connectionId::schema.table")
   columnWidths: Record<string, Record<string, number>>;
 
-  // Sort state per table (key: "schema.table") - array for multi-column sort
+  // Sort state per table (key: "connectionId::schema.table") - array for multi-column sort
   tableSortState: Record<string, SortColumn[]>;
 
-  // Filter state per table (key: "schema.table")
+  // Filter state per table (key: "connectionId::schema.table")
   tableFilterState: Record<string, FilterCondition[]>;
 
   // Expanded schemas in sidebar (persists across schema refresh)
@@ -103,6 +103,7 @@ interface UIState {
   closeTab: (id: string) => void;
   closeOtherTabs: (id: string) => void;
   closeAllTabs: () => void;
+  closeTabsForConnection: (connectionId: string) => void;
   setActiveTab: (id: string) => void;
   updateTab: (id: string, updates: Partial<Tab>) => void;
   toggleCommandPalette: () => void;
@@ -112,19 +113,19 @@ interface UIState {
   closeProjectModal: () => void;
   openCreateTableModal: (schema?: string) => void;
   closeCreateTableModal: () => void;
-  addCreateTableTab: (schema?: string) => void;
-  addEditTableTab: (schema: string, table: string) => void;
+  addCreateTableTab: (connectionId: string, projectId: string, schema?: string) => void;
+  addEditTableTab: (connectionId: string, projectId: string, schema: string, table: string) => void;
   openDeleteTableModal: (schema: string, table: string, rowCount?: number) => void;
   closeDeleteTableModal: () => void;
   openTruncateTableModal: (schema: string, table: string, rowCount?: number) => void;
   closeTruncateTableModal: () => void;
   openExportTableModal: (schema: string, table: string, rowCount?: number) => void;
   closeExportTableModal: () => void;
-  addImportDataTab: (schema: string, table: string, format: "csv" | "json") => void;
-  addQueryTab: (initialSql?: string) => void;
-  addHistoryTab: () => void;
-  addStagedChangesTab: () => void;
-  addDiagramTab: (schema?: string) => void;
+  addImportDataTab: (connectionId: string, projectId: string, schema: string, table: string, format: "csv" | "json") => void;
+  addQueryTab: (connectionId: string, projectId: string, initialSql?: string) => void;
+  addHistoryTab: (connectionId: string, projectId: string) => void;
+  addStagedChangesTab: (connectionId: string, projectId: string) => void;
+  addDiagramTab: (connectionId: string, projectId: string, schema?: string) => void;
   reorderTabs: (fromIndex: number, toIndex: number) => void;
   pinTab: (id: string) => void;
   unpinTab: (id: string) => void;
@@ -154,6 +155,8 @@ interface UIState {
   getTableSort: (tableKey: string) => SortColumn[];
   setTableFilters: (tableKey: string, filters: FilterCondition[]) => void;
   getTableFilters: (tableKey: string) => FilterCondition[];
+  getActiveConnectionId: () => string | undefined;
+  getActiveProjectId: () => string | undefined;
   toggleSchemaExpanded: (schemaName: string) => void;
   isSchemaExpanded: (schemaName: string) => boolean;
 }
@@ -222,7 +225,12 @@ export const useUIStore = create<UIState>((set, get) => ({
       // FK-filtered tabs (with filterKey) are always unique — skip dedup
       if (!tab.filterKey) {
         const existing = state.tabs.find(
-          (t) => t.type === tab.type && t.table === tab.table && t.schema === tab.schema && !t.filterKey
+          (t) =>
+            t.type === tab.type &&
+            t.connectionId === tab.connectionId &&
+            t.table === tab.table &&
+            t.schema === tab.schema &&
+            !t.filterKey
         );
         if (existing) {
           return { activeTabId: existing.id };
@@ -275,6 +283,40 @@ export const useUIStore = create<UIState>((set, get) => ({
       tableFilterState: {},
       tableSortState: {},
       columnWidths: {},
+    }),
+
+  closeTabsForConnection: (connectionId) =>
+    set((state) => {
+      const closingTabs = state.tabs.filter((t) => t.connectionId === connectionId);
+      const remainingTabs = state.tabs.filter((t) => t.connectionId !== connectionId);
+
+      // Clean up state for all closing table tabs
+      let newFilterState = { ...state.tableFilterState };
+      let newSortState = { ...state.tableSortState };
+      let newWidthState = { ...state.columnWidths };
+
+      closingTabs.forEach((tab) => {
+        if (tab.type === "table" && tab.schema && tab.table) {
+          const tableKey = tab.filterKey ?? `${connectionId}::${tab.schema}.${tab.table}`;
+          delete newFilterState[tableKey];
+          delete newSortState[tableKey];
+          delete newWidthState[tableKey];
+        }
+      });
+
+      // Update active tab if the current one is being closed
+      let newActiveId = state.activeTabId;
+      if (newActiveId && closingTabs.some((t) => t.id === newActiveId)) {
+        newActiveId = remainingTabs.length > 0 ? remainingTabs[remainingTabs.length - 1].id : null;
+      }
+
+      return {
+        tabs: remainingTabs,
+        activeTabId: newActiveId,
+        tableFilterState: newFilterState,
+        tableSortState: newSortState,
+        columnWidths: newWidthState,
+      };
     }),
 
   closeOtherTabs: (id) =>
@@ -392,12 +434,13 @@ export const useUIStore = create<UIState>((set, get) => ({
       },
     }),
 
-  addImportDataTab: (schema, table, format) =>
+  addImportDataTab: (connectionId, projectId, schema, table, format) =>
     set((state) => {
       // Check if an import tab already exists for this table and format
       const existing = state.tabs.find(
         (t) =>
           t.type === "import-data" &&
+          t.connectionId === connectionId &&
           t.schema === schema &&
           t.table === table &&
           t.importFormat === format
@@ -406,10 +449,12 @@ export const useUIStore = create<UIState>((set, get) => ({
         return { activeTabId: existing.id };
       }
       // Create a new import-data tab
-      const newTab = {
+      const newTab: Tab = {
         id: `import-${schema}-${table}-${format}-${Date.now()}`,
-        type: "import-data" as const,
+        type: "import-data",
         title: `Import ${format.toUpperCase()}`,
+        connectionId,
+        projectId,
         schema,
         table,
         importFormat: format,
@@ -420,14 +465,16 @@ export const useUIStore = create<UIState>((set, get) => ({
       };
     }),
 
-  addQueryTab: (initialSql) =>
+  addQueryTab: (connectionId, projectId, initialSql) =>
     set((state) => {
       // Count existing query tabs to generate a unique title
       const queryTabCount = state.tabs.filter((t) => t.type === "query").length;
-      const newTab = {
+      const newTab: Tab = {
         id: `query-${Date.now()}`,
-        type: "query" as const,
+        type: "query",
         title: `Query ${queryTabCount + 1}`,
+        connectionId,
+        projectId,
         queryContent: initialSql || "",
       };
       return {
@@ -436,9 +483,11 @@ export const useUIStore = create<UIState>((set, get) => ({
       };
     }),
 
-  addHistoryTab: () =>
+  addHistoryTab: (connectionId, projectId) =>
     set((state) => {
-      const existing = state.tabs.find((t) => t.type === "history");
+      const existing = state.tabs.find(
+        (t) => t.type === "history" && t.connectionId === connectionId
+      );
       if (existing) {
         return { activeTabId: existing.id };
       }
@@ -446,6 +495,8 @@ export const useUIStore = create<UIState>((set, get) => ({
         id: `history-${Date.now()}`,
         type: "history",
         title: "Commit History",
+        connectionId,
+        projectId,
       };
       return {
         tabs: [...state.tabs, newTab],
@@ -453,9 +504,11 @@ export const useUIStore = create<UIState>((set, get) => ({
       };
     }),
 
-  addStagedChangesTab: () =>
+  addStagedChangesTab: (connectionId, projectId) =>
     set((state) => {
-      const existing = state.tabs.find((t) => t.type === "staged-changes");
+      const existing = state.tabs.find(
+        (t) => t.type === "staged-changes" && t.connectionId === connectionId
+      );
       if (existing) {
         return { activeTabId: existing.id };
       }
@@ -463,6 +516,8 @@ export const useUIStore = create<UIState>((set, get) => ({
         id: `staged-changes-${Date.now()}`,
         type: "staged-changes",
         title: "Staged Changes",
+        connectionId,
+        projectId,
       };
       return {
         tabs: [...state.tabs, newTab],
@@ -470,10 +525,10 @@ export const useUIStore = create<UIState>((set, get) => ({
       };
     }),
 
-  addDiagramTab: (schema?: string) =>
+  addDiagramTab: (connectionId, projectId, schema?: string) =>
     set((state) => {
       const existing = state.tabs.find(
-        (t) => t.type === "diagram" && t.schema === schema,
+        (t) => t.type === "diagram" && t.connectionId === connectionId && t.schema === schema,
       );
       if (existing) {
         return { activeTabId: existing.id };
@@ -482,6 +537,8 @@ export const useUIStore = create<UIState>((set, get) => ({
         id: `diagram-${Date.now()}`,
         type: "diagram",
         title: schema ? `${schema} Diagram` : "Schema Diagram",
+        connectionId,
+        projectId,
         schema,
       };
       return {
@@ -581,10 +638,12 @@ export const useUIStore = create<UIState>((set, get) => ({
       toasts: state.toasts.filter((t) => t.id !== id),
     })),
 
-  addCreateTableTab: (schema) =>
+  addCreateTableTab: (connectionId, projectId, schema) =>
     set((state) => {
-      // Check if a create-table tab already exists
-      const existing = state.tabs.find((t) => t.type === "create-table");
+      // Check if a create-table tab already exists for this connection
+      const existing = state.tabs.find(
+        (t) => t.type === "create-table" && t.connectionId === connectionId
+      );
       if (existing) {
         // Update the existing tab's schema and make it active
         return {
@@ -599,6 +658,8 @@ export const useUIStore = create<UIState>((set, get) => ({
         id: `create-table-${Date.now()}`,
         type: "create-table",
         title: "New Table",
+        connectionId,
+        projectId,
         createTableSchema: schema,
       };
       return {
@@ -607,11 +668,11 @@ export const useUIStore = create<UIState>((set, get) => ({
       };
     }),
 
-  addEditTableTab: (schema, table) =>
+  addEditTableTab: (connectionId, projectId, schema, table) =>
     set((state) => {
-      // Check if an edit-table tab already exists for this table
+      // Check if an edit-table tab already exists for this table on this connection
       const existing = state.tabs.find(
-        (t) => t.type === "edit-table" && t.schema === schema && t.table === table
+        (t) => t.type === "edit-table" && t.connectionId === connectionId && t.schema === schema && t.table === table
       );
       if (existing) {
         return { activeTabId: existing.id };
@@ -620,6 +681,8 @@ export const useUIStore = create<UIState>((set, get) => ({
         id: `edit-table-${schema}-${table}-${Date.now()}`,
         type: "edit-table",
         title: `Edit: ${table}`,
+        connectionId,
+        projectId,
         schema,
         table,
       };
@@ -694,4 +757,18 @@ export const useUIStore = create<UIState>((set, get) => ({
     }),
 
   getTableFilters: (tableKey) => get().tableFilterState[tableKey] || [],
+
+  getActiveConnectionId: () => {
+    const state = get();
+    if (!state.activeTabId) return undefined;
+    const tab = state.tabs.find((t) => t.id === state.activeTabId);
+    return tab?.connectionId;
+  },
+
+  getActiveProjectId: () => {
+    const state = get();
+    if (!state.activeTabId) return undefined;
+    const tab = state.tabs.find((t) => t.id === state.activeTabId);
+    return tab?.projectId;
+  },
 }));
