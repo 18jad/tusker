@@ -8,7 +8,8 @@ interface ChangesState {
   addChange: (change: Omit<StagedChange, "id">) => void;
   removeChange: (id: string) => void;
   clearChanges: () => void;
-  getChangesForTable: (schema: string, table: string) => StagedChange[];
+  clearChangesForConnection: (connectionId: string) => void;
+  getChangesForTable: (connectionId: string, schema: string, table: string) => StagedChange[];
   hasChanges: () => boolean;
 }
 
@@ -25,6 +26,7 @@ export const useChangesStore = create<ChangesState>((set, get) => ({
         const existingIndex = state.changes.findIndex(
           (c) =>
             c.type === "update" &&
+            c.connectionId === change.connectionId &&
             c.schema === change.schema &&
             c.table === change.table &&
             findPrimaryKeyValue(c.data, c.originalData) === primaryKey
@@ -53,9 +55,17 @@ export const useChangesStore = create<ChangesState>((set, get) => ({
 
   clearChanges: () => set({ changes: [] }),
 
-  getChangesForTable: (schema, table) => {
+  clearChangesForConnection: (connectionId) =>
+    set((state) => ({
+      changes: state.changes.filter((c) => c.connectionId !== connectionId),
+    })),
+
+  getChangesForTable: (connectionId, schema, table) => {
     return get().changes.filter(
-      (c) => c.schema === schema && c.table === table
+      (c) =>
+        c.connectionId === connectionId &&
+        c.schema === schema &&
+        c.table === table
     );
   },
 
