@@ -2,24 +2,20 @@ import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { Search, Database, Plus, Loader2, AlertTriangle, Pencil, Trash2 } from "lucide-react";
 import { useUIStore } from "../../stores/uiStore";
 import { useProjectStore } from "../../stores/projectStore";
-import { useChangesStore } from "../../stores/changesStore";
-import { useConnect, useDisconnect } from "../../hooks/useDatabase";
+import { useConnect } from "../../hooks/useDatabase";
 import { cn, PROJECT_COLORS } from "../../lib/utils";
 import type { Project } from "../../types";
 
 export function ProjectSpotlight() {
-  const { projectSpotlightOpen, closeProjectSpotlight, openProjectModal, closeAllTabs } =
+  const { projectSpotlightOpen, closeProjectSpotlight, openProjectModal } =
     useUIStore();
-  const { projects, activeProjectId, connectionStatus, setActiveProject } =
-    useProjectStore();
-  const { clearChanges, hasChanges } = useChangesStore();
+  const projects = useProjectStore((s) => s.projects);
+  const connections = useProjectStore((s) => s.connections);
 
   const connect = useConnect();
-  const disconnect = useDisconnect();
 
   const [query, setQuery] = useState("");
   const [selectedIndex, setSelectedIndex] = useState(0);
-  const [pendingProject, setPendingProject] = useState<Project | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
@@ -36,65 +32,20 @@ export function ProjectSpotlight() {
     );
   }, [projects, query]);
 
-  const proceedWithProjectSwitch = useCallback(
-    async (project: Project) => {
-      // Disconnect from current if connected
-      if (connectionStatus === "connected") {
-        await disconnect.mutateAsync();
-      }
-
-      // Clear tabs and staged changes from previous project
-      closeAllTabs();
-      clearChanges();
-
-      setActiveProject(project.id);
-
-      // Auto-connect to the selected project
-      connect.mutate(project.connection);
-
-      closeProjectSpotlight();
-      setPendingProject(null);
-    },
-    [
-      connectionStatus,
-      disconnect,
-      closeAllTabs,
-      clearChanges,
-      setActiveProject,
-      connect,
-      closeProjectSpotlight,
-    ]
-  );
-
   const handleSelectProject = useCallback(
-    async (project: Project) => {
-      // If selecting the same project, just close
-      if (project.id === activeProjectId) {
+    (project: Project) => {
+      const isConnected = useProjectStore.getState().isProjectConnected(project.id);
+      if (isConnected) {
+        // Already connected — just close the spotlight
         closeProjectSpotlight();
         return;
       }
-
-      // Check for uncommitted staged changes
-      if (hasChanges()) {
-        setPendingProject(project);
-        return;
-      }
-
-      // No changes, proceed directly
-      await proceedWithProjectSwitch(project);
+      // Connect alongside existing connections
+      connect.mutate({ project });
+      closeProjectSpotlight();
     },
-    [activeProjectId, hasChanges, closeProjectSpotlight, proceedWithProjectSwitch]
+    [connect, closeProjectSpotlight]
   );
-
-  const handleConfirmSwitch = useCallback(async () => {
-    if (pendingProject) {
-      await proceedWithProjectSwitch(pendingProject);
-    }
-  }, [pendingProject, proceedWithProjectSwitch]);
-
-  const handleCancelSwitch = useCallback(() => {
-    setPendingProject(null);
-  }, []);
 
   const handleCreateProject = useCallback(() => {
     openProjectModal();
@@ -166,7 +117,6 @@ export function ProjectSpotlight() {
     if (projectSpotlightOpen) {
       setQuery("");
       setSelectedIndex(0);
-      setPendingProject(null);
       setConfirmDeleteId(null);
       setTimeout(() => inputRef.current?.focus(), 0);
     }
@@ -190,8 +140,6 @@ export function ProjectSpotlight() {
       closeProjectSpotlight();
     }
   };
-
-  const isConnecting = connectionStatus === "connecting";
 
   return (
     <div
@@ -218,69 +166,26 @@ export function ProjectSpotlight() {
             : "opacity-0 scale-95 -translate-y-2"
         )}
       >
-        {/* Confirmation Dialog for Staged Changes */}
-        {pendingProject ? (
-          <>
-            <div className="flex items-center gap-3 px-4 py-3 border-b border-[var(--border-color)]">
-              <AlertTriangle className="w-5 h-5 text-[var(--warning)]" />
-              <span className="text-sm font-medium text-[var(--text-primary)]">
-                Uncommitted Changes
-              </span>
-            </div>
-            <div className="p-4">
-              <p className="text-sm text-[var(--text-secondary)] mb-4">
-                You have staged changes that haven't been committed yet. Switching to{" "}
-                <span className="font-medium text-[var(--text-primary)]">
-                  {pendingProject.name}
-                </span>{" "}
-                will discard these changes.
-              </p>
-              <div className="flex items-center justify-end gap-2">
-                <button
-                  onClick={handleCancelSwitch}
-                  className={cn(
-                    "px-3 py-1.5 text-sm rounded-md",
-                    "text-[var(--text-secondary)] hover:text-[var(--text-primary)]",
-                    "hover:bg-[var(--bg-tertiary)] transition-colors"
-                  )}
-                >
-                  Stay & Review
-                </button>
-                <button
-                  onClick={handleConfirmSwitch}
-                  className={cn(
-                    "px-3 py-1.5 text-sm rounded-md",
-                    "bg-red-500 text-white",
-                    "hover:bg-red-600 transition-colors"
-                  )}
-                >
-                  Discard & Switch
-                </button>
-              </div>
-            </div>
-          </>
-        ) : (
-          <>
-            {/* Search Input */}
-            <div className="flex items-center gap-3 px-4 py-3 border-b border-[var(--border-color)]">
-              <Search className="w-5 h-5 text-[var(--text-muted)]" />
-              <input
-                ref={inputRef}
-                type="text"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search projects..."
-                className={cn(
-                  "flex-1 bg-transparent text-[var(--text-primary)]",
-                  "placeholder:text-[var(--text-muted)]",
-                  "!outline-none focus:!outline-none focus-visible:!outline-none",
-                  "!ring-0 focus:!ring-0 !border-none focus:!border-none"
-                )}
-              />
-              <kbd className="px-2 py-0.5 rounded text-xs text-[var(--text-muted)] bg-[var(--bg-tertiary)] border border-[var(--border-color)]">
-                ESC
-              </kbd>
-            </div>
+        {/* Search Input */}
+        <div className="flex items-center gap-3 px-4 py-3 border-b border-[var(--border-color)]">
+          <Search className="w-5 h-5 text-[var(--text-muted)]" />
+          <input
+            ref={inputRef}
+            type="text"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search projects..."
+            className={cn(
+              "flex-1 bg-transparent text-[var(--text-primary)]",
+              "placeholder:text-[var(--text-muted)]",
+              "!outline-none focus:!outline-none focus-visible:!outline-none",
+              "!ring-0 focus:!ring-0 !border-none focus:!border-none"
+            )}
+          />
+          <kbd className="px-2 py-0.5 rounded text-xs text-[var(--text-muted)] bg-[var(--bg-tertiary)] border border-[var(--border-color)]">
+            ESC
+          </kbd>
+        </div>
 
         {/* Projects List */}
         <div ref={listRef} className="max-h-80 overflow-y-auto p-2">
@@ -297,7 +202,8 @@ export function ProjectSpotlight() {
           ) : (
             filteredProjects.map((project, index) => {
               const isSelected = index === selectedIndex;
-              const isActive = project.id === activeProjectId;
+              const isConnected = !!connections[project.id];
+              const isConnecting = connections[project.id]?.status === "connecting";
               const colorClasses = PROJECT_COLORS[project.color];
               const isConfirmingDelete = confirmDeleteId === project.id;
 
@@ -375,9 +281,9 @@ export function ProjectSpotlight() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
                         <span className="font-medium truncate">{project.name}</span>
-                        {isActive && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--accent)]/20 text-[var(--accent)]">
-                            Active
+                        {isConnected && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400">
+                            Connected
                           </span>
                         )}
                       </div>
@@ -389,7 +295,7 @@ export function ProjectSpotlight() {
                   </button>
 
                   {/* Action buttons (visible on hover) */}
-                  {isConnecting && isActive ? (
+                  {isConnecting ? (
                     <Loader2 className="w-4 h-4 animate-spin flex-shrink-0" />
                   ) : (
                     <div className="flex items-center gap-0.5 flex-shrink-0 opacity-0 group-hover/project:opacity-100 transition-opacity">
@@ -455,8 +361,6 @@ export function ProjectSpotlight() {
             <span>New Project</span>
           </button>
         </div>
-          </>
-        )}
       </div>
     </div>
   );
