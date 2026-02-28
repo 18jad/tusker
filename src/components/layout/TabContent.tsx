@@ -3902,7 +3902,7 @@ export function TabContent() {
         } else if (tab.type === "staged-changes") {
           content = <StagedChangesTab key={tab.id} tab={tab} />;
         } else if (tab.type === "diagram") {
-          content = <DiagramTab key={tab.id} schema={tab.schema} />;
+          content = <DiagramTab key={tab.id} tab={tab} />;
         }
 
         if (!content) return null;

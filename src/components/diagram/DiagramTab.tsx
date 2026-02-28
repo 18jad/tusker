@@ -24,6 +24,7 @@ import { toPng, toSvg } from "html-to-image";
 import { useProjectStore } from "../../stores/projectStore";
 import { useUIStore } from "../../stores/uiStore";
 import { getCurrentConnectionId } from "../../hooks/useDatabase";
+import type { Tab, Schema } from "../../types";
 import { TableNode } from "./TableNode";
 import { SchemaLabelNode } from "./SchemaLabelNode";
 import { SchemaEdge } from "./SchemaEdge";
@@ -60,12 +61,17 @@ interface TableColumnsResult {
   }>;
 }
 
+const EMPTY_SCHEMAS: Schema[] = [];
+
 interface DiagramCanvasProps {
-  schema?: string;
+  tab: Tab;
 }
 
-function DiagramCanvas({ schema: singleSchema }: DiagramCanvasProps) {
-  const allSchemas = useProjectStore((s) => s.schemas);
+function DiagramCanvas({ tab }: DiagramCanvasProps) {
+  const allSchemas = useProjectStore(
+    (s) => s.connections[tab.projectId]?.schemas ?? EMPTY_SCHEMAS,
+  );
+  const singleSchema = tab.schema;
   const schemas = useMemo(
     () => singleSchema ? allSchemas.filter((s) => s.name === singleSchema) : allSchemas,
     [allSchemas, singleSchema],
@@ -274,11 +280,13 @@ function DiagramCanvas({ schema: singleSchema }: DiagramCanvasProps) {
         id: crypto.randomUUID(),
         type: "table",
         title: data.table,
+        connectionId: tab.connectionId,
+        projectId: tab.projectId,
         schema: data.schema,
         table: data.table,
       });
     },
-    [addTab],
+    [addTab, tab.connectionId, tab.projectId],
   );
 
   const schemaColorMap = useMemo(() => getSchemaColorMap(schemaNames), [schemaNames]);
@@ -503,10 +511,10 @@ function DiagramCanvas({ schema: singleSchema }: DiagramCanvasProps) {
   );
 }
 
-export function DiagramTab({ schema }: { schema?: string }) {
+export function DiagramTab({ tab }: { tab: Tab }) {
   return (
     <ReactFlowProvider>
-      <DiagramCanvas schema={schema} />
+      <DiagramCanvas tab={tab} />
     </ReactFlowProvider>
   );
 }
