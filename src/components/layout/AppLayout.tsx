@@ -13,7 +13,6 @@ import { TabBar } from "./TabBar";
 import { StatusBar } from "./StatusBar";
 import { TabContent } from "./TabContent";
 import { Dashboard } from "./Dashboard";
-import { HomePage } from "./HomePage";
 import { useProjectStore } from "../../stores/projectStore";
 import { useUIStore } from "../../stores/uiStore";
 import { useGlobalKeyboardShortcuts } from "../../hooks/useKeyboard";
@@ -197,7 +196,6 @@ export function AppLayout({ children }: AppLayoutProps) {
   const toggleSidebar = useUIStore((state) => state.toggleSidebar);
   const setSidebarWidth = useUIStore((state) => state.setSidebarWidth);
   const activeTabId = useUIStore((state) => state.activeTabId);
-  const projects = useProjectStore((state) => state.projects);
   const connections = useProjectStore((state) => state.connections);
 
   // Global keyboard shortcuts (Cmd+W to close tab, Cmd+K for command palette, etc.)
@@ -206,15 +204,12 @@ export function AppLayout({ children }: AppLayoutProps) {
   // Live database connection health check
   useConnectionHealthCheck();
 
-  const hasProjects = projects.length > 0;
   const hasAnyConnection = Object.keys(connections).length > 0;
   const showTabContent = activeTabId !== null;
 
   // Layout modes:
-  // 1. No projects at all → Dashboard (first-time setup)
-  // 2. Has projects but no active connections → HomePage (pick databases to connect)
-  // 3. Connected → Sidebar + workspace (tabs or empty state)
-  const showHomePage = hasProjects && !hasAnyConnection;
+  // 1. No active connections → Dashboard (Pencil design: stats, grid, quick connect, activity)
+  // 2. Connected → Sidebar + workspace (tabs or empty state)
 
   return (
     <div className="h-screen w-screen flex flex-col overflow-hidden bg-[var(--bg-primary)]">
@@ -226,10 +221,8 @@ export function AppLayout({ children }: AppLayoutProps) {
 
       {/* Main Content Area */}
       <div className="flex-1 flex overflow-hidden">
-        {!hasProjects ? (
+        {!hasAnyConnection ? (
           <Dashboard />
-        ) : showHomePage ? (
-          <HomePage />
         ) : (
           <>
             {/* Sidebar */}

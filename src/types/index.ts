@@ -5,6 +5,7 @@ export interface Project {
   color: ProjectColor;
   connection: ConnectionConfig;
   settings: ProjectSettings;
+  favorite?: boolean;
   lastConnected?: string;
   createdAt: string;
 }
