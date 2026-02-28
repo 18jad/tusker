@@ -148,10 +148,12 @@ export function ContextMenu({ items, children, disabled, className, onOpenChange
   const [position, setPosition] = useState<ContextMenuPosition>({ x: 0, y: 0 });
   const menuRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const onOpenChangeRef = useRef(onOpenChange);
+  onOpenChangeRef.current = onOpenChange;
 
   useEffect(() => {
-    onOpenChange?.(isOpen);
-  }, [isOpen, onOpenChange]);
+    onOpenChangeRef.current?.(isOpen);
+  }, [isOpen]);
 
   const handleContextMenu = (e: React.MouseEvent) => {
     if (disabled) return;
