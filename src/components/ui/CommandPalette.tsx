@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { Search, ArrowRight, Table2, FolderOpen, Command } from "lucide-react";
+import { Search, ArrowRight, Table2, FolderOpen, Command, Settings } from "lucide-react";
 import { useUIStore } from "../../stores/uiStore";
 import { useProjectStore } from "../../stores/projectStore";
+import { useUpdateCheck } from "../../hooks/useUpdateCheck";
 import { cn } from "../../lib/utils";
 import type { Command as CommandType } from "../../types";
 
@@ -12,6 +13,7 @@ const CATEGORY_LABELS: Record<CommandCategory, string> = {
   project: "Projects",
   table: "Tables",
   query: "Query",
+  system: "System",
 };
 
 const CATEGORY_ICONS: Record<CommandCategory, React.ReactNode> = {
@@ -19,12 +21,14 @@ const CATEGORY_ICONS: Record<CommandCategory, React.ReactNode> = {
   project: <FolderOpen className="w-4 h-4" />,
   table: <Table2 className="w-4 h-4" />,
   query: <Command className="w-4 h-4" />,
+  system: <Settings className="w-4 h-4" />,
 };
 
 export function CommandPalette() {
-  const { commandPaletteOpen, toggleCommandPalette, openProjectModal, addTab, addDiagramTab } =
+  const { commandPaletteOpen, toggleCommandPalette, openProjectModal, addTab, addDiagramTab, showToast } =
     useUIStore();
   const { projects, schemas, connectionStatus, setActiveProject } = useProjectStore();
+  const { checkNow, status: updateStatus } = useUpdateCheck();
 
   const [query, setQuery] = useState("");
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -101,8 +105,27 @@ export function CommandPalette() {
       });
     });
 
+    // System commands
+    cmds.push({
+      id: "check-for-updates",
+      label: updateStatus === "available" ? "Check for Updates (update available!)" : "Check for Updates",
+      action: () => {
+        showToast("Checking for updates...", "info");
+        checkNow().then((result) => {
+          if (result.error) {
+            showToast(`Update check failed: ${result.error}`, "error");
+          } else if (result.available) {
+            showToast(`Update available: v${result.version}`, "success");
+          } else {
+            showToast("You're on the latest version", "success");
+          }
+        });
+      },
+      category: "system",
+    });
+
     return cmds;
-  }, [projects, schemas, connectionStatus, openProjectModal, addTab, addDiagramTab, setActiveProject]);
+  }, [projects, schemas, connectionStatus, openProjectModal, addTab, addDiagramTab, setActiveProject, checkNow, updateStatus]);
 
   const filteredCommands = useMemo(() => {
     if (!query.trim()) return commands;

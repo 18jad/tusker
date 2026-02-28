@@ -133,7 +133,7 @@ export interface Command {
   label: string;
   shortcut?: string;
   action: () => void;
-  category: "navigation" | "project" | "table" | "query";
+  category: "navigation" | "project" | "table" | "query" | "system";
 }
 
 // Commit history
