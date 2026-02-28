@@ -33,7 +33,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useProjectStore } from "../../stores/projectStore";
 import { useUIStore } from "../../stores/uiStore";
 
-import { cn, generateId, PROJECT_COLORS, modKey } from "../../lib/utils";
+import { cn, generateId, PROJECT_COLORS } from "../../lib/utils";
 import { exportTable } from "../../lib/exportTable";
 import { ContextMenu } from "../ui";
 import { useConnect, useDisconnect, useExecuteSQL } from "../../hooks/useDatabase";
@@ -871,35 +871,6 @@ function DisconnectedProject({ project }: DisconnectedProjectProps) {
   );
 }
 
-// --- Helpers to resolve connection context for footer buttons ---
-
-function resolveConnectionContext(): { connectionId: string; projectId: string } | null {
-  const uiState = useUIStore.getState();
-  const projectState = useProjectStore.getState();
-
-  // 1. Try active tab
-  const activeConnectionId = uiState.getActiveConnectionId();
-  const activeProjectId = uiState.getActiveProjectId();
-  if (activeConnectionId && activeProjectId) {
-    return { connectionId: activeConnectionId, projectId: activeProjectId };
-  }
-
-  // 2. Check if exactly one connection exists
-  const connectedEntries = Object.entries(projectState.connections);
-  if (connectedEntries.length === 1) {
-    const [projectId, conn] = connectedEntries[0];
-    return { connectionId: conn.connectionId, projectId };
-  }
-
-  // 3. If multiple connections, pick the first one
-  if (connectedEntries.length > 0) {
-    const [projectId, conn] = connectedEntries[0];
-    return { connectionId: conn.connectionId, projectId };
-  }
-
-  return null;
-}
-
 // --- Main Sidebar ---
 
 interface SidebarProps {
@@ -916,9 +887,6 @@ export function Sidebar({
   onWidthChange,
 }: SidebarProps) {
   const openProjectModal = useUIStore((state) => state.openProjectModal);
-  const addCreateTableTab = useUIStore((state) => state.addCreateTableTab);
-  const addQueryTab = useUIStore((state) => state.addQueryTab);
-  const showToast = useUIStore((state) => state.showToast);
   const projects = useProjectStore((state) => state.projects);
   const connections = useProjectStore((state) => state.connections);
   const [isResizing, setIsResizing] = useState(false);
@@ -941,26 +909,6 @@ export function Sidebar({
       disconnectedProjects.push(project);
     }
   }
-
-  const hasAnyConnection = connectedProjects.length > 0;
-
-  const handleNewQuery = () => {
-    const ctx = resolveConnectionContext();
-    if (!ctx) {
-      showToast("No active connection. Connect to a project first.", "error");
-      return;
-    }
-    addQueryTab(ctx.connectionId, ctx.projectId);
-  };
-
-  const handleNewTable = () => {
-    const ctx = resolveConnectionContext();
-    if (!ctx) {
-      showToast("No active connection. Connect to a project first.", "error");
-      return;
-    }
-    addCreateTableTab(ctx.connectionId, ctx.projectId);
-  };
 
   return (
     <aside
@@ -1037,46 +985,8 @@ export function Sidebar({
             )}
           </div>
 
-          {/* Footer buttons */}
-          <div className="p-2 border-t border-[var(--border-color)] shrink-0 flex flex-col gap-2">
-            {hasAnyConnection && (
-              <>
-                <button
-                  onClick={handleNewQuery}
-                  className={cn(
-                    "w-full flex items-center gap-2 h-8 px-3",
-                    "bg-green-600/20 hover:bg-green-600/30",
-                    "rounded text-sm text-green-400",
-                    "hover:text-green-300",
-                    "transition-colors duration-150"
-                  )}
-                >
-                  <Terminal className="w-4 h-4" />
-                  <span>New Query</span>
-                  <div className="flex items-center gap-0.5 ml-auto">
-                    <kbd className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-green-500/20 text-green-300/80">{modKey.replace('+', '')}</kbd>
-                    <kbd className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-green-500/20 text-green-300/80">T</kbd>
-                  </div>
-                </button>
-                <button
-                  onClick={handleNewTable}
-                  className={cn(
-                    "w-full flex items-center gap-2 h-8 px-3",
-                    "bg-purple-600/20 hover:bg-purple-600/30",
-                    "rounded text-sm text-purple-400",
-                    "hover:text-purple-300",
-                    "transition-colors duration-150"
-                  )}
-                >
-                  <Table2 className="w-4 h-4" />
-                  <span>New Table</span>
-                  <div className="flex items-center gap-0.5 ml-auto">
-                    <kbd className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-purple-500/20 text-purple-300/80">{modKey.replace('+', '')}</kbd>
-                    <kbd className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-purple-500/20 text-purple-300/80">N</kbd>
-                  </div>
-                </button>
-              </>
-            )}
+          {/* Footer */}
+          <div className="p-2 border-t border-[var(--border-color)] shrink-0">
             <button
               onClick={() => openProjectModal()}
               className={cn(
