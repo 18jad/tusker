@@ -49,6 +49,7 @@ interface TreeItemProps {
   children?: React.ReactNode;
   isActive?: boolean;
   action?: React.ReactNode;
+  menuOpen?: boolean;
 }
 
 function TreeItem({
@@ -61,15 +62,16 @@ function TreeItem({
   children,
   isActive,
   action,
+  menuOpen,
 }: TreeItemProps) {
   const hasChildren = !!children;
   const paddingLeft = 12 + level * 16;
 
   return (
-    <div className="group/tree-item select-none">
+    <div className="select-none">
       <div
         className={cn(
-          "w-full flex items-center gap-2 h-7 text-sm",
+          "group/tree-item w-full flex items-center gap-2 h-7 text-sm",
           "hover:bg-[var(--bg-tertiary)] transition-colors duration-150",
           isActive && "bg-[var(--bg-tertiary)] text-[var(--accent)]"
         )}
@@ -94,7 +96,10 @@ function TreeItem({
           <span className="truncate text-left">{label}</span>
         </button>
         {action && (
-          <span className="opacity-0 group-hover/tree-item:opacity-100 transition-opacity duration-150 pr-2">
+          <span className={cn(
+            "transition-opacity duration-150 pr-2",
+            menuOpen ? "opacity-100" : "opacity-0 group-hover/tree-item:opacity-100"
+          )}>
             {action}
           </span>
         )}
@@ -129,6 +134,8 @@ function SchemaTree({ schema, level }: SchemaTreeProps) {
   const showToast = useUIStore((state) => state.showToast);
   const isExpanded = useUIStore((state) => state.expandedSchemas.has(schema.name));
   const toggleSchemaExpanded = useUIStore((state) => state.toggleSchemaExpanded);
+  const [schemaMenuOpen, setSchemaMenuOpen] = useState(false);
+  const [tableMenuOpen, setTableMenuOpen] = useState<string | null>(null);
 
   const handleTableClick = (table: Table) => {
     addTab({
@@ -157,6 +164,7 @@ function SchemaTree({ schema, level }: SchemaTreeProps) {
 
   return (
     <ContextMenu
+      onOpenChange={setSchemaMenuOpen}
       items={[
         {
           label: "Schema Info",
@@ -227,6 +235,7 @@ function SchemaTree({ schema, level }: SchemaTreeProps) {
         level={level}
         isExpanded={isExpanded}
         onToggle={() => toggleSchemaExpanded(schema.name)}
+        menuOpen={schemaMenuOpen}
         action={
           <span className="flex items-center gap-0.5">
             <button
@@ -267,6 +276,7 @@ function SchemaTree({ schema, level }: SchemaTreeProps) {
         {schema.tables.map((table) => (
           <ContextMenu
             key={`${schema.name}.${table.name}`}
+            onOpenChange={(open) => setTableMenuOpen(open ? table.name : null)}
             items={[
               {
                 label: "Copy Name",
@@ -379,6 +389,7 @@ function SchemaTree({ schema, level }: SchemaTreeProps) {
               level={level + 1}
               onClick={() => handleTableClick(table)}
               isActive={isTableActive(table.name)}
+              menuOpen={tableMenuOpen === table.name}
               action={
                 <button
                   onClick={(e) => {
@@ -430,6 +441,7 @@ function ProjectTree() {
   const addDiagramTab = useUIStore((state) => state.addDiagramTab);
   const queryClient = useQueryClient();
   const [isExpanded, setIsExpanded] = useState(true);
+  const [projectMenuOpen, setProjectMenuOpen] = useState(false);
   const [isCreatingSchema, setIsCreatingSchema] = useState(false);
   const [newSchemaName, setNewSchemaName] = useState("");
   const [schemaError, setSchemaError] = useState<string | null>(null);
@@ -506,6 +518,7 @@ function ProjectTree() {
   return (
     <div className="py-2">
       <ContextMenu
+        onOpenChange={setProjectMenuOpen}
         items={[
           ...connectionMenuItems,
           ...(connectionMenuItems.length > 0 ? [{ type: "separator" as const }] : []),
@@ -590,6 +603,7 @@ function ProjectTree() {
           level={0}
           isExpanded={isExpanded}
           onToggle={() => setIsExpanded(!isExpanded)}
+          menuOpen={projectMenuOpen}
           action={
             <span className="flex items-center gap-0.5">
               {connectionStatus === "connected" && (

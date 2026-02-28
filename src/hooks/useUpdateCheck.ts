@@ -84,6 +84,35 @@ export function useUpdateCheck() {
     }
   }, [update]);
 
+  const checkNow = useCallback(async (): Promise<{ available: boolean; version?: string; error?: string }> => {
+    setState((s) => ({ ...s, status: "idle", error: null }));
+
+    try {
+      const result = await check();
+      if (result) {
+        setState((s) => ({
+          ...s,
+          status: "available",
+          version: result.version,
+          dismissed: false,
+        }));
+        setUpdate(result);
+        return { available: true, version: result.version };
+      } else {
+        setState((s) => ({ ...s, status: "idle" }));
+        return { available: false };
+      }
+    } catch (e) {
+      const error = e instanceof Error ? e.message : "Update check failed";
+      setState((s) => ({
+        ...s,
+        status: "error",
+        error,
+      }));
+      return { available: false, error };
+    }
+  }, []);
+
   const dismiss = useCallback(() => {
     setState((s) => ({ ...s, dismissed: true }));
   }, []);
@@ -91,6 +120,7 @@ export function useUpdateCheck() {
   return {
     ...state,
     installUpdate,
+    checkNow,
     dismiss,
   };
 }

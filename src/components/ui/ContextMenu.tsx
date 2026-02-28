@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { ChevronRight } from "lucide-react";
 import { cn } from "../../lib/utils";
 
@@ -32,6 +33,8 @@ interface ContextMenuProps {
   items: ContextMenuItem[];
   children: React.ReactNode;
   disabled?: boolean;
+  className?: string;
+  onOpenChange?: (open: boolean) => void;
 }
 
 interface SubmenuItemProps {
@@ -140,11 +143,17 @@ function SubmenuItem({ item, onItemClick }: SubmenuItemProps) {
   );
 }
 
-export function ContextMenu({ items, children, disabled }: ContextMenuProps) {
+export function ContextMenu({ items, children, disabled, className, onOpenChange }: ContextMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [position, setPosition] = useState<ContextMenuPosition>({ x: 0, y: 0 });
   const menuRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const onOpenChangeRef = useRef(onOpenChange);
+  onOpenChangeRef.current = onOpenChange;
+
+  useEffect(() => {
+    onOpenChangeRef.current?.(isOpen);
+  }, [isOpen]);
 
   const handleContextMenu = (e: React.MouseEvent) => {
     if (disabled) return;
@@ -231,13 +240,15 @@ export function ContextMenu({ items, children, disabled }: ContextMenuProps) {
 
   return (
     <>
-      <div ref={containerRef} onContextMenu={handleContextMenu} data-context-menu>
+      <div ref={containerRef} onContextMenu={handleContextMenu} data-context-menu className={className}>
         {children}
       </div>
 
-      {isOpen && (
+      {isOpen && createPortal(
         <div
           ref={menuRef}
+          onClick={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
           className={cn(
             "fixed z-[100] min-w-[160px]",
             "bg-[var(--bg-secondary)] border border-[var(--border-color)]",
@@ -296,7 +307,8 @@ export function ContextMenu({ items, children, disabled }: ContextMenuProps) {
               </button>
             );
           })}
-        </div>
+        </div>,
+        document.body
       )}
     </>
   );

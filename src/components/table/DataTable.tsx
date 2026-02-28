@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect } from "react";
+import React, { useState, useCallback, useRef, useEffect } from "react";
 import DatePicker from "react-datepicker";
 import { cn } from "../../lib/utils";
 import { useUIStore } from "../../stores/uiStore";
@@ -13,7 +13,8 @@ import {
   SelectItem,
 } from "../ui/Select";
 import type { Column, Row, CellValue, SortColumn } from "../../types";
-import { Key, Hash, Type, Calendar, ToggleLeft, Braces, ArrowUp, ArrowDown, Copy, Columns, RotateCcw, ChevronDown } from "lucide-react";
+import { Key, Hash, Type, Calendar, ToggleLeft, Braces, ArrowUp, ArrowDown, Copy, Columns, RotateCcw, ChevronDown, Pencil, Ban, ClipboardCopy, MousePointerClick, Database, ExternalLink } from "lucide-react";
+import { ForeignKeySubRow, openRelatedTable } from "./ForeignKeyPreview";
 import "react-datepicker/dist/react-datepicker.css";
 
 interface DataTableProps {
@@ -596,6 +597,8 @@ function EditableCell({
   onCancel,
   readOnly,
   isEdited = false,
+  isFkPreviewOpen = false,
+  onFkPreview,
 }: {
   value: CellValue;
   column: Column;
@@ -605,6 +608,8 @@ function EditableCell({
   onCancel: () => void;
   readOnly: boolean;
   isEdited?: boolean;
+  isFkPreviewOpen?: boolean;
+  onFkPreview?: () => void;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -923,10 +928,12 @@ function EditableCell({
     );
   }
 
+  const hasFkPreview = column.isForeignKey && column.foreignKeyInfo && !isNull && onFkPreview;
+
   return (
     <div
       className={cn(
-        "px-3 py-2 truncate text-sm h-full flex items-center gap-1",
+        "px-3 py-2 truncate text-sm h-full flex items-center gap-1 group/fk",
         !readOnly && "cursor-text"
       )}
       onDoubleClick={() => !readOnly && onStartEdit()}
@@ -939,7 +946,7 @@ function EditableCell({
         <span className="text-[var(--text-muted)] italic text-xs">NULL</span>
       ) : (
         <>
-          <span className={cn("text-[var(--text-primary)]", isEdited && "text-[var(--warning)]")}>
+          <span className={cn("text-[var(--text-primary)] truncate", isEdited && "text-[var(--warning)]")}>
             {displayValue}
           </span>
           {isLarge && (
@@ -949,8 +956,190 @@ function EditableCell({
           )}
         </>
       )}
+      {hasFkPreview && (
+        <button
+          className={cn(
+            "ml-auto p-0.5 rounded transition-colors shrink-0",
+            "opacity-0 group-hover/fk:opacity-100",
+            "hover:bg-[var(--bg-tertiary)] text-[var(--text-muted)] hover:text-[var(--accent)]",
+            isFkPreviewOpen && "!opacity-100 bg-[var(--bg-tertiary)] text-[var(--accent)]"
+          )}
+          onClick={(e) => {
+            e.stopPropagation();
+            onFkPreview();
+          }}
+          onDoubleClick={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
+          title={`Preview ${column.foreignKeyInfo!.referencedTable}`}
+        >
+          <ExternalLink className="w-3 h-3" />
+        </button>
+      )}
     </div>
   );
+}
+
+/**
+ * Build context menu items for a data cell
+ */
+function buildCellContextMenu({
+  value,
+  row,
+  column,
+  readOnly,
+  isDeleted,
+  onStartEdit,
+  onCellEdit,
+  rowIndex,
+  tableKey,
+  hasSort,
+}: {
+  value: CellValue;
+  row: Row;
+  column: Column;
+  readOnly: boolean;
+  isDeleted: boolean;
+  onStartEdit: () => void;
+  onCellEdit?: (rowIndex: number, columnName: string, value: CellValue) => void;
+  rowIndex: number;
+  tableKey: string;
+  hasSort: boolean;
+}) {
+  const rawValue = value === null ? "NULL" : typeof value === "object" ? JSON.stringify(value, null, 2) : String(value);
+
+  const items: Parameters<typeof ContextMenu>[0]["items"] = [
+    {
+      label: "Copy Value",
+      icon: <ClipboardCopy className="w-3.5 h-3.5" />,
+      onClick: () => {
+        navigator.clipboard.writeText(rawValue);
+        useUIStore.getState().showToast("Value copied to clipboard", "info");
+      },
+    },
+    {
+      label: "Copy Row as JSON",
+      icon: <Braces className="w-3.5 h-3.5" />,
+      onClick: () => {
+        navigator.clipboard.writeText(JSON.stringify(row, null, 2));
+        useUIStore.getState().showToast("Row copied as JSON", "info");
+      },
+    },
+    {
+      label: "Copy Column Name",
+      icon: <Copy className="w-3.5 h-3.5" />,
+      onClick: () => {
+        navigator.clipboard.writeText(column.name);
+        useUIStore.getState().showToast("Column name copied", "info");
+      },
+    },
+  ];
+
+  if (!readOnly && !isDeleted) {
+    items.push({ type: "separator" });
+    items.push({
+      label: "Edit Cell",
+      icon: <Pencil className="w-3.5 h-3.5" />,
+      onClick: onStartEdit,
+    });
+    if (column.isNullable && value !== null) {
+      items.push({
+        label: "Set to NULL",
+        icon: <Ban className="w-3.5 h-3.5" />,
+        onClick: () => onCellEdit?.(rowIndex, column.name, null),
+      });
+    }
+  }
+
+  if (column.isForeignKey && column.foreignKeyInfo && value !== null) {
+    items.push({ type: "separator" });
+    items.push({
+      label: "Open Related Table",
+      icon: <ExternalLink className="w-3.5 h-3.5" />,
+      onClick: () => openRelatedTable(column.foreignKeyInfo!, value as string | number),
+    });
+  }
+
+  if (hasSort) {
+    items.push({ type: "separator" });
+    items.push({
+      label: "Sort Ascending",
+      icon: <ArrowUp className="w-3.5 h-3.5" />,
+      onClick: () => useUIStore.getState().setTableSort(tableKey, [{ column: column.name, direction: "ASC" }]),
+    });
+    items.push({
+      label: "Sort Descending",
+      icon: <ArrowDown className="w-3.5 h-3.5" />,
+      onClick: () => useUIStore.getState().setTableSort(tableKey, [{ column: column.name, direction: "DESC" }]),
+    });
+  }
+
+  return items;
+}
+
+/**
+ * Format a cell value as a SQL literal
+ */
+function formatSqlValue(value: CellValue): string {
+  if (value === null) return "NULL";
+  if (typeof value === "boolean") return value ? "TRUE" : "FALSE";
+  if (typeof value === "number") return String(value);
+  if (typeof value === "object") return `'${JSON.stringify(value).replace(/'/g, "''")}'`;
+  return `'${String(value).replace(/'/g, "''")}'`;
+}
+
+/**
+ * Build context menu items for a row number cell
+ */
+function buildRowContextMenu({
+  row,
+  columns,
+  tableKey,
+  rowIndex,
+  isSelected,
+  onRowSelect,
+}: {
+  row: Row;
+  columns: Column[];
+  tableKey: string;
+  rowIndex: number;
+  isSelected: boolean;
+  onRowSelect?: (index: number, modifiers: { shift: boolean; ctrl: boolean }) => void;
+}) {
+  const [schema, table] = tableKey.split(".");
+
+  const insertCols = columns.map((c) => `"${c.name}"`).join(", ");
+  const insertVals = columns.map((c) => formatSqlValue(row[c.name])).join(", ");
+  const insertSql = `INSERT INTO "${schema}"."${table}" (${insertCols}) VALUES (${insertVals});`;
+
+  const items: Parameters<typeof ContextMenu>[0]["items"] = [
+    {
+      label: "Copy Row as JSON",
+      icon: <Braces className="w-3.5 h-3.5" />,
+      onClick: () => {
+        navigator.clipboard.writeText(JSON.stringify(row, null, 2));
+        useUIStore.getState().showToast("Row copied as JSON", "info");
+      },
+    },
+    {
+      label: "Copy as INSERT",
+      icon: <Database className="w-3.5 h-3.5" />,
+      onClick: () => {
+        navigator.clipboard.writeText(insertSql);
+        useUIStore.getState().showToast("INSERT statement copied", "info");
+      },
+    },
+  ];
+
+  if (onRowSelect) {
+    items.push({ type: "separator" });
+    items.push({
+      label: isSelected ? "Deselect Row" : "Select Row",
+      icon: <MousePointerClick className="w-3.5 h-3.5" />,
+      onClick: () => onRowSelect(rowIndex, { shift: false, ctrl: true }),
+    });
+  }
+
+  return items;
 }
 
 /**
@@ -976,6 +1165,13 @@ export function DataTable({
   const [resizing, setResizing] = useState<string | null>(null);
   const [editingCell, setEditingCell] = useState<{ row: number; col: string } | null>(null);
   const [hoveringRowNumber, setHoveringRowNumber] = useState<number | null>(null);
+  const [fkPreview, setFkPreview] = useState<{ row: number; col: string } | null>(null);
+
+  const handleToggleFkPreview = useCallback((rowIndex: number, colName: string) => {
+    setFkPreview((prev) =>
+      prev?.row === rowIndex && prev?.col === colName ? null : { row: rowIndex, col: colName }
+    );
+  }, []);
 
   const columnWidths = allColumnWidths[tableKey] || {};
   const getColumnWidth = (colName: string) => columnWidths[colName] || 180;
@@ -1075,7 +1271,7 @@ export function DataTable({
 
   return (
     <div className="h-full flex flex-col">
-      <div className="flex-1 overflow-auto min-h-0">
+      <div className="flex-1 overflow-auto min-h-0" style={{ containerType: "inline-size" }}>
         <table className="w-full border-collapse">
         {/* Header */}
         <thead className="sticky top-0 z-20">
@@ -1093,12 +1289,20 @@ export function DataTable({
               const sortEntry = isSorted ? sorts[sortIndex] : null;
               const isAsc = sortEntry?.direction === "ASC";
               const isMultiSort = sorts.length > 1;
+              const isFkPinned = fkPreview?.col === column.name;
 
               return (
                 <th
                   key={column.name}
-                  className="relative text-left border-b border-r border-[var(--border-color)] last:border-r-0"
-                  style={{ width: getColumnWidth(column.name), minWidth: getColumnWidth(column.name) }}
+                  className={cn(
+                    "relative text-left border-b border-r border-[var(--border-color)] last:border-r-0",
+                    isFkPinned && "sticky z-20 bg-[var(--bg-secondary)] shadow-[inset_-2px_0_0_0_var(--border-color)]"
+                  )}
+                  style={{
+                    width: getColumnWidth(column.name),
+                    minWidth: getColumnWidth(column.name),
+                    ...(isFkPinned ? { left: 50 } : {}),
+                  }}
                   aria-sort={isSorted ? (isAsc ? "ascending" : "descending") : "none"}
                 >
                   <ContextMenu
@@ -1231,10 +1435,11 @@ export function DataTable({
             const isEven = rowIndex % 2 === 0;
             const isDeleted = deletedRows.has(rowIndex);
             const isRowHovered = hoveringRowNumber === rowIndex;
+            const fkCol = fkPreview?.row === rowIndex ? columns.find((c) => c.name === fkPreview.col) : null;
 
             return (
+              <React.Fragment key={rowIndex}>
               <tr
-                key={rowIndex}
                 className={cn(
                   "transition-colors",
                   isDeleted
@@ -1266,13 +1471,38 @@ export function DataTable({
                   )}
                   style={{ width: 50, minWidth: 50 }}
                 >
-                  <span className={cn(isDeleted && "line-through")}>{startRowNumber + rowIndex}</span>
+                  <ContextMenu
+                    className="w-full h-full flex items-center justify-center py-2"
+                    items={buildRowContextMenu({
+                      row,
+                      columns,
+                      tableKey,
+                      rowIndex,
+                      isSelected,
+                      onRowSelect,
+                    })}
+                  >
+                    <span className={cn(isDeleted && "line-through")}>{startRowNumber + rowIndex}</span>
+                  </ContextMenu>
                 </td>
                 {columns.map((column) => {
                   const value = row[column.name];
                   const isEditing = editingCell?.row === rowIndex && editingCell?.col === column.name;
                   const cellKey = `${rowIndex}:${column.name}`;
                   const isEdited = editedCells.has(cellKey);
+                  const isFkPreviewOpen = fkPreview?.row === rowIndex && fkPreview?.col === column.name;
+                  const isFkPinned = fkPreview?.col === column.name;
+
+                  // Determine background for pinned FK column cells
+                  const pinnedBg = isFkPinned
+                    ? isDeleted
+                      ? "bg-red-950"
+                      : isSelected
+                        ? "bg-[var(--bg-tertiary)]"
+                        : isEven
+                          ? "bg-[var(--bg-primary)]"
+                          : "bg-[var(--bg-secondary)]"
+                    : undefined;
 
                   return (
                     <td
@@ -1284,28 +1514,62 @@ export function DataTable({
                         isEdited && !isDeleted && "bg-[var(--warning)]/10",
                         isDeleted && "line-through text-red-400/70",
                         // Cell hover - only when not editing, not deleted, not row-number-hovered
-                        !isEditing && !isDeleted && !isRowHovered && "hover:bg-[var(--bg-tertiary)]"
+                        !isEditing && !isDeleted && !isRowHovered && "hover:bg-[var(--bg-tertiary)]",
+                        isFkPinned && "sticky z-10 shadow-[inset_-2px_0_0_0_var(--border-color)]",
+                        pinnedBg,
                       )}
                       style={{
                         width: getColumnWidth(column.name),
                         minWidth: getColumnWidth(column.name),
-                        maxWidth: getColumnWidth(column.name)
+                        maxWidth: getColumnWidth(column.name),
+                        ...(isFkPinned ? { left: 50 } : {}),
                       }}
                     >
-                      <EditableCell
-                        value={value}
-                        column={column}
-                        isEditing={isEditing && !isDeleted}
-                        onStartEdit={() => !isDeleted && handleStartEdit(rowIndex, column.name)}
-                        onSave={(newValue) => handleSaveEdit(rowIndex, column.name, newValue)}
-                        onCancel={handleCancelEdit}
-                        readOnly={readOnly || isDeleted}
-                        isEdited={isEdited}
-                      />
+                      <ContextMenu
+                        disabled={isEditing}
+                        items={buildCellContextMenu({
+                          value,
+                          row,
+                          column,
+                          readOnly,
+                          isDeleted,
+                          onStartEdit: () => !isDeleted && handleStartEdit(rowIndex, column.name),
+                          onCellEdit,
+                          rowIndex,
+                          tableKey,
+                          hasSort: !!onSort,
+                        })}
+                      >
+                        <EditableCell
+                          value={value}
+                          column={column}
+                          isEditing={isEditing && !isDeleted}
+                          onStartEdit={() => !isDeleted && handleStartEdit(rowIndex, column.name)}
+                          onSave={(newValue) => handleSaveEdit(rowIndex, column.name, newValue)}
+                          onCancel={handleCancelEdit}
+                          readOnly={readOnly || isDeleted}
+                          isEdited={isEdited}
+                          isFkPreviewOpen={isFkPreviewOpen}
+                          onFkPreview={
+                            column.isForeignKey && column.foreignKeyInfo
+                              ? () => handleToggleFkPreview(rowIndex, column.name)
+                              : undefined
+                          }
+                        />
+                      </ContextMenu>
                     </td>
                   );
                 })}
               </tr>
+              {fkCol?.foreignKeyInfo && (
+                <ForeignKeySubRow
+                  value={row[fkCol.name]}
+                  foreignKeyInfo={fkCol.foreignKeyInfo}
+                  colSpan={columns.length + 1}
+                  onClose={() => setFkPreview(null)}
+                />
+              )}
+              </React.Fragment>
             );
           })}
         </tbody>
@@ -1315,7 +1579,7 @@ export function DataTable({
       {/* Edit hint - outside scroll container */}
       {!readOnly && (
         <div className="shrink-0 px-3 py-1.5 bg-[var(--bg-secondary)] border-t border-[var(--border-color)] text-[10px] text-[var(--text-muted)]">
-          Click row number to select • Shift+click for range • Cmd/Ctrl+click to toggle • Double-click cell to edit
+          Click row number to select • Shift+click for range • Cmd/Ctrl+click to toggle • Double-click cell to edit • Right-click for more
         </div>
       )}
     </div>

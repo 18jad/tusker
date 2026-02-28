@@ -124,6 +124,7 @@ export interface Tab {
   queryContent?: string;
   createTableSchema?: string; // Pre-selected schema for create-table tabs
   importFormat?: "csv" | "json"; // Format for import-data tabs
+  filterKey?: string; // Unique state key for FK-filtered tabs (allows independent filter/sort/width state)
   pinned?: boolean;
 }
 
@@ -133,7 +134,7 @@ export interface Command {
   label: string;
   shortcut?: string;
   action: () => void;
-  category: "navigation" | "project" | "table" | "query";
+  category: "navigation" | "project" | "table" | "query" | "system";
 }
 
 // Commit history
