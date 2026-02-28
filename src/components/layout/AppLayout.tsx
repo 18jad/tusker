@@ -13,6 +13,7 @@ import { TabBar } from "./TabBar";
 import { StatusBar } from "./StatusBar";
 import { TabContent } from "./TabContent";
 import { Dashboard } from "./Dashboard";
+import { HomePage } from "./HomePage";
 import { useProjectStore } from "../../stores/projectStore";
 import { useUIStore } from "../../stores/uiStore";
 import { useGlobalKeyboardShortcuts } from "../../hooks/useKeyboard";
@@ -205,14 +206,15 @@ export function AppLayout({ children }: AppLayoutProps) {
   // Live database connection health check
   useConnectionHealthCheck();
 
-  // Determine what content to show:
-  // - If no projects exist -> show Dashboard (home page)
-  // - If projects exist -> show Sidebar + workspace
-  //   - If activeTabId -> show TabContent
-  //   - Otherwise -> show EmptyState
   const hasProjects = projects.length > 0;
-  const showTabContent = activeTabId !== null;
   const hasAnyConnection = Object.keys(connections).length > 0;
+  const showTabContent = activeTabId !== null;
+
+  // Layout modes:
+  // 1. No projects at all → Dashboard (first-time setup)
+  // 2. Has projects but no active connections → HomePage (pick databases to connect)
+  // 3. Connected → Sidebar + workspace (tabs or empty state)
+  const showHomePage = hasProjects && !hasAnyConnection;
 
   return (
     <div className="h-screen w-screen flex flex-col overflow-hidden bg-[var(--bg-primary)]">
@@ -224,7 +226,11 @@ export function AppLayout({ children }: AppLayoutProps) {
 
       {/* Main Content Area */}
       <div className="flex-1 flex overflow-hidden">
-        {hasProjects ? (
+        {!hasProjects ? (
+          <Dashboard />
+        ) : showHomePage ? (
+          <HomePage />
+        ) : (
           <>
             {/* Sidebar */}
             <Sidebar
@@ -241,12 +247,10 @@ export function AppLayout({ children }: AppLayoutProps) {
 
               {/* Content */}
               <div className="flex-1 overflow-hidden bg-[var(--bg-primary)]">
-                {children || (showTabContent ? <TabContent /> : <EmptyState hasAnyConnection={hasAnyConnection} />)}
+                {children || (showTabContent ? <TabContent /> : <EmptyState />)}
               </div>
             </main>
           </>
-        ) : (
-          <Dashboard />
         )}
       </div>
 
@@ -256,35 +260,17 @@ export function AppLayout({ children }: AppLayoutProps) {
   );
 }
 
-function EmptyState({ hasAnyConnection }: { hasAnyConnection: boolean }) {
-  if (hasAnyConnection) {
-    // Connected to at least one database — prompt to select a table
-    return (
-      <div className="h-full flex flex-col items-center justify-center text-center p-8">
-        <div className="rounded-2xl bg-[var(--bg-secondary)] p-6 mb-6">
-          <Database className="w-12 h-12 text-[var(--text-muted)]" />
-        </div>
-        <h2 className="text-lg font-medium text-[var(--text-primary)] mb-2">
-          Select a table from the sidebar
-        </h2>
-        <p className="text-[var(--text-muted)]">
-          Choose a table from the sidebar to view and edit its data
-        </p>
-      </div>
-    );
-  }
-
-  // No active connections — prompt to connect
+function EmptyState() {
   return (
     <div className="h-full flex flex-col items-center justify-center text-center p-8">
       <div className="rounded-2xl bg-[var(--bg-secondary)] p-6 mb-6">
         <Database className="w-12 h-12 text-[var(--text-muted)]" />
       </div>
       <h2 className="text-lg font-medium text-[var(--text-primary)] mb-2">
-        Connect to a database
+        Select a table from the sidebar
       </h2>
       <p className="text-[var(--text-muted)]">
-        Connect to a database from the sidebar to get started
+        Choose a table from the sidebar to view and edit its data
       </p>
     </div>
   );

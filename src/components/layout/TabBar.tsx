@@ -1,8 +1,9 @@
-import { useRef, useState, useEffect, useCallback } from "react";
+import { useRef, useState, useEffect, useCallback, useMemo } from "react";
 import { X, Table2, FileCode, ChevronLeft, ChevronRight, Database, FileUp, Pencil, XCircle, Pin, PinOff, Workflow } from "lucide-react";
 import { useUIStore } from "../../stores/uiStore";
+import { useProjectStore } from "../../stores/projectStore";
 import { ContextMenu } from "../ui/ContextMenu";
-import { cn } from "../../lib/utils";
+import { cn, PROJECT_COLORS } from "../../lib/utils";
 import type { Tab } from "../../types";
 
 function getTabIcon(type: Tab["type"]) {
@@ -28,6 +29,7 @@ interface TabItemProps {
   isPinned: boolean;
   isRenaming: boolean;
   renameValue: string;
+  dotColor?: string;
   onActivate: () => void;
   onClose: (e: React.MouseEvent) => void;
   onRenameStart: () => void;
@@ -47,6 +49,7 @@ function TabItem({
   isPinned,
   isRenaming,
   renameValue,
+  dotColor,
   onActivate,
   onClose,
   onRenameStart,
@@ -133,6 +136,7 @@ function TabItem({
         )}
       >
         {isPinned && <Pin className="w-3.5 h-3.5 shrink-0 text-[var(--text-secondary)] fill-current rotate-45" />}
+        {dotColor && <span className={cn("w-2 h-2 rounded-full shrink-0", dotColor)} />}
         <Icon className="w-4 h-4 shrink-0 text-[var(--text-muted)]" />
         {isPinned ? (
           <span className="truncate text-sm select-none">{tab.title}</span>
@@ -187,6 +191,16 @@ export function TabBar() {
   const reorderTabs = useUIStore((state) => state.reorderTabs);
   const pinTab = useUIStore((state) => state.pinTab);
   const unpinTab = useUIStore((state) => state.unpinTab);
+  const projects = useProjectStore((state) => state.projects);
+
+  // Build projectId -> dot color class lookup
+  const projectDotColors = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const p of projects) {
+      map[p.id] = PROJECT_COLORS[p.color]?.dot ?? "bg-gray-500";
+    }
+    return map;
+  }, [projects]);
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const tabRefs = useRef<(HTMLDivElement | null)[]>([]);
@@ -460,6 +474,7 @@ export function TabBar() {
               isPinned={!!tab.pinned}
               isRenaming={renamingTabId === tab.id}
               renameValue={renameValue}
+              dotColor={tab.projectId ? projectDotColors[tab.projectId] : undefined}
               onActivate={() => setActiveTab(tab.id)}
               onClose={(e) => handleClose(e, tab.id)}
               onRenameStart={() => handleRenameStart(tab)}
@@ -509,6 +524,7 @@ export function TabBar() {
             isPinned={!!tabs[dragIndex].pinned}
             isRenaming={false}
             renameValue=""
+            dotColor={tabs[dragIndex].projectId ? projectDotColors[tabs[dragIndex].projectId] : undefined}
             onActivate={() => {}}
             onClose={() => {}}
             onRenameStart={() => {}}

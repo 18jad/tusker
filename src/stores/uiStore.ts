@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import type { Tab, SortColumn, FilterCondition } from "../types";
+import { useProjectStore } from "./projectStore";
 
 interface Toast {
   id: string;
@@ -491,10 +492,12 @@ export const useUIStore = create<UIState>((set, get) => ({
       if (existing) {
         return { activeTabId: existing.id };
       }
+      const project = useProjectStore.getState().getProject(projectId);
+      const label = project?.connection.database ?? project?.name ?? "History";
       const newTab: Tab = {
         id: `history-${Date.now()}`,
         type: "history",
-        title: "Commit History",
+        title: `History · ${label}`,
         connectionId,
         projectId,
       };
@@ -512,10 +515,12 @@ export const useUIStore = create<UIState>((set, get) => ({
       if (existing) {
         return { activeTabId: existing.id };
       }
+      const project = useProjectStore.getState().getProject(projectId);
+      const label = project?.connection.database ?? project?.name ?? "Changes";
       const newTab: Tab = {
         id: `staged-changes-${Date.now()}`,
         type: "staged-changes",
-        title: "Staged Changes",
+        title: `Changes · ${label}`,
         connectionId,
         projectId,
       };
