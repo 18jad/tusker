@@ -1,18 +1,9 @@
 import { invoke } from "@tauri-apps/api/core";
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from "@tanstack/react-query";
-import type { Schema, TableData, Row, ConnectionConfig, SortColumn, FilterCondition, CommitRecord, CommitDetail } from "../types";
+import type { Schema, TableData, Row, SortColumn, FilterCondition, CommitRecord, CommitDetail, Project } from "../types";
 import { useProjectStore } from "../stores/projectStore";
-
-// Store the current connection ID
-let currentConnectionId: string | null = null;
-
-export function getCurrentConnectionId() {
-  return currentConnectionId;
-}
-
-export function setCurrentConnectionId(id: string | null) {
-  currentConnectionId = id;
-}
+import { useUIStore } from "../stores/uiStore";
+import { useChangesStore } from "../stores/changesStore";
 
 interface ConnectRequest {
   name: string;
@@ -58,22 +49,21 @@ function convertSchemasWithTables(raw: SchemaWithTables[]): Schema[] {
 
 // Connect to database
 export function useConnect() {
-  const { setConnectionStatus, setSchemas, setSchemasLoading, setError, getActiveProject } = useProjectStore();
+  const projectStore = useProjectStore;
 
   return useMutation({
-    mutationFn: async (config: ConnectionConfig) => {
-      setConnectionStatus("connecting");
-      setSchemas([]); // Clear stale schemas from previous connection
-      setSchemasLoading(false);
-      setError(null);
+    mutationFn: async (params: { project: Project; password?: string }) => {
+      const { project, password: providedPassword } = params;
+      const projectId = project.id;
 
-      const activeProject = getActiveProject();
+      projectStore.getState().setProjectConnectionStatus(projectId, "connecting");
+      projectStore.getState().setProjectError(projectId, null);
 
       // Fetch password from secure keychain if not provided
-      let password = config.password;
-      if (!password && activeProject) {
+      let password = providedPassword || project.connection.password;
+      if (!password) {
         try {
-          password = await invoke<string>("get_saved_password", { connectionId: activeProject.id });
+          password = await invoke<string>("get_saved_password", { connectionId: projectId });
         } catch {
           // No saved password, will try with empty (may fail auth)
           password = "";
@@ -81,73 +71,66 @@ export function useConnect() {
       }
 
       const request: ConnectRequest = {
-        name: activeProject?.name || "connection",
-        host: config.host,
-        port: config.port,
-        database: config.database,
-        username: config.username,
+        name: project.name,
+        host: project.connection.host,
+        port: project.connection.port,
+        database: project.connection.database,
+        username: project.connection.username,
         password,
-        ssl_mode: config.ssl ? "require" : "disable",
+        ssl_mode: project.connection.ssl ? "require" : "disable",
         save_connection: false,
       };
 
       const result = await invoke<ConnectResponse>("connect", { request });
-      currentConnectionId = result.connection_id;
-      return result;
+      return { result, projectId };
     },
-    onSuccess: async (result) => {
-      setConnectionStatus("connected");
-      setError(null);
+    onSuccess: async ({ result, projectId }) => {
+      projectStore.getState().connectProject(projectId, result.connection_id);
+      projectStore.getState().setProjectError(projectId, null);
 
-      // Update lastConnected timestamp on the active project
-      const activeProject = getActiveProject();
-      if (activeProject) {
-        useProjectStore.getState().updateProject(activeProject.id, {
-          lastConnected: new Date().toISOString(),
-        });
-      }
-      setSchemasLoading(true);
+      // Update lastConnected timestamp
+      projectStore.getState().updateProject(projectId, {
+        lastConnected: new Date().toISOString(),
+      });
+
+      projectStore.getState().setProjectSchemasLoading(projectId, true);
 
       // Fetch all schemas with tables in a single IPC call
       try {
         const raw = await invoke<SchemaWithTables[]>("get_schemas_with_tables", {
           connectionId: result.connection_id,
         });
-        setSchemas(convertSchemasWithTables(raw));
+        projectStore.getState().setProjectSchemas(projectId, convertSchemasWithTables(raw));
       } catch (err) {
         console.error("Failed to fetch schemas:", err);
       } finally {
-        setSchemasLoading(false);
+        projectStore.getState().setProjectSchemasLoading(projectId, false);
       }
     },
-    onError: (error: Error) => {
-      setConnectionStatus("error");
-      setError(error.message || "Failed to connect to database");
-      currentConnectionId = null;
+    onError: (error: Error, params) => {
+      const projectId = params.project.id;
+      projectStore.getState().setProjectConnectionStatus(projectId, "error");
+      projectStore.getState().setProjectError(projectId, error.message || "Failed to connect to database");
     },
   });
 }
 
 // Disconnect from database
 export function useDisconnect() {
-  const { setConnectionStatus, setSchemas, setSchemasLoading, setError, setActiveProject } = useProjectStore();
+  const projectStore = useProjectStore;
 
   return useMutation({
-    mutationFn: async () => {
-      if (currentConnectionId) {
-        await invoke("disconnect", { connectionId: currentConnectionId });
-        currentConnectionId = null;
-      }
+    mutationFn: async (params: { projectId: string; connectionId: string }) => {
+      await invoke("disconnect", { connectionId: params.connectionId });
+      return params;
     },
-    onSuccess: () => {
-      setConnectionStatus("disconnected");
-      setSchemas([]);
-      setSchemasLoading(false);
-      setError(null);
-      setActiveProject(null);
+    onSuccess: (params) => {
+      projectStore.getState().disconnectProject(params.projectId);
+      useUIStore.getState().closeTabsForConnection(params.connectionId);
+      useChangesStore.getState().clearChangesForConnection(params.connectionId);
     },
-    onError: (error: Error) => {
-      setError(error.message);
+    onError: (error: Error, params) => {
+      projectStore.getState().setProjectError(params.projectId, error.message);
     },
   });
 }
@@ -155,7 +138,7 @@ export function useDisconnect() {
 // Test connection
 export function useTestConnection() {
   return useMutation({
-    mutationFn: async (config: ConnectionConfig) => {
+    mutationFn: async (config: { host: string; port: number; database: string; username: string; password: string; ssl?: boolean }) => {
       const request = {
         host: config.host,
         port: config.port,
@@ -172,20 +155,16 @@ export function useTestConnection() {
 }
 
 // Fetch schemas
-export function useSchemas() {
-  const { connectionStatus } = useProjectStore();
-
+export function useSchemas(connectionId: string) {
   return useQuery({
-    queryKey: ["schemas"],
+    queryKey: ["schemas", connectionId],
     queryFn: async () => {
-      if (!currentConnectionId) throw new Error("Not connected");
-
       const raw = await invoke<SchemaWithTables[]>("get_schemas_with_tables", {
-        connectionId: currentConnectionId,
+        connectionId,
       });
       return convertSchemasWithTables(raw);
     },
-    enabled: connectionStatus === "connected" && !!currentConnectionId,
+    enabled: !!connectionId,
   });
 }
 
@@ -235,20 +214,17 @@ export interface FullColumnInfo {
 }
 
 // Fetch column metadata for a table (for Edit Table)
-export function useTableColumns(schema: string, table: string) {
-  const { connectionStatus } = useProjectStore();
-
+export function useTableColumns(connectionId: string, schema: string, table: string) {
   return useQuery({
-    queryKey: ["tableColumns", schema, table],
+    queryKey: ["tableColumns", connectionId, schema, table],
     queryFn: async () => {
-      if (!currentConnectionId) throw new Error("Not connected");
       return invoke<FullColumnInfo[]>("get_columns", {
-        connectionId: currentConnectionId,
+        connectionId,
         schema,
         table,
       });
     },
-    enabled: connectionStatus === "connected" && !!schema && !!table && !!currentConnectionId,
+    enabled: !!connectionId && !!schema && !!table,
   });
 }
 
@@ -262,32 +238,29 @@ export interface IndexInfoRaw {
 }
 
 // Fetch indexes for a table (for Edit Table)
-export function useTableIndexes(schema: string, table: string) {
-  const { connectionStatus } = useProjectStore();
-
+export function useTableIndexes(connectionId: string, schema: string, table: string) {
   return useQuery({
-    queryKey: ["tableIndexes", schema, table],
+    queryKey: ["tableIndexes", connectionId, schema, table],
     queryFn: async () => {
-      if (!currentConnectionId) throw new Error("Not connected");
       return invoke<IndexInfoRaw[]>("get_indexes", {
-        connectionId: currentConnectionId,
+        connectionId,
         schema,
         table,
       });
     },
-    enabled: connectionStatus === "connected" && !!schema && !!table && !!currentConnectionId,
+    enabled: !!connectionId && !!schema && !!table,
   });
 }
 
 // Fetch table data with pagination and sorting
 export function useTableData(
+  connectionId: string,
   schema: string,
   table: string,
   page: number = 1,
   sorts: SortColumn[] = [],
   filters: FilterCondition[] = [],
 ) {
-  const { connectionStatus } = useProjectStore();
   const queryClient = useQueryClient();
   const pageSize = 50;
   // Stable keys for React Query cache
@@ -295,33 +268,31 @@ export function useTableData(
   const filterKey = JSON.stringify(filters);
 
   return useQuery({
-    queryKey: ["tableData", schema, table, page, sortKey, filterKey],
+    queryKey: ["tableData", connectionId, schema, table, page, sortKey, filterKey],
     queryFn: async () => {
-      if (!currentConnectionId) throw new Error("Not connected");
-
       // Build order arrays from explicit sorts (backend auto-detects PK if none provided)
       const orderByColumns = sorts.length > 0 ? sorts.map((s) => s.column) : undefined;
       const orderDirections = sorts.length > 0 ? sorts.map((s) => s.direction) : undefined;
 
       // Check if columns are already cached (they rarely change)
-      const cachedColumns = queryClient.getQueryData<ColumnInfo[]>(["tableColumns", schema, table]);
+      const cachedColumns = queryClient.getQueryData<ColumnInfo[]>(["tableColumns", connectionId, schema, table]);
 
       // Only fetch columns if not cached; always fetch data
       const [columnsResult, dataResult] = await Promise.all([
         cachedColumns
           ? Promise.resolve(cachedColumns)
           : invoke<ColumnInfo[]>("get_columns", {
-              connectionId: currentConnectionId,
+              connectionId,
               schema,
               table,
             }).then((cols) => {
               // Populate the cache for future calls
-              queryClient.setQueryData(["tableColumns", schema, table], cols);
+              queryClient.setQueryData(["tableColumns", connectionId, schema, table], cols);
               return cols;
             }),
         invoke<PaginatedResult>("fetch_table_data", {
           request: {
-            connection_id: currentConnectionId,
+            connection_id: connectionId,
             schema,
             table,
             page,
@@ -357,7 +328,7 @@ export function useTableData(
         pageSize: dataResult.page_size,
       } as TableData;
     },
-    enabled: connectionStatus === "connected" && !!schema && !!table && !!currentConnectionId,
+    enabled: !!connectionId && !!schema && !!table,
     staleTime: 30000, // 30 seconds
     placeholderData: keepPreviousData, // Show old data while sort/page change fetches
   });
@@ -368,10 +339,9 @@ export function useInsertRow() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (params: { schema: string; table: string; data: Row }) => {
-      if (!currentConnectionId) throw new Error("Not connected");
+    mutationFn: async (params: { connectionId: string; schema: string; table: string; data: Row }) => {
       await invoke("insert_row", {
-        connectionId: currentConnectionId,
+        connectionId: params.connectionId,
         schema: params.schema,
         table: params.table,
         data: params.data,
@@ -379,7 +349,7 @@ export function useInsertRow() {
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({
-        queryKey: ["tableData", variables.schema, variables.table],
+        queryKey: ["tableData", variables.connectionId, variables.schema, variables.table],
       });
     },
   });
@@ -390,10 +360,9 @@ export function useUpdateRow() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (params: { schema: string; table: string; data: Row; where: Row }) => {
-      if (!currentConnectionId) throw new Error("Not connected");
+    mutationFn: async (params: { connectionId: string; schema: string; table: string; data: Row; where: Row }) => {
       await invoke("update_row", {
-        connectionId: currentConnectionId,
+        connectionId: params.connectionId,
         schema: params.schema,
         table: params.table,
         data: params.data,
@@ -402,7 +371,7 @@ export function useUpdateRow() {
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({
-        queryKey: ["tableData", variables.schema, variables.table],
+        queryKey: ["tableData", variables.connectionId, variables.schema, variables.table],
       });
     },
   });
@@ -413,10 +382,9 @@ export function useDeleteRow() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (params: { schema: string; table: string; where: Row }) => {
-      if (!currentConnectionId) throw new Error("Not connected");
+    mutationFn: async (params: { connectionId: string; schema: string; table: string; where: Row }) => {
       await invoke("delete_row", {
-        connectionId: currentConnectionId,
+        connectionId: params.connectionId,
         schema: params.schema,
         table: params.table,
         whereClause: params.where,
@@ -424,7 +392,7 @@ export function useDeleteRow() {
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({
-        queryKey: ["tableData", variables.schema, variables.table],
+        queryKey: ["tableData", variables.connectionId, variables.schema, variables.table],
       });
     },
   });
@@ -433,11 +401,10 @@ export function useDeleteRow() {
 // Execute raw SQL
 export function useExecuteQuery() {
   return useMutation({
-    mutationFn: async (query: string) => {
-      if (!currentConnectionId) throw new Error("Not connected");
+    mutationFn: async (params: { connectionId: string; query: string }) => {
       const result = await invoke<TableData>("execute_query", {
-        connectionId: currentConnectionId,
-        sql: query,
+        connectionId: params.connectionId,
+        sql: params.query,
       });
       return result;
     },
@@ -446,19 +413,16 @@ export function useExecuteQuery() {
 
 // Fetch foreign key reference values for a column
 export function useForeignKeyValues(
+  connectionId: string,
   schema: string,
   table: string,
   column: string,
   searchQuery: string = "",
   limit: number = 100
 ) {
-  const { connectionStatus } = useProjectStore();
-
   return useQuery({
-    queryKey: ["fkValues", schema, table, column, searchQuery, limit],
+    queryKey: ["fkValues", connectionId, schema, table, column, searchQuery, limit],
     queryFn: async () => {
-      if (!currentConnectionId) throw new Error("Not connected");
-
       // Build query to fetch distinct values from the referenced column
       const searchCondition = searchQuery
         ? `WHERE "${column}"::text ILIKE '%' || $1 || '%'`
@@ -472,14 +436,14 @@ export function useForeignKeyValues(
       `;
 
       const result = await invoke<{ rows: Row[] }>("execute_query", {
-        connectionId: currentConnectionId,
+        connectionId,
         sql: searchQuery ? sql.replace("$1", `'${searchQuery.replace(/'/g, "''")}'`) : sql,
       });
 
       // Extract the column values
       return result.rows.map((row) => row[column]);
     },
-    enabled: connectionStatus === "connected" && !!schema && !!table && !!column,
+    enabled: !!connectionId && !!schema && !!table && !!column,
     staleTime: 30000, // Cache for 30 seconds
   });
 }
@@ -489,18 +453,17 @@ export function useCommitChanges() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (queries: string[]) => {
-      if (!currentConnectionId) throw new Error("Not connected");
+    mutationFn: async (params: { connectionId: string; queries: string[] }) => {
       // Execute each query in sequence
-      for (const query of queries) {
+      for (const query of params.queries) {
         await invoke("execute_query", {
-          connectionId: currentConnectionId,
+          connectionId: params.connectionId,
           sql: query,
         });
       }
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["tableData"] });
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["tableData", variables.connectionId] });
     },
   });
 }
@@ -534,43 +497,43 @@ export interface MigrationResult {
 // Execute migration (dry-run or apply) with transactional safety
 export function useMigration() {
   const queryClient = useQueryClient();
-  const { setSchemas, setSchemasLoading } = useProjectStore.getState();
 
   return useMutation({
     mutationFn: async (params: {
+      connectionId: string;
+      projectId: string;
       statements: string[];
       dry_run: boolean;
       lock_timeout_ms?: number;
       statement_timeout_ms?: number;
     }) => {
-      if (!currentConnectionId) throw new Error("Not connected");
-      return invoke<MigrationResult>("execute_migration", {
+      const result = await invoke<MigrationResult>("execute_migration", {
         request: {
-          connection_id: currentConnectionId,
+          connection_id: params.connectionId,
           statements: params.statements,
           dry_run: params.dry_run,
           lock_timeout_ms: params.lock_timeout_ms,
           statement_timeout_ms: params.statement_timeout_ms,
         },
       });
+      return { result, connectionId: params.connectionId, projectId: params.projectId };
     },
-    onSuccess: async (result) => {
+    onSuccess: async ({ result, connectionId, projectId }) => {
       // Only refresh schemas if we actually committed changes
       if (result.committed) {
-        queryClient.invalidateQueries({ queryKey: ["tableData"] });
-        queryClient.invalidateQueries({ queryKey: ["tableColumns"] });
-        queryClient.invalidateQueries({ queryKey: ["tableIndexes"] });
+        queryClient.invalidateQueries({ queryKey: ["tableData", connectionId] });
+        queryClient.invalidateQueries({ queryKey: ["tableColumns", connectionId] });
+        queryClient.invalidateQueries({ queryKey: ["tableIndexes", connectionId] });
 
-        if (currentConnectionId) {
-          setSchemasLoading(true);
-          try {
-            const raw = await invoke<SchemaWithTables[]>("get_schemas_with_tables", {
-              connectionId: currentConnectionId,
-            });
-            setSchemas(convertSchemasWithTables(raw));
-          } finally {
-            setSchemasLoading(false);
-          }
+        const projectStore = useProjectStore.getState();
+        projectStore.setProjectSchemasLoading(projectId, true);
+        try {
+          const raw = await invoke<SchemaWithTables[]>("get_schemas_with_tables", {
+            connectionId,
+          });
+          projectStore.setProjectSchemas(projectId, convertSchemasWithTables(raw));
+        } finally {
+          projectStore.setProjectSchemasLoading(projectId, false);
         }
       }
     },
@@ -580,38 +543,36 @@ export function useMigration() {
 // Execute a single SQL statement (for DDL like CREATE TABLE)
 export function useExecuteSQL() {
   const queryClient = useQueryClient();
-  const { setSchemas, setSchemasLoading } = useProjectStore.getState();
 
   return useMutation({
-    mutationFn: async (params: { sql: string }) => {
-      if (!currentConnectionId) throw new Error("Not connected");
+    mutationFn: async (params: { connectionId: string; projectId: string; sql: string }) => {
       await invoke("execute_query", {
-        connectionId: currentConnectionId,
+        connectionId: params.connectionId,
         sql: params.sql,
       });
+      return { connectionId: params.connectionId, projectId: params.projectId };
     },
-    onSuccess: async () => {
+    onSuccess: async ({ connectionId, projectId }) => {
       // Refresh schemas to show new/modified tables
-      queryClient.invalidateQueries({ queryKey: ["tableData"] });
+      queryClient.invalidateQueries({ queryKey: ["tableData", connectionId] });
 
       // Also refresh the schema list in the sidebar
-      if (currentConnectionId) {
-        setSchemasLoading(true);
-        try {
-          const raw = await invoke<SchemaWithTables[]>("get_schemas_with_tables", {
-            connectionId: currentConnectionId,
-          });
-          setSchemas(convertSchemasWithTables(raw));
-        } finally {
-          setSchemasLoading(false);
-        }
+      const projectStore = useProjectStore.getState();
+      projectStore.setProjectSchemasLoading(projectId, true);
+      try {
+        const raw = await invoke<SchemaWithTables[]>("get_schemas_with_tables", {
+          connectionId,
+        });
+        projectStore.setProjectSchemas(projectId, convertSchemasWithTables(raw));
+      } finally {
+        projectStore.setProjectSchemasLoading(projectId, false);
       }
     },
   });
 }
 
 // Helper to get connection config - used by components that need to connect
-export function getConnectionConfig(config: ConnectionConfig): ConnectionConfig {
+export function getConnectionConfig(config: { host: string; port: number; database: string; username: string; password: string; ssl: boolean }) {
   return config;
 }
 
