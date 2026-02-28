@@ -1,53 +1,11 @@
-import { Circle, Database, FileEdit, History, Loader2 } from "lucide-react";
+import { useState, useRef, useEffect } from "react";
+import { Database, FileEdit, History, Unplug, ChevronUp } from "lucide-react";
 import { useProjectStore } from "../../stores/projectStore";
 import { useUIStore } from "../../stores/uiStore";
 import { useChangesStore } from "../../stores/changesStore";
-import { useConnect, useDisconnect } from "../../hooks/useDatabase";
+import { useDisconnect } from "../../hooks/useDatabase";
 import { cn } from "../../lib/utils";
-import type { ConnectionStatus, Tab } from "../../types";
-
-const CONNECTION_STATUS_CONFIG: Record<
-  ConnectionStatus,
-  { label: string; color: string; dotColor: string }
-> = {
-  disconnected: {
-    label: "Disconnected",
-    color: "text-[var(--text-muted)]",
-    dotColor: "bg-[var(--text-muted)]",
-  },
-  connecting: {
-    label: "Connecting...",
-    color: "text-[var(--warning)]",
-    dotColor: "bg-[var(--warning)]",
-  },
-  connected: {
-    label: "Connected",
-    color: "text-[var(--success)]",
-    dotColor: "bg-[var(--success)]",
-  },
-  reconnecting: {
-    label: "Reconnecting...",
-    color: "text-[var(--warning)]",
-    dotColor: "bg-[var(--warning)]",
-  },
-  error: {
-    label: "Connection Error",
-    color: "text-[var(--danger)]",
-    dotColor: "bg-[var(--danger)]",
-  },
-};
-
-function getActiveTableRowCount(
-  tabs: Tab[],
-  activeTabId: string | null
-): number | null {
-  if (!activeTabId) return null;
-  const activeTab = tabs.find((t) => t.id === activeTabId);
-  if (!activeTab || activeTab.type !== "table") return null;
-  // Row count would come from table data in a real implementation
-  // For now, return null as placeholder
-  return null;
-}
+import { PROJECT_COLORS } from "../../lib/utils";
 
 export function StatusBar() {
   const projects = useProjectStore((state) => state.projects);
@@ -55,36 +13,39 @@ export function StatusBar() {
   const tabs = useUIStore((state) => state.tabs);
   const activeTabId = useUIStore((state) => state.activeTabId);
   const addStagedChangesTab = useUIStore((state) => state.addStagedChangesTab);
-  const changes = useChangesStore((state) => state.changes);
   const addHistoryTab = useUIStore((state) => state.addHistoryTab);
+  const changes = useChangesStore((state) => state.changes);
 
-  const connect = useConnect();
-  const disconnect = useDisconnect();
+  const [popupOpen, setPopupOpen] = useState(false);
+  const popupRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
 
-  // Derive active project/connection from the active tab
+  // Derive active tab connection info
   const activeTab = activeTabId ? tabs.find((t) => t.id === activeTabId) : undefined;
   const activeProjectId = activeTab?.projectId;
   const activeConnectionId = activeTab?.connectionId;
-  const activeProject = activeProjectId ? projects.find((p) => p.id === activeProjectId) : undefined;
-  const activeConn = activeProjectId ? connections[activeProjectId] : undefined;
 
-  const connectionStatus: ConnectionStatus = activeConn?.status ?? "disconnected";
-  const error = activeConn?.error ?? null;
-  const statusConfig = CONNECTION_STATUS_CONFIG[connectionStatus];
-  const rowCount = getActiveTableRowCount(tabs, activeTabId);
+  // Connected projects list
+  const connectedProjects = projects.filter((p) => connections[p.id]);
+  const connectedCount = connectedProjects.length;
   const changesCount = changes.length;
 
-  const handleConnectionClick = () => {
-    if (!activeProject) return;
-
-    if (connectionStatus === "connected" && activeProjectId && activeConnectionId) {
-      disconnect.mutate({ projectId: activeProjectId, connectionId: activeConnectionId });
-    } else if (connectionStatus === "disconnected" || connectionStatus === "error") {
-      connect.mutate({ project: activeProject });
-    }
-  };
-
-  const isLoading = connect.isPending || disconnect.isPending || connectionStatus === "connecting" || connectionStatus === "reconnecting";
+  // Close popup on outside click
+  useEffect(() => {
+    if (!popupOpen) return;
+    const handleClick = (e: MouseEvent) => {
+      if (
+        popupRef.current &&
+        !popupRef.current.contains(e.target as Node) &&
+        buttonRef.current &&
+        !buttonRef.current.contains(e.target as Node)
+      ) {
+        setPopupOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [popupOpen]);
 
   return (
     <footer
@@ -94,56 +55,74 @@ export function StatusBar() {
         "text-xs select-none shrink-0"
       )}
     >
-      {/* Left section - Connection status */}
-      <div className="flex items-center gap-4">
+      {/* Left section - Connection count badge + popup */}
+      <div className="relative flex items-center gap-4">
         <button
-          onClick={handleConnectionClick}
-          disabled={isLoading || !activeProject}
+          ref={buttonRef}
+          onClick={() => setPopupOpen(!popupOpen)}
           className={cn(
             "flex items-center gap-1.5 px-1.5 py-0.5 -mx-1.5 rounded",
             "hover:bg-[var(--bg-tertiary)] transition-colors duration-150",
-            "disabled:cursor-default disabled:hover:bg-transparent",
-            statusConfig.color
+            connectedCount > 0 ? "text-[var(--success)]" : "text-[var(--text-muted)]"
           )}
-          title={
-            connectionStatus === "connected"
-              ? "Click to disconnect"
-              : connectionStatus === "disconnected"
-                ? "Click to connect"
-                : undefined
-          }
         >
-          {isLoading ? (
-            <Loader2 className="w-3 h-3 animate-spin" />
-          ) : connectionStatus === "connected" ? (
-            <Circle className={cn("w-2 h-2 fill-current", statusConfig.dotColor)} />
-          ) : (
-            <Circle className={cn("w-2 h-2 fill-current", statusConfig.dotColor)} />
-          )}
-          <span>{statusConfig.label}</span>
-          {activeProject && connectionStatus === "connected" && (
-            <span className="text-[var(--text-muted)] ml-1">
-              ({activeProject.connection.database})
-            </span>
-          )}
-          {connectionStatus === "error" && error && (
-            <span className="text-[var(--text-muted)] ml-1 truncate max-w-[200px]" title={error}>
-              - {error}
-            </span>
-          )}
+          <Database className="w-3 h-3" />
+          <span>
+            {connectedCount} {connectedCount === 1 ? "connection" : "connections"}
+          </span>
+          <ChevronUp className={cn(
+            "w-3 h-3 transition-transform duration-150",
+            !popupOpen && "rotate-180"
+          )} />
         </button>
 
-        {rowCount !== null && (
-          <div className="flex items-center gap-1.5 text-[var(--text-secondary)]">
-            <Database className="w-3 h-3" />
-            <span>{rowCount.toLocaleString()} rows</span>
+        {/* Connection popup */}
+        {popupOpen && (
+          <div
+            ref={popupRef}
+            className={cn(
+              "absolute bottom-full left-0 mb-1",
+              "w-64 bg-[var(--bg-primary)] border border-[var(--border-color)]",
+              "rounded-lg shadow-lg overflow-hidden z-50"
+            )}
+          >
+            <div className="px-3 py-2 border-b border-[var(--border-color)]">
+              <span className="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider">
+                Connections
+              </span>
+            </div>
+            {connectedProjects.length === 0 ? (
+              <div className="px-3 py-3 text-xs text-[var(--text-muted)] text-center">
+                No active connections
+              </div>
+            ) : (
+              <div className="py-1 max-h-48 overflow-y-auto">
+                {connectedProjects.map((project) => {
+                  const conn = connections[project.id];
+                  if (!conn) return null;
+                  const colorConfig = PROJECT_COLORS[project.color];
+                  return (
+                    <ConnectionPopupItem
+                      key={project.id}
+                      projectId={project.id}
+                      projectName={project.name}
+                      database={project.connection.database}
+                      connectionId={conn.connectionId}
+                      status={conn.status}
+                      dotColor={colorConfig.dot}
+                      onClose={() => setPopupOpen(false)}
+                    />
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
       </div>
 
       {/* Right section - History & Staged changes */}
       <div className="flex items-center gap-3">
-        {connectionStatus === "connected" && activeConnectionId && activeProjectId && (
+        {activeConnectionId && activeProjectId && (
           <button
             onClick={() => addHistoryTab(activeConnectionId, activeProjectId)}
             className={cn(
@@ -174,5 +153,68 @@ export function StatusBar() {
         )}
       </div>
     </footer>
+  );
+}
+
+// --- Individual connection item in the popup ---
+
+interface ConnectionPopupItemProps {
+  projectId: string;
+  projectName: string;
+  database: string;
+  connectionId: string;
+  status: string;
+  dotColor: string;
+  onClose: () => void;
+}
+
+function ConnectionPopupItem({
+  projectId,
+  projectName,
+  database,
+  connectionId,
+  status,
+  dotColor,
+  onClose,
+}: ConnectionPopupItemProps) {
+  const disconnect = useDisconnect();
+
+  const handleDisconnect = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    disconnect.mutate({ projectId, connectionId });
+    onClose();
+  };
+
+  const isReconnecting = status === "reconnecting";
+
+  return (
+    <div
+      className={cn(
+        "group flex items-center gap-2 px-3 py-1.5",
+        "hover:bg-[var(--bg-tertiary)] transition-colors duration-150"
+      )}
+    >
+      <span className={cn("w-2 h-2 rounded-full shrink-0", dotColor)} />
+      <div className="flex-1 min-w-0">
+        <div className="text-xs text-[var(--text-primary)] truncate">{projectName}</div>
+        <div className="text-[10px] text-[var(--text-muted)] truncate">{database}</div>
+      </div>
+      {isReconnecting ? (
+        <span className="text-[10px] text-[var(--warning)] shrink-0">Reconnecting...</span>
+      ) : (
+        <button
+          onClick={handleDisconnect}
+          className={cn(
+            "p-0.5 rounded shrink-0",
+            "text-[var(--text-muted)] hover:text-[var(--danger)]",
+            "opacity-0 group-hover:opacity-100",
+            "transition-all duration-150"
+          )}
+          title={`Disconnect from ${projectName}`}
+        >
+          <Unplug className="w-3 h-3" />
+        </button>
+      )}
+    </div>
   );
 }
