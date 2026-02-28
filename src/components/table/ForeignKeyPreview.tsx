@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
-import { ExternalLink, Loader2, AlertCircle, X, Key, Hash, Type, Calendar, ToggleLeft, Braces } from "lucide-react";
+import { ExternalLink, Loader2, AlertCircle, X, Key, Hash, Type, Calendar, ToggleLeft, Braces, ClipboardCopy, Copy } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentConnectionId } from "../../hooks/useDatabase";
+import { ContextMenu } from "../ui/ContextMenu";
 import { useUIStore } from "../../stores/uiStore";
 import type { ForeignKeyInfo, CellValue, Column, Row, Tab } from "../../types";
 
@@ -221,6 +222,7 @@ export function ForeignKeySubRow({
                     {columns.map((column) => {
                       const val = row[column.name];
                       const isNull = val === null;
+                      const rawValue = val === null ? "NULL" : typeof val === "object" ? JSON.stringify(val, null, 2) : String(val);
 
                       return (
                         <td
@@ -228,15 +230,36 @@ export function ForeignKeySubRow({
                           className="border-b border-r border-[var(--border-color)] last:border-r-0"
                           style={{ width: 150, minWidth: 150, maxWidth: 150 }}
                         >
-                          <div className="px-3 py-2 truncate text-sm h-full flex items-center gap-1">
-                            {isNull ? (
-                              <span className="text-[var(--text-muted)] italic text-xs">NULL</span>
-                            ) : (
-                              <span className="text-[var(--text-primary)]" title={String(val)}>
-                                {formatCellValue(val)}
-                              </span>
-                            )}
-                          </div>
+                          <ContextMenu
+                            items={[
+                              {
+                                label: "Copy Value",
+                                icon: <ClipboardCopy className="w-3.5 h-3.5" />,
+                                onClick: () => {
+                                  navigator.clipboard.writeText(rawValue);
+                                  useUIStore.getState().showToast("Value copied to clipboard", "info");
+                                },
+                              },
+                              {
+                                label: "Copy Column Name",
+                                icon: <Copy className="w-3.5 h-3.5" />,
+                                onClick: () => {
+                                  navigator.clipboard.writeText(column.name);
+                                  useUIStore.getState().showToast("Column name copied", "info");
+                                },
+                              },
+                            ]}
+                          >
+                            <div className="px-3 py-2 truncate text-sm h-full flex items-center gap-1">
+                              {isNull ? (
+                                <span className="text-[var(--text-muted)] italic text-xs">NULL</span>
+                              ) : (
+                                <span className="text-[var(--text-primary)]" title={String(val)}>
+                                  {formatCellValue(val)}
+                                </span>
+                              )}
+                            </div>
+                          </ContextMenu>
                         </td>
                       );
                     })}
