@@ -371,21 +371,28 @@ export function ForeignKeySubRow({
  */
 export function openRelatedTable(
   foreignKeyInfo: ForeignKeyInfo,
-  value: string | number
+  value: string | number,
+  connectionId?: string,
+  projectId?: string
 ) {
   const { referencedSchema, referencedTable, referencedColumn } = foreignKeyInfo;
   const filterKey = `${referencedSchema}.${referencedTable}:fk:${referencedColumn}=${value}`;
+
+  const store = useUIStore.getState();
+  const resolvedConnectionId = connectionId ?? store.getActiveConnectionId() ?? "";
+  const resolvedProjectId = projectId ?? store.getActiveProjectId() ?? "";
 
   const newTab: Tab = {
     id: `table-fk-${Date.now()}`,
     type: "table",
     title: `${referencedTable} [${referencedColumn}=${value}]`,
+    connectionId: resolvedConnectionId,
+    projectId: resolvedProjectId,
     schema: referencedSchema,
     table: referencedTable,
     filterKey,
   };
 
-  const store = useUIStore.getState();
   store.addTab(newTab);
 
   store.setTableFilters(filterKey, [

@@ -20,6 +20,10 @@ import { lineNumbers, highlightActiveLine, highlightActiveLineGutter } from "@co
 import { sqlTheme } from "../../lib/codemirrorTheme";
 import { modKeyName } from "../../lib/utils";
 import { useProjectStore } from "../../stores/projectStore";
+import { useUIStore } from "../../stores/uiStore";
+import type { Schema } from "../../types";
+
+const EMPTY_SCHEMAS: Schema[] = [];
 
 interface SQLEditorProps {
   value: string;
@@ -65,8 +69,11 @@ export const SQLEditor = forwardRef<SQLEditorHandle, SQLEditorProps>(function SQ
     onSaveRef.current = onSave;
   }, [onExecute, onExecuteSelection, onFormat, onSave]);
 
-  // Get schemas for autocomplete
-  const schemas = useProjectStore((state) => state.schemas);
+  // Get schemas for autocomplete from the active connection
+  const activeProjectId = useUIStore.getState().getActiveProjectId();
+  const schemas = useProjectStore((state) =>
+    activeProjectId ? state.connections[activeProjectId]?.schemas ?? EMPTY_SCHEMAS : EMPTY_SCHEMAS
+  );
 
   // Build schema map for autocomplete
   const schemaMap = useMemo(() => {

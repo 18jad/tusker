@@ -2,13 +2,14 @@ import { useState, useRef, useEffect } from "react";
 import { useFloating, autoUpdate, offset, flip, size } from "@floating-ui/react";
 import { ChevronDown, Search, Loader2, X } from "lucide-react";
 import { cn } from "../../lib/utils";
-import { useForeignKeyValues } from "../../hooks/useDatabase";
+import { useForeignKeyValues, getCurrentConnectionId } from "../../hooks/useDatabase";
 import type { ForeignKeyInfo } from "../../types";
 
 interface RelationSelectProps {
   value: string;
   onChange: (value: string) => void;
   foreignKeyInfo: ForeignKeyInfo;
+  connectionId?: string;
   disabled?: boolean;
   placeholder?: string;
   hasError?: boolean;
@@ -20,6 +21,7 @@ export function RelationSelect({
   value,
   onChange,
   foreignKeyInfo,
+  connectionId,
   disabled = false,
   placeholder = "Select...",
   hasError = false,
@@ -47,7 +49,10 @@ export function RelationSelect({
     whileElementsMounted: autoUpdate,
   });
 
+  const resolvedConnectionId = connectionId ?? getCurrentConnectionId() ?? "";
+
   const { data: options, isLoading } = useForeignKeyValues(
+    resolvedConnectionId,
     foreignKeyInfo.referencedSchema,
     foreignKeyInfo.referencedTable,
     foreignKeyInfo.referencedColumn,

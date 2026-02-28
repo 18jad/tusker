@@ -41,7 +41,8 @@ function generateSummary(changes: StagedChange[]): string {
 export function StagedChangesTab({ tab: _tab }: { tab: Tab }) {
   const { showToast } = useUIStore();
   const { changes, removeChange, clearChanges } = useChangesStore();
-  const activeProject = useProjectStore((s) => s.getActiveProject());
+  const activeProjectId = useUIStore.getState().getActiveProjectId();
+  const activeProject = useProjectStore((s) => activeProjectId ? s.getProject(activeProjectId) : undefined);
   const [commitError, setCommitError] = useState<string | null>(null);
   const [showCommitInput, setShowCommitInput] = useState(false);
   const [commitMessage, setCommitMessage] = useState("");
@@ -100,7 +101,9 @@ export function StagedChangesTab({ tab: _tab }: { tab: Tab }) {
     const finalMessage = commitMessage.trim() || summary;
 
     try {
-      await commitChanges.mutateAsync(queries);
+      const connectionId = useUIStore.getState().getActiveConnectionId();
+      if (!connectionId) throw new Error("No active connection");
+      await commitChanges.mutateAsync({ connectionId, queries });
 
       if (activeProject) {
         try {

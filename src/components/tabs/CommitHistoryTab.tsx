@@ -13,6 +13,7 @@ import {
   ChevronDown,
 } from "lucide-react";
 import { useProjectStore } from "../../stores/projectStore";
+import { useUIStore } from "../../stores/uiStore";
 import { useCommitHistory, useCommitDetail } from "../../hooks/useDatabase";
 import { ChangeCard } from "../commits/ChangeCard";
 import { cn } from "../../lib/utils";
@@ -560,7 +561,8 @@ function CommitDetailPanel({
 // ─── Main component ─────────────────────────────────────────────────────────
 
 export function CommitHistoryTab({ tab: _tab }: { tab: Tab }) {
-  const activeProject = useProjectStore((s) => s.getActiveProject());
+  const activeProjectId = useUIStore((s) => s.getActiveProjectId)();
+  const activeProject = useProjectStore((s) => activeProjectId ? s.getProject(activeProjectId) : undefined);
   const projectId = activeProject?.id ?? null;
   const { data: commits, isLoading, error } = useCommitHistory(projectId);
   const [selectedCommitId, setSelectedCommitId] = useState<string | null>(null);
