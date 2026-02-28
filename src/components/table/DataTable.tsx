@@ -1289,12 +1289,20 @@ export function DataTable({
               const sortEntry = isSorted ? sorts[sortIndex] : null;
               const isAsc = sortEntry?.direction === "ASC";
               const isMultiSort = sorts.length > 1;
+              const isFkPinned = fkPreview?.col === column.name;
 
               return (
                 <th
                   key={column.name}
-                  className="relative text-left border-b border-r border-[var(--border-color)] last:border-r-0"
-                  style={{ width: getColumnWidth(column.name), minWidth: getColumnWidth(column.name) }}
+                  className={cn(
+                    "relative text-left border-b border-r border-[var(--border-color)] last:border-r-0",
+                    isFkPinned && "sticky z-20 bg-[var(--bg-secondary)] shadow-[inset_-2px_0_0_0_var(--border-color)]"
+                  )}
+                  style={{
+                    width: getColumnWidth(column.name),
+                    minWidth: getColumnWidth(column.name),
+                    ...(isFkPinned ? { left: 50 } : {}),
+                  }}
                   aria-sort={isSorted ? (isAsc ? "ascending" : "descending") : "none"}
                 >
                   <ContextMenu
@@ -1483,6 +1491,18 @@ export function DataTable({
                   const cellKey = `${rowIndex}:${column.name}`;
                   const isEdited = editedCells.has(cellKey);
                   const isFkPreviewOpen = fkPreview?.row === rowIndex && fkPreview?.col === column.name;
+                  const isFkPinned = fkPreview?.col === column.name;
+
+                  // Determine background for pinned FK column cells
+                  const pinnedBg = isFkPinned
+                    ? isDeleted
+                      ? "bg-red-950"
+                      : isSelected
+                        ? "bg-[var(--bg-tertiary)]"
+                        : isEven
+                          ? "bg-[var(--bg-primary)]"
+                          : "bg-[var(--bg-secondary)]"
+                    : undefined;
 
                   return (
                     <td
@@ -1494,12 +1514,15 @@ export function DataTable({
                         isEdited && !isDeleted && "bg-[var(--warning)]/10",
                         isDeleted && "line-through text-red-400/70",
                         // Cell hover - only when not editing, not deleted, not row-number-hovered
-                        !isEditing && !isDeleted && !isRowHovered && "hover:bg-[var(--bg-tertiary)]"
+                        !isEditing && !isDeleted && !isRowHovered && "hover:bg-[var(--bg-tertiary)]",
+                        isFkPinned && "sticky z-10 shadow-[inset_-2px_0_0_0_var(--border-color)]",
+                        pinnedBg,
                       )}
                       style={{
                         width: getColumnWidth(column.name),
                         minWidth: getColumnWidth(column.name),
-                        maxWidth: getColumnWidth(column.name)
+                        maxWidth: getColumnWidth(column.name),
+                        ...(isFkPinned ? { left: 50 } : {}),
                       }}
                     >
                       <ContextMenu
