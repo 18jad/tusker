@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { ChevronRight } from "lucide-react";
 import { cn } from "../../lib/utils";
 
@@ -235,7 +236,7 @@ export function ContextMenu({ items, children, disabled }: ContextMenuProps) {
         {children}
       </div>
 
-      {isOpen && (
+      {isOpen && createPortal(
         <div
           ref={menuRef}
           className={cn(
@@ -296,7 +297,8 @@ export function ContextMenu({ items, children, disabled }: ContextMenuProps) {
               </button>
             );
           })}
-        </div>
+        </div>,
+        document.body
       )}
     </>
   );
