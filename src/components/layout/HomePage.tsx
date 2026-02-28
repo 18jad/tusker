@@ -3,8 +3,7 @@ import { Plus, Pencil, Trash2, Download, Upload, Loader2, Check, ArrowRight, Sea
 import { getVersion } from "@tauri-apps/api/app";
 import { useProjectStore } from "../../stores/projectStore";
 import { useUIStore } from "../../stores/uiStore";
-import { useChangesStore } from "../../stores/changesStore";
-import { useConnect, useDisconnect } from "../../hooks/useDatabase";
+import { useConnect } from "../../hooks/useDatabase";
 import { useUpdateCheck } from "../../hooks/useUpdateCheck";
 import { cn, PROJECT_COLORS, modKey } from "../../lib/utils";
 import appIcon from "../../assets/app-icon.png";
@@ -29,40 +28,32 @@ function timeAgo(dateStr: string): string {
 }
 
 function ProjectCard({ project }: { project: Project }) {
-  const connectionStatus = useProjectStore((s) => s.connectionStatus);
-  const { closeAllTabs, openProjectModal, openDeleteProjectModal } =
-    useUIStore();
-  const { clearChanges } = useChangesStore();
-  const setActiveProject = useProjectStore((s) => s.setActiveProject);
+  const connectionState = useProjectStore((s) => s.connections[project.id]);
+  const { openProjectModal, openDeleteProjectModal } = useUIStore();
   const connect = useConnect();
-  const disconnect = useDisconnect();
 
   const colorClasses = PROJECT_COLORS[project.color];
-  const isConnecting = connectionStatus === "connecting";
+  const status = connectionState?.status;
+  const isConnecting = status === "connecting";
+  const isConnected = status === "connected" || status === "reconnecting";
 
-  const handleClick = async () => {
-    if (isConnecting) return;
-
-    if (connectionStatus === "connected") {
-      await disconnect.mutateAsync();
-    }
-
-    closeAllTabs();
-    clearChanges();
-    setActiveProject(project.id);
-    connect.mutate(project.connection);
+  const handleClick = () => {
+    if (isConnecting || isConnected) return;
+    connect.mutate({ project });
   };
 
   return (
     <button
       onClick={handleClick}
-      disabled={isConnecting}
+      disabled={isConnecting || isConnected}
       className={cn(
         "group/card relative w-full text-left rounded-xl overflow-hidden",
         "bg-[var(--bg-secondary)] border border-[var(--border-color)]",
         "transition-all duration-200",
-        "disabled:opacity-50 disabled:cursor-not-allowed",
-        "hover:bg-[var(--bg-tertiary)] hover:border-[var(--text-muted)]/30"
+        isConnected
+          ? "border-[var(--success)]/30 bg-[var(--success)]/[0.03]"
+          : "hover:bg-[var(--bg-tertiary)] hover:border-[var(--text-muted)]/30",
+        isConnecting && "opacity-50 cursor-not-allowed"
       )}
     >
       <div className="flex">
@@ -124,14 +115,26 @@ function ProjectCard({ project }: { project: Project }) {
                 ? timeAgo(project.lastConnected)
                 : "Never connected"}
             </span>
-            <span
-              className={cn(
-                "text-[11px] font-medium opacity-0 group-hover/card:opacity-100 transition-opacity",
-                colorClasses.text
-              )}
-            >
-              Connect
-            </span>
+            {isConnecting ? (
+              <span className="flex items-center gap-1 text-[11px] font-medium text-[var(--text-muted)]">
+                <Loader2 className="w-3 h-3 animate-spin" />
+                Connecting...
+              </span>
+            ) : isConnected ? (
+              <span className="flex items-center gap-1 text-[11px] font-medium text-[var(--success)]">
+                <Check className="w-3 h-3" />
+                Connected
+              </span>
+            ) : (
+              <span
+                className={cn(
+                  "text-[11px] font-medium opacity-0 group-hover/card:opacity-100 transition-opacity",
+                  colorClasses.text
+                )}
+              >
+                Connect
+              </span>
+            )}
           </div>
         </div>
       </div>
