@@ -33,6 +33,7 @@ interface ContextMenuProps {
   items: ContextMenuItem[];
   children: React.ReactNode;
   disabled?: boolean;
+  className?: string;
 }
 
 interface SubmenuItemProps {
@@ -141,7 +142,7 @@ function SubmenuItem({ item, onItemClick }: SubmenuItemProps) {
   );
 }
 
-export function ContextMenu({ items, children, disabled }: ContextMenuProps) {
+export function ContextMenu({ items, children, disabled, className }: ContextMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [position, setPosition] = useState<ContextMenuPosition>({ x: 0, y: 0 });
   const menuRef = useRef<HTMLDivElement>(null);
@@ -232,7 +233,7 @@ export function ContextMenu({ items, children, disabled }: ContextMenuProps) {
 
   return (
     <>
-      <div ref={containerRef} onContextMenu={handleContextMenu} data-context-menu>
+      <div ref={containerRef} onContextMenu={handleContextMenu} data-context-menu className={className}>
         {children}
       </div>
 

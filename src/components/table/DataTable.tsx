@@ -1421,6 +1421,7 @@ export function DataTable({
                   style={{ width: 50, minWidth: 50 }}
                 >
                   <ContextMenu
+                    className="w-full h-full flex items-center justify-center py-2"
                     items={buildRowContextMenu({
                       row,
                       columns,
