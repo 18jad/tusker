@@ -250,7 +250,7 @@ export function ForeignKeySubRow({
                               },
                             ]}
                           >
-                            <div className="px-3 py-2 truncate text-sm h-full flex items-center gap-1">
+                            <div className="px-3 py-2 text-sm h-full flex items-center gap-1 select-text overflow-hidden text-ellipsis whitespace-nowrap">
                               {isNull ? (
                                 <span className="text-[var(--text-muted)] italic text-xs">NULL</span>
                               ) : (
