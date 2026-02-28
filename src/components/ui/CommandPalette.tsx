@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { Search, ArrowRight, Table2, FolderOpen, Command, Settings } from "lucide-react";
 import { useUIStore } from "../../stores/uiStore";
 import { useProjectStore } from "../../stores/projectStore";
+import { useConnect, useDisconnect } from "../../hooks/useDatabase";
 import { useUpdateCheck } from "../../hooks/useUpdateCheck";
 import { cn } from "../../lib/utils";
 import type { Command as CommandType } from "../../types";
@@ -25,9 +26,12 @@ const CATEGORY_ICONS: Record<CommandCategory, React.ReactNode> = {
 };
 
 export function CommandPalette() {
-  const { commandPaletteOpen, toggleCommandPalette, openProjectModal, addTab, addDiagramTab, showToast } =
+  const { commandPaletteOpen, toggleCommandPalette, openProjectModal, addTab, addQueryTab, addDiagramTab, showToast } =
     useUIStore();
-  const { projects, schemas, connectionStatus, setActiveProject } = useProjectStore();
+  const projects = useProjectStore((s) => s.projects);
+  const connections = useProjectStore((s) => s.connections);
+  const connect = useConnect();
+  const disconnect = useDisconnect();
   const { checkNow, status: updateStatus } = useUpdateCheck();
 
   const [query, setQuery] = useState("");
@@ -47,61 +51,76 @@ export function CommandPalette() {
       },
     ];
 
-    if (connectionStatus === "connected") {
-      cmds.push({
-        id: "new-query",
-        label: "New Query Tab",
-        shortcut: "Ctrl+T",
-        action: () =>
-          addTab({
-            id: crypto.randomUUID(),
-            type: "query",
-            title: "New Query",
-            queryContent: "",
-          }),
-        category: "query",
-      });
-      cmds.push({
-        id: "schema-diagram",
-        label: "Open Schema Diagram",
-        shortcut: "\u2318\u21E7D",
-        action: () => addDiagramTab(),
-        category: "navigation",
-      });
-    }
-
-    // Add project commands
+    // Per-project commands
     projects.forEach((project) => {
-      cmds.push({
-        id: `project-${project.id}`,
-        label: `Switch to ${project.name}`,
-        action: () => setActiveProject(project.id),
-        category: "project",
-      });
+      const conn = connections[project.id];
+      const isConnected = conn?.status === "connected" || conn?.status === "reconnecting";
+
+      if (isConnected) {
+        const { connectionId } = conn;
+
+        // New Query tab for this project
+        cmds.push({
+          id: `new-query-${project.id}`,
+          label: `New Query (${project.name})`,
+          shortcut: "Ctrl+T",
+          action: () => addQueryTab(connectionId, project.id),
+          category: "query",
+        });
+
+        // Schema Diagram for this project
+        cmds.push({
+          id: `schema-diagram-${project.id}`,
+          label: `Open Schema Diagram (${project.name})`,
+          shortcut: "\u2318\u21E7D",
+          action: () => addDiagramTab(connectionId, project.id),
+          category: "navigation",
+        });
+
+        // Disconnect command
+        cmds.push({
+          id: `disconnect-${project.id}`,
+          label: `Disconnect from ${project.name}`,
+          action: () => disconnect.mutate({ projectId: project.id, connectionId }),
+          category: "project",
+        });
+
+        // Table commands from this connection's schemas
+        conn.schemas.forEach((schema) => {
+          schema.tables.forEach((table) => {
+            cmds.push({
+              id: `table-${project.id}-${schema.name}-${table.name}`,
+              label: `${schema.name}.${table.name} (${project.name})`,
+              action: () =>
+                addTab({
+                  id: crypto.randomUUID(),
+                  type: "table",
+                  title: table.name,
+                  connectionId,
+                  projectId: project.id,
+                  schema: schema.name,
+                  table: table.name,
+                }),
+              category: "table",
+            });
+          });
+        });
+      } else {
+        // Connect command for disconnected projects
+        cmds.push({
+          id: `connect-${project.id}`,
+          label: `Connect to ${project.name}`,
+          action: () => connect.mutate({ project }),
+          category: "project",
+        });
+      }
+
+      // Edit project (always available)
       cmds.push({
         id: `edit-project-${project.id}`,
         label: `Edit ${project.name}`,
         action: () => openProjectModal(project.id),
         category: "project",
-      });
-    });
-
-    // Add table commands from schemas
-    schemas.forEach((schema) => {
-      schema.tables.forEach((table) => {
-        cmds.push({
-          id: `table-${schema.name}-${table.name}`,
-          label: `${schema.name}.${table.name}`,
-          action: () =>
-            addTab({
-              id: crypto.randomUUID(),
-              type: "table",
-              title: table.name,
-              schema: schema.name,
-              table: table.name,
-            }),
-          category: "table",
-        });
       });
     });
 
@@ -125,7 +144,7 @@ export function CommandPalette() {
     });
 
     return cmds;
-  }, [projects, schemas, connectionStatus, openProjectModal, addTab, addDiagramTab, setActiveProject, checkNow, updateStatus]);
+  }, [projects, connections, openProjectModal, addTab, addQueryTab, addDiagramTab, connect, disconnect, checkNow, updateStatus, showToast]);
 
   const filteredCommands = useMemo(() => {
     if (!query.trim()) return commands;
