@@ -27,6 +27,14 @@ export interface ProjectSettings {
 
 export type ConnectionStatus = "disconnected" | "connecting" | "connected" | "reconnecting" | "error";
 
+export interface ConnectionState {
+  connectionId: string;
+  status: ConnectionStatus;
+  schemas: Schema[];
+  schemasLoading: boolean;
+  error: string | null;
+}
+
 // Database schema types
 export interface Schema {
   name: string;
@@ -74,6 +82,7 @@ export type CellValue = string | number | boolean | null | object;
 export interface StagedChange {
   id: string;
   type: "insert" | "update" | "delete";
+  connectionId: string;
   table: string;
   schema: string;
   data: Row;
@@ -119,6 +128,8 @@ export interface Tab {
   id: string;
   type: "table" | "query" | "create-table" | "edit-table" | "import-data" | "history" | "staged-changes" | "diagram";
   title: string;
+  connectionId: string;
+  projectId: string;
   schema?: string;
   table?: string;
   queryContent?: string;
