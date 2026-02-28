@@ -1,197 +1,35 @@
-import { useState, useRef, useEffect } from "react";
+import { useEffect } from "react";
 import {
-  ChevronDown,
   Database,
-  Plug,
-  Unplug,
-  Loader2,
-  ArrowLeftRight,
   X,
   Download,
   RefreshCw,
-  Pencil,
-  Trash2,
+  Loader2,
   Workflow,
+  LayoutGrid,
 } from "lucide-react";
 import { Sidebar } from "./Sidebar";
 import { TabBar } from "./TabBar";
 import { StatusBar } from "./StatusBar";
 import { TabContent } from "./TabContent";
-import { HomePage } from "./HomePage";
+import { Dashboard } from "./Dashboard";
 import { useProjectStore } from "../../stores/projectStore";
 import { useUIStore } from "../../stores/uiStore";
-import { useConnect, useDisconnect } from "../../hooks/useDatabase";
 import { useGlobalKeyboardShortcuts } from "../../hooks/useKeyboard";
 import { useConnectionHealthCheck } from "../../hooks/useConnectionHealthCheck";
 import { useUpdateCheck } from "../../hooks/useUpdateCheck";
-import { cn, PROJECT_COLORS } from "../../lib/utils";
-
-function ProjectMenu() {
-  const [isOpen, setIsOpen] = useState(false);
-  const dropdownRef = useRef<HTMLDivElement>(null);
-
-  const projects = useProjectStore((state) => state.projects);
-  const activeProjectId = useProjectStore((state) => state.activeProjectId);
-  const connectionStatus = useProjectStore((state) => state.connectionStatus);
-  const openProjectModal = useUIStore((state) => state.openProjectModal);
-  const openDeleteProjectModal = useUIStore((state) => state.openDeleteProjectModal);
-
-  const connect = useConnect();
-  const disconnect = useDisconnect();
-
-  const activeProject = projects.find((p) => p.id === activeProjectId);
-
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (
-        dropdownRef.current &&
-        !dropdownRef.current.contains(event.target as Node)
-      ) {
-        setIsOpen(false);
-      }
-    };
-
-    if (isOpen) {
-      document.addEventListener("mousedown", handleClickOutside);
-      return () =>
-        document.removeEventListener("mousedown", handleClickOutside);
-    }
-  }, [isOpen]);
-
-  const handleConnect = () => {
-    if (!activeProject) return;
-    connect.mutate(activeProject.connection);
-    setIsOpen(false);
-  };
-
-  const handleDisconnect = () => {
-    disconnect.mutate();
-    setIsOpen(false);
-  };
-
-  if (!activeProject) return null;
-
-  return (
-    <div ref={dropdownRef} className="relative">
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        className={cn(
-          "flex items-center gap-2 px-3 h-8 rounded",
-          "hover:bg-[var(--bg-tertiary)] transition-colors duration-150",
-          "text-sm"
-        )}
-      >
-        <div
-          className={cn(
-            "w-2 h-2 rounded-full",
-            PROJECT_COLORS[activeProject.color].dot
-          )}
-        />
-        <span className="text-[var(--text-primary)]">{activeProject.name}</span>
-        <ChevronDown
-          className={cn(
-            "w-4 h-4 text-[var(--text-muted)]",
-            "transition-transform duration-150",
-            isOpen && "rotate-180"
-          )}
-        />
-      </button>
-
-      {isOpen && (
-        <div
-          className={cn(
-            "absolute top-full left-0 mt-1 z-50",
-            "min-w-[180px] py-1 rounded-md shadow-lg",
-            "bg-[var(--bg-secondary)] border border-[var(--border-color)]",
-            "animate-in fade-in-0 zoom-in-95 duration-150"
-          )}
-        >
-          {connectionStatus === "disconnected" ||
-          connectionStatus === "error" ? (
-            <button
-              onClick={handleConnect}
-              disabled={connect.isPending}
-              className={cn(
-                "w-full flex items-center gap-2 px-3 py-2",
-                "hover:bg-[var(--bg-tertiary)] transition-colors duration-150",
-                "text-sm text-[var(--success)]"
-              )}
-            >
-              {connect.isPending ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <Plug className="w-4 h-4" />
-              )}
-              <span>{connect.isPending ? "Connecting..." : "Connect"}</span>
-            </button>
-          ) : connectionStatus === "connected" ? (
-            <button
-              onClick={handleDisconnect}
-              disabled={disconnect.isPending}
-              className={cn(
-                "w-full flex items-center gap-2 px-3 py-2",
-                "hover:bg-[var(--bg-tertiary)] transition-colors duration-150",
-                "text-sm text-[var(--danger)]"
-              )}
-            >
-              {disconnect.isPending ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <Unplug className="w-4 h-4" />
-              )}
-              <span>
-                {disconnect.isPending ? "Disconnecting..." : "Disconnect"}
-              </span>
-            </button>
-          ) : null}
-
-          <div className="my-1 h-px bg-[var(--border-color)]" />
-
-          <button
-            onClick={() => {
-              openProjectModal(activeProject.id);
-              setIsOpen(false);
-            }}
-            className={cn(
-              "w-full flex items-center gap-2 px-3 py-2",
-              "hover:bg-[var(--bg-tertiary)] transition-colors duration-150",
-              "text-sm text-[var(--text-secondary)]"
-            )}
-          >
-            <Pencil className="w-4 h-4" />
-            <span>Edit Project</span>
-          </button>
-
-          <button
-            onClick={() => {
-              setIsOpen(false);
-              openDeleteProjectModal(activeProject.id);
-            }}
-            className={cn(
-              "w-full flex items-center gap-2 px-3 py-2",
-              "hover:bg-red-500/10 transition-colors duration-150",
-              "text-sm text-red-400"
-            )}
-          >
-            <Trash2 className="w-4 h-4" />
-            <span>Delete Project</span>
-          </button>
-        </div>
-      )}
-    </div>
-  );
-}
+import { cn } from "../../lib/utils";
 
 function TitleBar() {
   const projects = useProjectStore((state) => state.projects);
-  const activeProjectId = useProjectStore((state) => state.activeProjectId);
-  const connectionStatus = useProjectStore((state) => state.connectionStatus);
   const toggleProjectSpotlight = useUIStore(
     (state) => state.toggleProjectSpotlight
   );
   const addDiagramTab = useUIStore((state) => state.addDiagramTab);
-
-  const activeProject = projects.find((p) => p.id === activeProjectId);
+  const getActiveConnectionId = useUIStore(
+    (state) => state.getActiveConnectionId
+  );
+  const getActiveProjectId = useUIStore((state) => state.getActiveProjectId);
 
   // Keyboard shortcut for project spotlight (Ctrl/Cmd + P)
   useEffect(() => {
@@ -206,6 +44,16 @@ function TitleBar() {
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [toggleProjectSpotlight]);
 
+  const handleOpenDiagram = () => {
+    const connectionId = getActiveConnectionId();
+    const projectId = getActiveProjectId();
+    if (connectionId && projectId) {
+      addDiagramTab(connectionId, projectId);
+    }
+  };
+
+  const hasActiveConnection = !!getActiveConnectionId();
+
   return (
     <header
       className={cn(
@@ -219,38 +67,21 @@ function TitleBar() {
       {/* Space for macOS traffic lights (overlay titlebar) */}
       <div className="w-[78px] shrink-0" data-tauri-drag-region />
 
-      {/* Project menu (manage current project) */}
-      {activeProject ? (
-        <ProjectMenu />
-      ) : (
+      {/* Projects button */}
+      {projects.length > 0 && (
         <button
           onClick={toggleProjectSpotlight}
           className={cn(
-            "flex items-center gap-2 px-2 h-8 rounded",
-            "hover:bg-[var(--bg-tertiary)] transition-colors duration-150",
-            "text-sm"
-          )}
-        >
-          <Database className="w-4 h-4 text-[var(--text-muted)]" />
-          <span className="text-[var(--text-muted)]">Select Project</span>
-        </button>
-      )}
-
-      {/* Switch project button - only show when a project is selected */}
-      {activeProject && (
-        <button
-          onClick={toggleProjectSpotlight}
-          className={cn(
-            "flex items-center gap-1.5 px-2 h-8 rounded ml-2",
+            "flex items-center gap-1.5 px-2 h-8 rounded",
             "hover:bg-[var(--bg-tertiary)] transition-colors duration-150",
             "text-xs text-[var(--text-muted)]"
           )}
-          title="Switch project (Ctrl+P)"
+          title="Switch project (Cmd+P)"
         >
-          <ArrowLeftRight className="w-3.5 h-3.5" />
-          <span>Switch</span>
+          <LayoutGrid className="w-3.5 h-3.5" />
+          <span>Projects</span>
           <kbd className="ml-1 px-1.5 py-0.5 rounded text-[10px] bg-[var(--bg-tertiary)] border border-[var(--border-color)]">
-            ⌘P
+            &#8984;P
           </kbd>
         </button>
       )}
@@ -267,9 +98,9 @@ function TitleBar() {
       </div>
 
       {/* Right-side actions */}
-      {connectionStatus === "connected" && (
+      {hasActiveConnection && (
         <button
-          onClick={() => addDiagramTab()}
+          onClick={handleOpenDiagram}
           className={cn(
             "flex items-center gap-1.5 px-2 h-8 rounded",
             "hover:bg-[var(--bg-tertiary)] transition-colors duration-150",
@@ -365,8 +196,8 @@ export function AppLayout({ children }: AppLayoutProps) {
   const toggleSidebar = useUIStore((state) => state.toggleSidebar);
   const setSidebarWidth = useUIStore((state) => state.setSidebarWidth);
   const activeTabId = useUIStore((state) => state.activeTabId);
-  const activeProjectId = useProjectStore((state) => state.activeProjectId);
-  const connectionStatus = useProjectStore((state) => state.connectionStatus);
+  const projects = useProjectStore((state) => state.projects);
+  const connections = useProjectStore((state) => state.connections);
 
   // Global keyboard shortcuts (Cmd+W to close tab, Cmd+K for command palette, etc.)
   useGlobalKeyboardShortcuts();
@@ -374,8 +205,14 @@ export function AppLayout({ children }: AppLayoutProps) {
   // Live database connection health check
   useConnectionHealthCheck();
 
-  // Determine what content to show
-  const showTabContent = activeTabId && (connectionStatus === "connected" || connectionStatus === "reconnecting");
+  // Determine what content to show:
+  // - If no projects exist -> show Dashboard (home page)
+  // - If projects exist -> show Sidebar + workspace
+  //   - If activeTabId -> show TabContent
+  //   - Otherwise -> show EmptyState
+  const hasProjects = projects.length > 0;
+  const showTabContent = activeTabId !== null;
+  const hasAnyConnection = Object.keys(connections).length > 0;
 
   return (
     <div className="h-screen w-screen flex flex-col overflow-hidden bg-[var(--bg-primary)]">
@@ -387,7 +224,7 @@ export function AppLayout({ children }: AppLayoutProps) {
 
       {/* Main Content Area */}
       <div className="flex-1 flex overflow-hidden">
-        {activeProjectId ? (
+        {hasProjects ? (
           <>
             {/* Sidebar */}
             <Sidebar
@@ -404,12 +241,12 @@ export function AppLayout({ children }: AppLayoutProps) {
 
               {/* Content */}
               <div className="flex-1 overflow-hidden bg-[var(--bg-primary)]">
-                {children || (showTabContent ? <TabContent /> : <EmptyState />)}
+                {children || (showTabContent ? <TabContent /> : <EmptyState hasAnyConnection={hasAnyConnection} />)}
               </div>
             </main>
           </>
         ) : (
-          <HomePage />
+          <Dashboard />
         )}
       </div>
 
@@ -419,86 +256,35 @@ export function AppLayout({ children }: AppLayoutProps) {
   );
 }
 
-function EmptyState() {
-  const projects = useProjectStore((state) => state.projects);
-  const activeProjectId = useProjectStore((state) => state.activeProjectId);
-  const connectionStatus = useProjectStore((state) => state.connectionStatus);
-  const error = useProjectStore((state) => state.error);
-  const activeProject = projects.find((p) => p.id === activeProjectId);
-
-  const connect = useConnect();
-
-  const handleConnect = () => {
-    if (!activeProject) return;
-    connect.mutate(activeProject.connection);
-  };
-
-  // Project selected but not connected
-  if (connectionStatus === "disconnected" || connectionStatus === "error") {
+function EmptyState({ hasAnyConnection }: { hasAnyConnection: boolean }) {
+  if (hasAnyConnection) {
+    // Connected to at least one database — prompt to select a table
     return (
       <div className="h-full flex flex-col items-center justify-center text-center p-8">
         <div className="rounded-2xl bg-[var(--bg-secondary)] p-6 mb-6">
-          <Plug className="w-12 h-12 text-[var(--text-muted)]" />
+          <Database className="w-12 h-12 text-[var(--text-muted)]" />
         </div>
-        <h2 className="text-xl font-medium text-[var(--text-primary)] mb-2">
-          Connect to {activeProject?.name}
+        <h2 className="text-lg font-medium text-[var(--text-primary)] mb-2">
+          Select a table from the sidebar
         </h2>
-        <p className="text-[var(--text-secondary)] mb-6 max-w-md">
-          Click the button below to establish a connection to your database.
-        </p>
-        {error && (
-          <div className="mb-4 px-4 py-2 rounded-md bg-red-500/10 border border-red-500/20 text-red-400 text-sm max-w-md">
-            {error}
-          </div>
-        )}
-        <button
-          onClick={handleConnect}
-          disabled={connect.isPending}
-          className={cn(
-            "flex items-center gap-2 px-4 py-2 rounded-md",
-            "bg-[var(--success)] hover:bg-green-600",
-            "text-white font-medium",
-            "transition-colors duration-150",
-            "disabled:opacity-50 disabled:cursor-not-allowed"
-          )}
-        >
-          {connect.isPending ? (
-            <>
-              <Loader2 className="w-4 h-4 animate-spin" />
-              Connecting...
-            </>
-          ) : (
-            <>
-              <Plug className="w-4 h-4" />
-              Connect
-            </>
-          )}
-        </button>
-      </div>
-    );
-  }
-
-  // Connecting
-  if (connectionStatus === "connecting") {
-    return (
-      <div className="h-full flex flex-col items-center justify-center text-center p-8">
-        <Loader2 className="w-12 h-12 text-[var(--accent)] animate-spin mb-4" />
-        <p className="text-[var(--text-secondary)]">
-          Connecting to {activeProject?.name}...
+        <p className="text-[var(--text-muted)]">
+          Choose a table from the sidebar to view and edit its data
         </p>
       </div>
     );
   }
 
-  // Connected - show table selection prompt
+  // No active connections — prompt to connect
   return (
     <div className="h-full flex flex-col items-center justify-center text-center p-8">
-      <Database className="w-12 h-12 text-[var(--success)] mb-4" />
+      <div className="rounded-2xl bg-[var(--bg-secondary)] p-6 mb-6">
+        <Database className="w-12 h-12 text-[var(--text-muted)]" />
+      </div>
       <h2 className="text-lg font-medium text-[var(--text-primary)] mb-2">
-        Connected to {activeProject?.name}
+        Connect to a database
       </h2>
       <p className="text-[var(--text-muted)]">
-        Select a table from the sidebar to view its data
+        Connect to a database from the sidebar to get started
       </p>
     </div>
   );
