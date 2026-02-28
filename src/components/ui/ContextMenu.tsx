@@ -240,6 +240,8 @@ export function ContextMenu({ items, children, disabled, className }: ContextMen
       {isOpen && createPortal(
         <div
           ref={menuRef}
+          onClick={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
           className={cn(
             "fixed z-[100] min-w-[160px]",
             "bg-[var(--bg-secondary)] border border-[var(--border-color)]",
