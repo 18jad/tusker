@@ -13,7 +13,7 @@ import {
   SelectItem,
 } from "../ui/Select";
 import type { Column, Row, CellValue, SortColumn } from "../../types";
-import { Key, Hash, Type, Calendar, ToggleLeft, Braces, ArrowUp, ArrowDown, Copy, Columns, RotateCcw, ChevronDown, Pencil, Ban, ClipboardCopy } from "lucide-react";
+import { Key, Hash, Type, Calendar, ToggleLeft, Braces, ArrowUp, ArrowDown, Copy, Columns, RotateCcw, ChevronDown, Pencil, Ban, ClipboardCopy, MousePointerClick, Database } from "lucide-react";
 import "react-datepicker/dist/react-datepicker.css";
 
 interface DataTableProps {
@@ -1042,6 +1042,72 @@ function buildCellContextMenu({
 }
 
 /**
+ * Format a cell value as a SQL literal
+ */
+function formatSqlValue(value: CellValue): string {
+  if (value === null) return "NULL";
+  if (typeof value === "boolean") return value ? "TRUE" : "FALSE";
+  if (typeof value === "number") return String(value);
+  if (typeof value === "object") return `'${JSON.stringify(value).replace(/'/g, "''")}'`;
+  return `'${String(value).replace(/'/g, "''")}'`;
+}
+
+/**
+ * Build context menu items for a row number cell
+ */
+function buildRowContextMenu({
+  row,
+  columns,
+  tableKey,
+  rowIndex,
+  isSelected,
+  onRowSelect,
+}: {
+  row: Row;
+  columns: Column[];
+  tableKey: string;
+  rowIndex: number;
+  isSelected: boolean;
+  onRowSelect?: (index: number, modifiers: { shift: boolean; ctrl: boolean }) => void;
+}) {
+  const [schema, table] = tableKey.split(".");
+
+  const insertCols = columns.map((c) => `"${c.name}"`).join(", ");
+  const insertVals = columns.map((c) => formatSqlValue(row[c.name])).join(", ");
+  const insertSql = `INSERT INTO "${schema}"."${table}" (${insertCols}) VALUES (${insertVals});`;
+
+  const items: Parameters<typeof ContextMenu>[0]["items"] = [
+    {
+      label: "Copy Row as JSON",
+      icon: <Braces className="w-3.5 h-3.5" />,
+      onClick: () => {
+        navigator.clipboard.writeText(JSON.stringify(row, null, 2));
+        useUIStore.getState().showToast("Row copied as JSON", "info");
+      },
+    },
+    {
+      label: "Copy as INSERT",
+      icon: <Database className="w-3.5 h-3.5" />,
+      onClick: () => {
+        navigator.clipboard.writeText(insertSql);
+        useUIStore.getState().showToast("INSERT statement copied", "info");
+      },
+    },
+  ];
+
+  if (onRowSelect) {
+    items.push({ type: "separator" });
+    items.push({
+      label: isSelected ? "Deselect Row" : "Select Row",
+      icon: <MousePointerClick className="w-3.5 h-3.5" />,
+      onClick: () => onRowSelect(rowIndex, { shift: false, ctrl: true }),
+    });
+  }
+
+  return items;
+}
+
+/**
  * Clean, modern data table with inline editing
  */
 export function DataTable({
@@ -1354,7 +1420,18 @@ export function DataTable({
                   )}
                   style={{ width: 50, minWidth: 50 }}
                 >
-                  <span className={cn(isDeleted && "line-through")}>{startRowNumber + rowIndex}</span>
+                  <ContextMenu
+                    items={buildRowContextMenu({
+                      row,
+                      columns,
+                      tableKey,
+                      rowIndex,
+                      isSelected,
+                      onRowSelect,
+                    })}
+                  >
+                    <span className={cn(isDeleted && "line-through")}>{startRowNumber + rowIndex}</span>
+                  </ContextMenu>
                 </td>
                 {columns.map((column) => {
                   const value = row[column.name];
