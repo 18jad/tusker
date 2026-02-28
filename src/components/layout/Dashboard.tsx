@@ -90,10 +90,16 @@ function ConnectionCard({
 }) {
   const colorClasses = PROJECT_COLORS[project.color];
   const updateProject = useProjectStore((s) => s.updateProject);
+  const openProjectModal = useUIStore((s) => s.openProjectModal);
 
   const handleToggleFavorite = (e: React.MouseEvent) => {
     e.stopPropagation();
     updateProject(project.id, { favorite: !project.favorite });
+  };
+
+  const handleEdit = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    openProjectModal(project.id);
   };
 
   return (
@@ -132,21 +138,35 @@ function ConnectionCard({
         <span className="text-[9px] font-semibold font-mono uppercase px-2 py-[3px] rounded-[2px] bg-[var(--bg-tertiary)] text-[var(--text-muted)]">
           {project.connection.ssl ? "SSL" : "PG"}
         </span>
-        <div
-          role="button"
-          onClick={handleToggleFavorite}
-          className={cn(
-            "p-1 rounded transition-all duration-150",
-            project.favorite
-              ? "text-[var(--warning)] hover:bg-[var(--warning)]/15"
-              : "text-[var(--text-muted)] opacity-0 group-hover/card:opacity-100 hover:text-[var(--warning)] hover:bg-[var(--warning)]/10"
-          )}
-          title={project.favorite ? "Remove from Quick Connect" : "Add to Quick Connect"}
-        >
-          <Star
-            className="w-3.5 h-3.5"
-            fill={project.favorite ? "currentColor" : "none"}
-          />
+        <div className="flex items-center gap-0.5">
+          <div
+            role="button"
+            onClick={handleEdit}
+            className={cn(
+              "p-1 rounded transition-all duration-150",
+              "text-[var(--text-muted)] opacity-0 group-hover/card:opacity-100",
+              "hover:text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)]"
+            )}
+            title="Edit connection"
+          >
+            <Pencil className="w-3.5 h-3.5" />
+          </div>
+          <div
+            role="button"
+            onClick={handleToggleFavorite}
+            className={cn(
+              "p-1 rounded transition-all duration-150",
+              project.favorite
+                ? "text-[var(--warning)] hover:bg-[var(--warning)]/15"
+                : "text-[var(--text-muted)] opacity-0 group-hover/card:opacity-100 hover:text-[var(--warning)] hover:bg-[var(--warning)]/10"
+            )}
+            title={project.favorite ? "Remove from Quick Connect" : "Add to Quick Connect"}
+          >
+            <Star
+              className="w-3.5 h-3.5"
+              fill={project.favorite ? "currentColor" : "none"}
+            />
+          </div>
         </div>
       </div>
     </button>

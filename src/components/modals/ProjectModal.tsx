@@ -1,9 +1,6 @@
 import { useState, useEffect, useRef } from "react";
-import { Plug, Database, Check } from "lucide-react";
+import { Plug, Database, Check, X, Loader2, Eye, EyeOff } from "lucide-react";
 import { Modal } from "../ui/Modal";
-import { Button } from "../ui/Button";
-import { Input } from "../ui/Input";
-import { Toggle } from "../ui/Toggle";
 import { useProjectStore } from "../../stores/projectStore";
 import { useUIStore } from "../../stores/uiStore";
 import { useTestConnection, savePassword, getPassword } from "../../hooks/useDatabase";
@@ -57,6 +54,103 @@ const PROJECT_COLOR_OPTIONS: ProjectColor[] = [
   "purple",
 ];
 
+// ── Themed form components ──────────────────────────────────────────
+
+function ThemedInput({
+  label,
+  type = "text",
+  value,
+  onChange,
+  placeholder,
+}: {
+  label: string;
+  type?: string;
+  value: string;
+  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  placeholder?: string;
+}) {
+  const [showPassword, setShowPassword] = useState(false);
+  const isPassword = type === "password";
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <label className="text-[10px] font-medium font-mono uppercase tracking-wider text-[var(--text-muted)]">
+        {label}
+      </label>
+      <div className="relative">
+        <input
+          type={isPassword && showPassword ? "text" : type}
+          value={value}
+          onChange={onChange}
+          placeholder={placeholder}
+          className={cn(
+            "w-full h-9 px-3 rounded-[4px] text-xs font-mono",
+            "bg-[var(--bg-tertiary)] text-[var(--text-primary)]",
+            "border border-[var(--border-color)]",
+            "placeholder:text-[var(--text-muted)]",
+            "transition-colors duration-150",
+            "hover:border-[#3a3a3a]",
+            "focus:outline-none focus:border-[var(--success)]/60 focus:ring-1 focus:ring-[var(--success)]/30",
+            isPassword && "pr-10"
+          )}
+        />
+        {isPassword && (
+          <button
+            type="button"
+            tabIndex={-1}
+            onClick={() => setShowPassword(!showPassword)}
+            className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors"
+          >
+            {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ThemedToggle({
+  checked,
+  onChange,
+  label,
+}: {
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+  label: string;
+}) {
+  return (
+    <div className="flex items-center gap-3">
+      <button
+        type="button"
+        role="switch"
+        aria-checked={checked}
+        onClick={() => onChange(!checked)}
+        className={cn(
+          "relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full items-center",
+          "transition-colors duration-200",
+          checked
+            ? "bg-[var(--success)]"
+            : "bg-[var(--bg-tertiary)] border border-[var(--border-color)]"
+        )}
+      >
+        <span
+          className={cn(
+            "pointer-events-none absolute h-3.5 w-3.5 rounded-full",
+            "bg-white shadow-sm",
+            "transition-all duration-200",
+            checked ? "left-[18px]" : "left-[3px]"
+          )}
+        />
+      </button>
+      <span className="text-xs font-mono text-[var(--text-secondary)]">
+        {label}
+      </span>
+    </div>
+  );
+}
+
+// ── Main modal ──────────────────────────────────────────────────────
+
 export function ProjectModal() {
   const { projectModalOpen, editingProjectId, closeProjectModal } =
     useUIStore();
@@ -68,7 +162,6 @@ export function ProjectModal() {
   const [colorPickerOpen, setColorPickerOpen] = useState(false);
   const colorPickerRef = useRef<HTMLDivElement>(null);
 
-  // Close color picker when clicking outside
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (colorPickerRef.current && !colorPickerRef.current.contains(e.target as Node)) {
@@ -252,25 +345,37 @@ export function ProjectModal() {
     <Modal
       open={projectModalOpen}
       onClose={closeProjectModal}
-      title={isEditing ? "Edit Project" : "New Project"}
-      className="max-w-md"
+      showCloseButton={false}
+      className="max-w-md !rounded-[4px]"
     >
+      {/* Custom header */}
+      <div className="flex items-center justify-between mb-5">
+        <h2 className="text-base font-bold font-heading tracking-[-0.3px] text-[var(--text-primary)]">
+          {isEditing ? "Edit Connection" : "New Connection"}
+        </h2>
+        <button
+          onClick={closeProjectModal}
+          className="p-1 rounded-[4px] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)] transition-colors"
+        >
+          <X className="w-4 h-4" />
+        </button>
+      </div>
+
       <div className="space-y-5">
         {/* Project Name with Color Picker */}
         <div className="flex flex-col gap-1.5">
-          <label className="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider">
-            Project Name
+          <label className="text-[10px] font-medium font-mono uppercase tracking-wider text-[var(--text-muted)]">
+            PROJECT_NAME
           </label>
           <div
             ref={colorPickerRef}
             className={cn(
-              "relative flex items-center rounded-lg",
+              "relative flex items-center rounded-[4px]",
               "bg-[var(--bg-tertiary)] border border-[var(--border-color)]",
-              "focus-within:border-[var(--accent)] focus-within:ring-1 focus-within:ring-[var(--accent)]",
+              "focus-within:border-[var(--success)]/60 focus-within:ring-1 focus-within:ring-[var(--success)]/30",
               "hover:border-[#3a3a3a]"
             )}
           >
-            {/* Color Picker Trigger */}
             <button
               type="button"
               onClick={() => setColorPickerOpen(!colorPickerOpen)}
@@ -281,13 +386,11 @@ export function ProjectModal() {
                 PROJECT_COLORS[form.color].dot
               )} />
             </button>
-            {/* Color Picker Popover */}
             {colorPickerOpen && (
               <div className={cn(
-                "absolute left-0 top-full mt-2 p-3 rounded-lg z-[100]",
+                "absolute left-0 top-full mt-2 p-3 rounded-[4px] z-[100]",
                 "bg-[var(--bg-secondary)] border border-[var(--border-color)]",
-                "shadow-xl shadow-black/40",
-                "animate-in fade-in zoom-in-95 duration-150"
+                "shadow-xl shadow-black/40"
               )}>
                 <div className="flex gap-2.5">
                   {PROJECT_COLOR_OPTIONS.map((color) => (
@@ -315,16 +418,14 @@ export function ProjectModal() {
                 </div>
               </div>
             )}
-            {/* Divider */}
             <div className="w-px h-5 bg-[var(--border-color)]" />
-            {/* Name Input */}
             <input
               type="text"
-              placeholder="My Database"
+              placeholder="my_database"
               value={form.name}
               onChange={(e) => updateField("name", e.target.value)}
               className={cn(
-                "flex-1 px-3 py-2 bg-transparent text-sm rounded-r-lg",
+                "flex-1 px-3 py-2 bg-transparent text-xs font-mono rounded-r-[4px]",
                 "text-[var(--text-primary)]",
                 "placeholder:text-[var(--text-muted)]",
                 "focus:outline-none"
@@ -335,92 +436,95 @@ export function ProjectModal() {
 
         {/* Connection Method Toggle */}
         <div className="flex flex-col gap-1.5">
-          <label className="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider">
-            Connection
+          <label className="text-[10px] font-medium font-mono uppercase tracking-wider text-[var(--text-muted)]">
+            CONNECTION
           </label>
-          <div className="flex rounded-lg border border-[var(--border-color)] p-0.5 bg-[var(--bg-tertiary)]">
+          <div className="flex rounded-[4px] border border-[var(--border-color)] p-0.5 bg-[var(--bg-tertiary)]">
             <button
               type="button"
               onClick={() => updateField("connectionMethod", "manual")}
               className={cn(
-                "flex-1 flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-md text-xs font-medium transition-colors",
+                "flex-1 flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-[3px] text-[11px] font-medium font-mono transition-colors",
                 form.connectionMethod === "manual"
                   ? "bg-[var(--bg-secondary)] text-[var(--text-primary)]"
                   : "text-[var(--text-muted)] hover:text-[var(--text-secondary)]"
               )}
             >
               <Database className="w-3.5 h-3.5" />
-              Manual
+              MANUAL
             </button>
             <button
               type="button"
               onClick={() => updateField("connectionMethod", "string")}
               className={cn(
-                "flex-1 flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-md text-xs font-medium transition-colors",
+                "flex-1 flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-[3px] text-[11px] font-medium font-mono transition-colors",
                 form.connectionMethod === "string"
                   ? "bg-[var(--bg-secondary)] text-[var(--text-primary)]"
                   : "text-[var(--text-muted)] hover:text-[var(--text-secondary)]"
               )}
             >
               <Plug className="w-3.5 h-3.5" />
-              Connection String
+              URI_STRING
             </button>
           </div>
         </div>
 
         {/* Connection Fields */}
         {form.connectionMethod === "string" ? (
-          <div>
+          <div className="flex flex-col gap-1.5">
+            <label className="text-[10px] font-medium font-mono uppercase tracking-wider text-[var(--text-muted)]">
+              CONNECTION_STRING
+            </label>
             <textarea
               value={form.connectionString}
               onChange={(e) => handleConnectionStringChange(e.target.value)}
               placeholder="postgresql://user:password@localhost:5432/database"
               rows={2}
               className={cn(
-                "w-full px-3 py-2 rounded-lg text-xs font-mono resize-none",
+                "w-full px-3 py-2 rounded-[4px] text-xs font-mono resize-none",
                 "bg-[var(--bg-tertiary)] text-[var(--text-primary)]",
                 "border border-[var(--border-color)]",
                 "placeholder:text-[var(--text-muted)]",
                 "hover:border-[#3a3a3a]",
-                "focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)]"
+                "focus:outline-none focus:border-[var(--success)]/60 focus:ring-1 focus:ring-[var(--success)]/30"
               )}
             />
           </div>
         ) : (
           <div className="grid grid-cols-4 gap-3">
             <div className="col-span-3">
-              <Input
-                label="Host"
+              <ThemedInput
+                label="HOST"
                 placeholder="localhost"
                 value={form.host}
                 onChange={(e) => updateField("host", e.target.value)}
               />
             </div>
-            <Input
-              label="Port"
+            <ThemedInput
+              label="PORT"
               placeholder="5432"
               value={form.port}
               onChange={(e) => updateField("port", e.target.value)}
             />
             <div className="col-span-4">
-              <Input
-                label="Database"
+              <ThemedInput
+                label="DATABASE"
                 placeholder="my_database"
                 value={form.database}
                 onChange={(e) => updateField("database", e.target.value)}
               />
             </div>
             <div className="col-span-2">
-              <Input
-                label="Username"
+              <ThemedInput
+                label="USERNAME"
                 placeholder="postgres"
                 value={form.username}
                 onChange={(e) => updateField("username", e.target.value)}
               />
             </div>
             <div className="col-span-2">
-              <Input
-                label="Password"
+              <ThemedInput
+                label="PASSWORD"
                 type="password"
                 placeholder="********"
                 value={form.password}
@@ -430,28 +534,27 @@ export function ProjectModal() {
           </div>
         )}
 
-        {/* SSL toggle — part of connection config */}
-        <Toggle
-          checked={form.ssl}
-          onChange={(checked) => updateField("ssl", checked)}
-          label="Use SSL"
-        />
-
-        {/* Project Options */}
-        <div className="flex flex-col gap-1.5">
-          <label className="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider">
-            Options
+        {/* SSL + Options */}
+        <div className="flex flex-col gap-3">
+          <label className="text-[10px] font-medium font-mono uppercase tracking-wider text-[var(--text-muted)]">
+            OPTIONS
           </label>
-          <div className="flex items-center gap-6">
-            <Toggle
+          <div className="flex flex-col gap-2.5">
+            <ThemedToggle
+              checked={form.ssl}
+              onChange={(checked) => updateField("ssl", checked)}
+              label="USE_SSL"
+            />
+            <div className="h-px bg-[var(--border-color)]" />
+            <ThemedToggle
               checked={form.instantCommit}
               onChange={(checked) => updateField("instantCommit", checked)}
-              label="Instant Commit"
+              label="INSTANT_COMMIT"
             />
-            <Toggle
+            <ThemedToggle
               checked={form.readOnly}
               onChange={(checked) => updateField("readOnly", checked)}
-              label="Read-only Mode"
+              label="READ_ONLY"
             />
           </div>
         </div>
@@ -460,10 +563,10 @@ export function ProjectModal() {
         {testResult && (
           <div
             className={cn(
-              "flex items-center gap-2 px-3 py-2 rounded-lg text-xs",
+              "flex items-center gap-2 px-3 py-2 rounded-[4px] text-[11px] font-mono",
               testResult.success
-                ? "bg-green-500/10 text-green-400 border border-green-500/20"
-                : "bg-red-500/10 text-red-400 border border-red-500/20"
+                ? "bg-[var(--success)]/10 text-[var(--success)] border border-[var(--success)]/20"
+                : "bg-[var(--danger)]/10 text-[var(--danger)] border border-[var(--danger)]/20"
             )}
           >
             {testResult.success ? (
@@ -475,31 +578,53 @@ export function ProjectModal() {
           </div>
         )}
 
-        {/* Footer — Test on left, Cancel + Save on right */}
-        <div className="flex items-center justify-between pt-4 mt-1">
-          <Button
-            variant="secondary"
-            size="sm"
+        {/* Footer */}
+        <div className="flex items-center justify-between pt-3 mt-1 border-t border-[var(--border-color)]">
+          <button
             onClick={handleTestConnection}
-            loading={testing}
-            disabled={!isValid}
+            disabled={!isValid || testing}
+            className={cn(
+              "flex items-center gap-1.5 px-3 py-1.5 rounded-[4px] text-[11px] font-medium font-mono",
+              "bg-[var(--bg-tertiary)] text-[var(--text-secondary)] border border-[var(--border-color)]",
+              "hover:bg-[var(--bg-secondary)] hover:text-[var(--text-primary)]",
+              "transition-colors duration-150",
+              (!isValid || testing) && "opacity-50 cursor-not-allowed"
+            )}
           >
-            {testing ? "Testing..." : "Test Connection"}
-          </Button>
+            {testing ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            ) : (
+              <Plug className="w-3.5 h-3.5" />
+            )}
+            {testing ? "TESTING..." : "TEST"}
+          </button>
 
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm" onClick={closeProjectModal}>
-              Cancel
-            </Button>
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={handleSave}
-              loading={saving}
-              disabled={!isValid}
+            <button
+              onClick={closeProjectModal}
+              className={cn(
+                "px-3 py-1.5 rounded-[4px] text-[11px] font-medium font-mono",
+                "text-[var(--text-secondary)]",
+                "hover:bg-[var(--bg-tertiary)] hover:text-[var(--text-primary)]",
+                "transition-colors duration-150"
+              )}
             >
-              {isEditing ? "Save Changes" : "Create Project"}
-            </Button>
+              CANCEL
+            </button>
+            <button
+              onClick={handleSave}
+              disabled={!isValid || saving}
+              className={cn(
+                "flex items-center gap-1.5 px-4 py-1.5 rounded-[4px] text-[11px] font-semibold font-mono",
+                "bg-[var(--success)] text-[var(--bg-primary)]",
+                "hover:bg-[var(--success)]/90",
+                "transition-colors duration-150",
+                (!isValid || saving) && "opacity-50 cursor-not-allowed"
+              )}
+            >
+              {saving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+              {isEditing ? "SAVE" : "CREATE"}
+            </button>
           </div>
         </div>
       </div>
