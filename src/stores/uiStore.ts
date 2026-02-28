@@ -219,12 +219,14 @@ export const useUIStore = create<UIState>((set, get) => ({
 
   addTab: (tab) =>
     set((state) => {
-      // Check if tab already exists
-      const existing = state.tabs.find(
-        (t) => t.type === tab.type && t.table === tab.table && t.schema === tab.schema
-      );
-      if (existing) {
-        return { activeTabId: existing.id };
+      // FK-filtered tabs (with filterKey) are always unique — skip dedup
+      if (!tab.filterKey) {
+        const existing = state.tabs.find(
+          (t) => t.type === tab.type && t.table === tab.table && t.schema === tab.schema && !t.filterKey
+        );
+        if (existing) {
+          return { activeTabId: existing.id };
+        }
       }
       return {
         tabs: [...state.tabs, tab],
@@ -249,7 +251,7 @@ export const useUIStore = create<UIState>((set, get) => ({
 
       // Clean up filters, sorts, and column widths for table tabs
       if (tabToClose?.type === "table" && tabToClose.schema && tabToClose.table) {
-        const tableKey = `${tabToClose.schema}.${tabToClose.table}`;
+        const tableKey = tabToClose.filterKey ?? `${tabToClose.schema}.${tabToClose.table}`;
         const { [tableKey]: _, ...remainingFilters } = state.tableFilterState;
         const { [tableKey]: __, ...remainingSorts } = state.tableSortState;
         const { [tableKey]: ___, ...remainingWidths } = state.columnWidths;
@@ -287,7 +289,7 @@ export const useUIStore = create<UIState>((set, get) => ({
 
       closingTabs.forEach((tab) => {
         if (tab.type === "table" && tab.schema && tab.table) {
-          const tableKey = `${tab.schema}.${tab.table}`;
+          const tableKey = tab.filterKey ?? `${tab.schema}.${tab.table}`;
           delete newFilterState[tableKey];
           delete newSortState[tableKey];
           delete newWidthState[tableKey];

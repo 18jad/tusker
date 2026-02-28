@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect } from "react";
+import React, { useState, useCallback, useRef, useEffect } from "react";
 import DatePicker from "react-datepicker";
 import { cn } from "../../lib/utils";
 import { useUIStore } from "../../stores/uiStore";
@@ -13,7 +13,8 @@ import {
   SelectItem,
 } from "../ui/Select";
 import type { Column, Row, CellValue, SortColumn } from "../../types";
-import { Key, Hash, Type, Calendar, ToggleLeft, Braces, ArrowUp, ArrowDown, Copy, Columns, RotateCcw, ChevronDown, Pencil, Ban, ClipboardCopy, MousePointerClick, Database } from "lucide-react";
+import { Key, Hash, Type, Calendar, ToggleLeft, Braces, ArrowUp, ArrowDown, Copy, Columns, RotateCcw, ChevronDown, Pencil, Ban, ClipboardCopy, MousePointerClick, Database, ExternalLink } from "lucide-react";
+import { ForeignKeySubRow, openRelatedTable } from "./ForeignKeyPreview";
 import "react-datepicker/dist/react-datepicker.css";
 
 interface DataTableProps {
@@ -596,6 +597,8 @@ function EditableCell({
   onCancel,
   readOnly,
   isEdited = false,
+  isFkPreviewOpen = false,
+  onFkPreview,
 }: {
   value: CellValue;
   column: Column;
@@ -605,6 +608,8 @@ function EditableCell({
   onCancel: () => void;
   readOnly: boolean;
   isEdited?: boolean;
+  isFkPreviewOpen?: boolean;
+  onFkPreview?: () => void;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -923,10 +928,12 @@ function EditableCell({
     );
   }
 
+  const hasFkPreview = column.isForeignKey && column.foreignKeyInfo && !isNull && onFkPreview;
+
   return (
     <div
       className={cn(
-        "px-3 py-2 truncate text-sm h-full flex items-center gap-1",
+        "px-3 py-2 truncate text-sm h-full flex items-center gap-1 group/fk",
         !readOnly && "cursor-text"
       )}
       onDoubleClick={() => !readOnly && onStartEdit()}
@@ -939,7 +946,7 @@ function EditableCell({
         <span className="text-[var(--text-muted)] italic text-xs">NULL</span>
       ) : (
         <>
-          <span className={cn("text-[var(--text-primary)]", isEdited && "text-[var(--warning)]")}>
+          <span className={cn("text-[var(--text-primary)] truncate", isEdited && "text-[var(--warning)]")}>
             {displayValue}
           </span>
           {isLarge && (
@@ -948,6 +955,25 @@ function EditableCell({
             </span>
           )}
         </>
+      )}
+      {hasFkPreview && (
+        <button
+          className={cn(
+            "ml-auto p-0.5 rounded transition-colors shrink-0",
+            "opacity-0 group-hover/fk:opacity-100",
+            "hover:bg-[var(--bg-tertiary)] text-[var(--text-muted)] hover:text-[var(--accent)]",
+            isFkPreviewOpen && "!opacity-100 bg-[var(--bg-tertiary)] text-[var(--accent)]"
+          )}
+          onClick={(e) => {
+            e.stopPropagation();
+            onFkPreview();
+          }}
+          onDoubleClick={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
+          title={`Preview ${column.foreignKeyInfo!.referencedTable}`}
+        >
+          <ExternalLink className="w-3 h-3" />
+        </button>
       )}
     </div>
   );
@@ -1022,6 +1048,15 @@ function buildCellContextMenu({
         onClick: () => onCellEdit?.(rowIndex, column.name, null),
       });
     }
+  }
+
+  if (column.isForeignKey && column.foreignKeyInfo && value !== null) {
+    items.push({ type: "separator" });
+    items.push({
+      label: "Open Related Table",
+      icon: <ExternalLink className="w-3.5 h-3.5" />,
+      onClick: () => openRelatedTable(column.foreignKeyInfo!, value as string | number),
+    });
   }
 
   if (hasSort) {
@@ -1130,6 +1165,13 @@ export function DataTable({
   const [resizing, setResizing] = useState<string | null>(null);
   const [editingCell, setEditingCell] = useState<{ row: number; col: string } | null>(null);
   const [hoveringRowNumber, setHoveringRowNumber] = useState<number | null>(null);
+  const [fkPreview, setFkPreview] = useState<{ row: number; col: string } | null>(null);
+
+  const handleToggleFkPreview = useCallback((rowIndex: number, colName: string) => {
+    setFkPreview((prev) =>
+      prev?.row === rowIndex && prev?.col === colName ? null : { row: rowIndex, col: colName }
+    );
+  }, []);
 
   const columnWidths = allColumnWidths[tableKey] || {};
   const getColumnWidth = (colName: string) => columnWidths[colName] || 180;
@@ -1229,7 +1271,7 @@ export function DataTable({
 
   return (
     <div className="h-full flex flex-col">
-      <div className="flex-1 overflow-auto min-h-0">
+      <div className="flex-1 overflow-auto min-h-0" style={{ containerType: "inline-size" }}>
         <table className="w-full border-collapse">
         {/* Header */}
         <thead className="sticky top-0 z-20">
@@ -1385,10 +1427,11 @@ export function DataTable({
             const isEven = rowIndex % 2 === 0;
             const isDeleted = deletedRows.has(rowIndex);
             const isRowHovered = hoveringRowNumber === rowIndex;
+            const fkCol = fkPreview?.row === rowIndex ? columns.find((c) => c.name === fkPreview.col) : null;
 
             return (
+              <React.Fragment key={rowIndex}>
               <tr
-                key={rowIndex}
                 className={cn(
                   "transition-colors",
                   isDeleted
@@ -1439,6 +1482,7 @@ export function DataTable({
                   const isEditing = editingCell?.row === rowIndex && editingCell?.col === column.name;
                   const cellKey = `${rowIndex}:${column.name}`;
                   const isEdited = editedCells.has(cellKey);
+                  const isFkPreviewOpen = fkPreview?.row === rowIndex && fkPreview?.col === column.name;
 
                   return (
                     <td
@@ -1482,12 +1526,27 @@ export function DataTable({
                           onCancel={handleCancelEdit}
                           readOnly={readOnly || isDeleted}
                           isEdited={isEdited}
+                          isFkPreviewOpen={isFkPreviewOpen}
+                          onFkPreview={
+                            column.isForeignKey && column.foreignKeyInfo
+                              ? () => handleToggleFkPreview(rowIndex, column.name)
+                              : undefined
+                          }
                         />
                       </ContextMenu>
                     </td>
                   );
                 })}
               </tr>
+              {fkCol?.foreignKeyInfo && (
+                <ForeignKeySubRow
+                  value={row[fkCol.name]}
+                  foreignKeyInfo={fkCol.foreignKeyInfo}
+                  colSpan={columns.length + 1}
+                  onClose={() => setFkPreview(null)}
+                />
+              )}
+              </React.Fragment>
             );
           })}
         </tbody>
