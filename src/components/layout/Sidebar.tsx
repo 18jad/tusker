@@ -37,7 +37,7 @@ import { cn, generateId, PROJECT_COLORS, modKey } from "../../lib/utils";
 import { exportTable } from "../../lib/exportTable";
 import { ContextMenu } from "../ui";
 import { useConnect, useDisconnect, useExecuteSQL } from "../../hooks/useDatabase";
-import type { Schema, Table } from "../../types";
+import type { Schema, Table, Project, ProjectColor } from "../../types";
 
 interface TreeItemProps {
   label: string;
@@ -113,12 +113,17 @@ function TreeItem({
   );
 }
 
+// --- SchemaTree: now accepts connection context via props ---
+
 interface SchemaTreeProps {
+  projectId: string;
+  connectionId: string;
   schema: Schema;
+  projectColor: ProjectColor;
   level: number;
 }
 
-function SchemaTree({ schema, level }: SchemaTreeProps) {
+function SchemaTree({ projectId, connectionId, schema, projectColor: _projectColor, level }: SchemaTreeProps) {
   const queryClient = useQueryClient();
   const addTab = useUIStore((state) => state.addTab);
   const activeTabId = useUIStore((state) => state.activeTabId);
@@ -142,6 +147,8 @@ function SchemaTree({ schema, level }: SchemaTreeProps) {
       id: generateId(),
       type: "table",
       title: table.name,
+      connectionId,
+      projectId,
       schema: table.schema,
       table: table.name,
     });
@@ -152,6 +159,7 @@ function SchemaTree({ schema, level }: SchemaTreeProps) {
     const activeTab = tabs.find((t) => t.id === activeTabId);
     return (
       activeTab?.type === "table" &&
+      activeTab.connectionId === connectionId &&
       activeTab.table === tableName &&
       activeTab.schema === schema.name
     );
@@ -159,7 +167,7 @@ function SchemaTree({ schema, level }: SchemaTreeProps) {
 
   const handleCreateTable = (e: React.MouseEvent) => {
     e.stopPropagation();
-    addCreateTableTab(schema.name);
+    addCreateTableTab(connectionId, projectId, schema.name);
   };
 
   return (
@@ -174,7 +182,7 @@ function SchemaTree({ schema, level }: SchemaTreeProps) {
         {
           label: "Schema Diagram",
           icon: <Workflow className="w-4 h-4" />,
-          onClick: () => addDiagramTab(schema.name),
+          onClick: () => addDiagramTab(connectionId, projectId, schema.name),
         },
         {
           type: "separator" as const,
@@ -183,7 +191,7 @@ function SchemaTree({ schema, level }: SchemaTreeProps) {
           label: "Add New Table",
           icon: <Plus className="w-4 h-4" />,
           onClick: () => {
-            addCreateTableTab(schema.name);
+            addCreateTableTab(connectionId, projectId, schema.name);
           },
         },
         {
@@ -207,7 +215,7 @@ function SchemaTree({ schema, level }: SchemaTreeProps) {
           icon: <RefreshCw className="w-4 h-4" />,
           onClick: () => {
             queryClient.invalidateQueries({
-              queryKey: ["schemas"],
+              queryKey: ["schemas", connectionId],
             });
             showToast(`Refreshed schema "${schema.name}"`);
           },
@@ -297,7 +305,7 @@ function SchemaTree({ schema, level }: SchemaTreeProps) {
                 icon: <RefreshCw className="w-4 h-4" />,
                 onClick: () => {
                   queryClient.invalidateQueries({
-                    queryKey: ["tableData", schema.name, table.name],
+                    queryKey: ["tableData", connectionId, schema.name, table.name],
                   });
                 },
               },
@@ -346,14 +354,14 @@ function SchemaTree({ schema, level }: SchemaTreeProps) {
                     label: "Import from CSV",
                     icon: <FileSpreadsheet className="w-4 h-4" />,
                     onClick: () => {
-                      addImportDataTab(schema.name, table.name, "csv");
+                      addImportDataTab(connectionId, projectId, schema.name, table.name, "csv");
                     },
                   },
                   {
                     label: "Import from JSON",
                     icon: <FileJson className="w-4 h-4" />,
                     onClick: () => {
-                      addImportDataTab(schema.name, table.name, "json");
+                      addImportDataTab(connectionId, projectId, schema.name, table.name, "json");
                     },
                   },
                 ],
@@ -364,7 +372,7 @@ function SchemaTree({ schema, level }: SchemaTreeProps) {
               {
                 label: "Edit Table",
                 icon: <Settings className="w-4 h-4" />,
-                onClick: () => addEditTableTab(schema.name, table.name),
+                onClick: () => addEditTableTab(connectionId, projectId, schema.name, table.name),
               },
               {
                 type: "separator" as const,
@@ -429,17 +437,25 @@ function SchemaTree({ schema, level }: SchemaTreeProps) {
   );
 }
 
-function ProjectTree() {
-  const activeProject = useProjectStore((state) => state.getActiveProject());
-  const schemas = useProjectStore((state) => state.schemas);
-  const connectionStatus = useProjectStore((state) => state.connectionStatus);
-  const schemasLoading = useProjectStore((state) => state.schemasLoading);
+// --- ConnectionSection: renders a connected project with its schema tree ---
+
+interface ConnectionSectionProps {
+  project: Project;
+  connectionId: string;
+  schemas: Schema[];
+  schemasLoading: boolean;
+  status: string;
+}
+
+function ConnectionSection({ project, connectionId, schemas, schemasLoading, status }: ConnectionSectionProps) {
+  const queryClient = useQueryClient();
   const openProjectModal = useUIStore((state) => state.openProjectModal);
   const openDeleteProjectModal = useUIStore((state) => state.openDeleteProjectModal);
   const toggleProjectSpotlight = useUIStore((state) => state.toggleProjectSpotlight);
   const showToast = useUIStore((state) => state.showToast);
   const addDiagramTab = useUIStore((state) => state.addDiagramTab);
-  const queryClient = useQueryClient();
+  const addQueryTab = useUIStore((state) => state.addQueryTab);
+  const addCreateTableTab = useUIStore((state) => state.addCreateTableTab);
   const [isExpanded, setIsExpanded] = useState(true);
   const [projectMenuOpen, setProjectMenuOpen] = useState(false);
   const [isCreatingSchema, setIsCreatingSchema] = useState(false);
@@ -447,10 +463,10 @@ function ProjectTree() {
   const [schemaError, setSchemaError] = useState<string | null>(null);
   const executeSQL = useExecuteSQL();
   const schemaInputRef = useRef<HTMLInputElement>(null);
+  const disconnect = useDisconnect();
 
   useEffect(() => {
     if (isCreatingSchema) {
-      // Small delay to let the DOM render
       requestAnimationFrame(() => schemaInputRef.current?.focus());
     }
   }, [isCreatingSchema]);
@@ -460,7 +476,7 @@ function ProjectTree() {
     if (!trimmed) return;
     setSchemaError(null);
     try {
-      await executeSQL.mutateAsync({ sql: `CREATE SCHEMA "${trimmed}"` });
+      await executeSQL.mutateAsync({ connectionId, projectId: project.id, sql: `CREATE SCHEMA "${trimmed}"` });
       setIsCreatingSchema(false);
       setNewSchemaName("");
       showToast(`Created schema "${trimmed}"`);
@@ -475,78 +491,61 @@ function ProjectTree() {
     setSchemaError(null);
   };
 
-  const connect = useConnect();
-  const disconnect = useDisconnect();
-
-  if (!activeProject) {
-    return (
-      <div className="p-4 text-center text-[var(--text-muted)] text-sm">
-        No project selected
-      </div>
-    );
-  }
-
-  const colorConfig = PROJECT_COLORS[activeProject.color];
-
-  const handleConnect = () => {
-    connect.mutate(activeProject.connection);
-  };
-
   const handleDisconnect = () => {
-    disconnect.mutate();
+    disconnect.mutate({ projectId: project.id, connectionId });
   };
 
-  const connectionMenuItems = connectionStatus === "disconnected" || connectionStatus === "error"
-    ? [
-        {
-          label: "Connect",
-          icon: <Plug className="w-4 h-4" />,
-          onClick: handleConnect,
-        },
-      ]
-    : connectionStatus === "connected"
-    ? [
-        {
-          label: "Disconnect",
-          icon: <Unplug className="w-4 h-4" />,
-          variant: "danger" as const,
-          onClick: handleDisconnect,
-        },
-      ]
-    : [];
+  const colorConfig = PROJECT_COLORS[project.color];
+  const isConnected = status === "connected" || status === "reconnecting";
 
   return (
-    <div className="py-2">
+    <div className="py-1">
       <ContextMenu
         onOpenChange={setProjectMenuOpen}
         items={[
-          ...connectionMenuItems,
-          ...(connectionMenuItems.length > 0 ? [{ type: "separator" as const }] : []),
+          {
+            label: "New Query",
+            icon: <Terminal className="w-4 h-4" />,
+            onClick: () => addQueryTab(connectionId, project.id),
+          },
+          {
+            label: "New Table",
+            icon: <Table2 className="w-4 h-4" />,
+            onClick: () => addCreateTableTab(connectionId, project.id),
+          },
+          {
+            type: "separator" as const,
+          },
+          {
+            label: "Disconnect",
+            icon: <Unplug className="w-4 h-4" />,
+            variant: "danger" as const,
+            onClick: handleDisconnect,
+          },
+          {
+            type: "separator" as const,
+          },
           {
             label: "Copy Connection Name",
             icon: <Copy className="w-4 h-4" />,
             onClick: () => {
-              navigator.clipboard.writeText(activeProject.name);
-              showToast(`Copied "${activeProject.name}" to clipboard`);
+              navigator.clipboard.writeText(project.name);
+              showToast(`Copied "${project.name}" to clipboard`);
             },
           },
           {
             label: "Copy Database Name",
             icon: <Database className="w-4 h-4" />,
             onClick: () => {
-              navigator.clipboard.writeText(activeProject.connection.database);
-              showToast(`Copied "${activeProject.connection.database}" to clipboard`);
+              navigator.clipboard.writeText(project.connection.database);
+              showToast(`Copied "${project.connection.database}" to clipboard`);
             },
           },
-          ...(connectionStatus === "connected"
-            ? [
-                {
-                  label: "Schema Diagram",
-                  icon: <Workflow className="w-4 h-4" />,
-                  onClick: () => addDiagramTab(),
-                },
-              ]
-            : []),
+          {
+            label: "Schema Diagram",
+            icon: <Workflow className="w-4 h-4" />,
+            onClick: () => addDiagramTab(connectionId, project.id),
+          },
           {
             label: "Create Schema",
             icon: <FolderPlus className="w-4 h-4" />,
@@ -562,7 +561,7 @@ function ProjectTree() {
             icon: <RefreshCw className="w-4 h-4" />,
             onClick: () => {
               queryClient.invalidateQueries({
-                queryKey: ["schemas"],
+                queryKey: ["schemas", connectionId],
               });
               showToast("Refreshed all schemas");
             },
@@ -573,16 +572,12 @@ function ProjectTree() {
           {
             label: "Switch Project",
             icon: <ArrowLeftRight className="w-4 h-4" />,
-            onClick: () => {
-              toggleProjectSpotlight();
-            },
+            onClick: () => toggleProjectSpotlight(),
           },
           {
             label: "Edit Project",
             icon: <Pencil className="w-4 h-4" />,
-            onClick: () => {
-              openProjectModal(activeProject.id);
-            },
+            onClick: () => openProjectModal(project.id),
           },
           {
             type: "separator" as const,
@@ -591,14 +586,20 @@ function ProjectTree() {
             label: "Delete Project",
             icon: <Trash2 className="w-4 h-4" />,
             variant: "danger" as const,
-            onClick: () => openDeleteProjectModal(activeProject.id),
+            onClick: () => openDeleteProjectModal(project.id),
           },
         ]}
       >
         <TreeItem
-          label={activeProject.name}
+          label={project.name}
           icon={
-            <Database className={cn("w-4 h-4", colorConfig.text)} />
+            <span className="relative flex items-center justify-center">
+              <Database className={cn("w-4 h-4", colorConfig.text)} />
+              <span className={cn(
+                "absolute -bottom-0.5 -right-0.5 w-1.5 h-1.5 rounded-full",
+                isConnected ? "bg-green-500" : "bg-yellow-500"
+              )} />
+            </span>
           }
           level={0}
           isExpanded={isExpanded}
@@ -606,25 +607,34 @@ function ProjectTree() {
           menuOpen={projectMenuOpen}
           action={
             <span className="flex items-center gap-0.5">
-              {connectionStatus === "connected" && (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setIsCreatingSchema(true);
-                    setNewSchemaName("");
-                    setSchemaError(null);
-                    if (!isExpanded) setIsExpanded(true);
-                  }}
-                  className={cn(
-                    "p-0.5 rounded hover:bg-[var(--bg-tertiary)]",
-                    "text-[var(--text-muted)] hover:text-[var(--accent)]",
-                    "transition-colors duration-150"
-                  )}
-                  title="Create schema"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                </button>
-              )}
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  addQueryTab(connectionId, project.id);
+                }}
+                className={cn(
+                  "p-0.5 rounded hover:bg-[var(--bg-tertiary)]",
+                  "text-[var(--text-muted)] hover:text-green-400",
+                  "transition-colors duration-150"
+                )}
+                title="New Query"
+              >
+                <Terminal className="w-3.5 h-3.5" />
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  addCreateTableTab(connectionId, project.id);
+                }}
+                className={cn(
+                  "p-0.5 rounded hover:bg-[var(--bg-tertiary)]",
+                  "text-[var(--text-muted)] hover:text-purple-400",
+                  "transition-colors duration-150"
+                )}
+                title="New Table"
+              >
+                <Plus className="w-3.5 h-3.5" />
+              </button>
               <button
                 onClick={(e) => {
                   e.stopPropagation();
@@ -649,11 +659,11 @@ function ProjectTree() {
             </span>
           }
         >
-          {connectionStatus === "connecting" ? (
+          {status === "connecting" ? (
             <div className="text-xs text-[var(--text-muted)] py-1 pl-12">
               Connecting...
             </div>
-          ) : connectionStatus === "connected" ? (
+          ) : isConnected ? (
             schemasLoading ? (
               <div className="text-xs text-[var(--text-muted)] py-1 pl-12">
                 Loading schemas...
@@ -662,7 +672,14 @@ function ProjectTree() {
               <>
                 {schemas.length > 0 ? (
                   schemas.map((schema) => (
-                    <SchemaTree key={schema.name} schema={schema} level={1} />
+                    <SchemaTree
+                      key={schema.name}
+                      projectId={project.id}
+                      connectionId={connectionId}
+                      schema={schema}
+                      projectColor={project.color}
+                      level={1}
+                    />
                   ))
                 ) : !isCreatingSchema ? (
                   <div className="text-xs text-[var(--text-muted)] py-1 pl-12">
@@ -726,7 +743,7 @@ function ProjectTree() {
             )
           ) : (
             <div className="text-xs text-[var(--text-muted)] py-1 pl-12">
-              Not connected
+              {status === "error" ? "Connection error" : "Not connected"}
             </div>
           )}
         </TreeItem>
@@ -734,6 +751,154 @@ function ProjectTree() {
     </div>
   );
 }
+
+// --- DisconnectedProject: shows a disconnected project as a simple row ---
+
+interface DisconnectedProjectProps {
+  project: Project;
+}
+
+function DisconnectedProject({ project }: DisconnectedProjectProps) {
+  const openProjectModal = useUIStore((state) => state.openProjectModal);
+  const openDeleteProjectModal = useUIStore((state) => state.openDeleteProjectModal);
+  const showToast = useUIStore((state) => state.showToast);
+  const connect = useConnect();
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  const handleConnect = () => {
+    connect.mutate({ project });
+  };
+
+  return (
+    <div className="py-0.5">
+      <ContextMenu
+        onOpenChange={setMenuOpen}
+        items={[
+          {
+            label: "Connect",
+            icon: <Plug className="w-4 h-4" />,
+            onClick: handleConnect,
+          },
+          {
+            type: "separator" as const,
+          },
+          {
+            label: "Copy Connection Name",
+            icon: <Copy className="w-4 h-4" />,
+            onClick: () => {
+              navigator.clipboard.writeText(project.name);
+              showToast(`Copied "${project.name}" to clipboard`);
+            },
+          },
+          {
+            label: "Edit Project",
+            icon: <Pencil className="w-4 h-4" />,
+            onClick: () => openProjectModal(project.id),
+          },
+          {
+            type: "separator" as const,
+          },
+          {
+            label: "Delete Project",
+            icon: <Trash2 className="w-4 h-4" />,
+            variant: "danger" as const,
+            onClick: () => openDeleteProjectModal(project.id),
+          },
+        ]}
+      >
+        <div
+          className={cn(
+            "group/tree-item w-full flex items-center gap-2 h-7 text-sm cursor-pointer",
+            "hover:bg-[var(--bg-tertiary)] transition-colors duration-150",
+            "text-[var(--text-muted)]"
+          )}
+          style={{ paddingLeft: 12 }}
+          onClick={handleConnect}
+        >
+          <span className="w-4 h-4 shrink-0" />
+          <span className="relative flex items-center justify-center shrink-0">
+            <Database className="w-4 h-4 text-[var(--text-muted)]" />
+            <span className="absolute -bottom-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-gray-500" />
+          </span>
+          <span className="truncate text-left">{project.name}</span>
+          <span className={cn(
+            "transition-opacity duration-150 pr-2 ml-auto",
+            menuOpen ? "opacity-100" : "opacity-0 group-hover/tree-item:opacity-100"
+          )}>
+            <span className="flex items-center gap-0.5">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleConnect();
+                }}
+                className={cn(
+                  "p-0.5 rounded hover:bg-[var(--bg-tertiary)]",
+                  "text-[var(--text-muted)] hover:text-green-400",
+                  "transition-colors duration-150"
+                )}
+                title="Connect"
+              >
+                <Plug className="w-3.5 h-3.5" />
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  e.currentTarget.closest("[data-context-menu]")?.dispatchEvent(
+                    new MouseEvent("contextmenu", {
+                      bubbles: true,
+                      clientX: rect.left,
+                      clientY: rect.bottom,
+                    })
+                  );
+                }}
+                className={cn(
+                  "p-0.5 rounded hover:bg-[var(--bg-tertiary)]",
+                  "text-[var(--text-muted)] hover:text-[var(--text-primary)]",
+                  "transition-colors duration-150"
+                )}
+                title="More actions"
+              >
+                <MoreHorizontal className="w-3.5 h-3.5" />
+              </button>
+            </span>
+          </span>
+        </div>
+      </ContextMenu>
+    </div>
+  );
+}
+
+// --- Helpers to resolve connection context for footer buttons ---
+
+function resolveConnectionContext(): { connectionId: string; projectId: string } | null {
+  const uiState = useUIStore.getState();
+  const projectState = useProjectStore.getState();
+
+  // 1. Try active tab
+  const activeConnectionId = uiState.getActiveConnectionId();
+  const activeProjectId = uiState.getActiveProjectId();
+  if (activeConnectionId && activeProjectId) {
+    return { connectionId: activeConnectionId, projectId: activeProjectId };
+  }
+
+  // 2. Check if exactly one connection exists
+  const connectedEntries = Object.entries(projectState.connections);
+  if (connectedEntries.length === 1) {
+    const [projectId, conn] = connectedEntries[0];
+    return { connectionId: conn.connectionId, projectId };
+  }
+
+  // 3. If multiple connections, pick the first one
+  if (connectedEntries.length > 0) {
+    const [projectId, conn] = connectedEntries[0];
+    return { connectionId: conn.connectionId, projectId };
+  }
+
+  return null;
+}
+
+// --- Main Sidebar ---
 
 interface SidebarProps {
   isCollapsed: boolean;
@@ -751,8 +916,49 @@ export function Sidebar({
   const openProjectModal = useUIStore((state) => state.openProjectModal);
   const addCreateTableTab = useUIStore((state) => state.addCreateTableTab);
   const addQueryTab = useUIStore((state) => state.addQueryTab);
-  const connectionStatus = useProjectStore((state) => state.connectionStatus);
+  const showToast = useUIStore((state) => state.showToast);
+  const projects = useProjectStore((state) => state.projects);
+  const connections = useProjectStore((state) => state.connections);
   const [isResizing, setIsResizing] = useState(false);
+
+  // Split projects into connected and disconnected
+  const connectedProjects: Array<{ project: Project; connectionId: string; schemas: Schema[]; schemasLoading: boolean; status: string }> = [];
+  const disconnectedProjects: Project[] = [];
+
+  for (const project of projects) {
+    const conn = connections[project.id];
+    if (conn) {
+      connectedProjects.push({
+        project,
+        connectionId: conn.connectionId,
+        schemas: conn.schemas,
+        schemasLoading: conn.schemasLoading,
+        status: conn.status,
+      });
+    } else {
+      disconnectedProjects.push(project);
+    }
+  }
+
+  const hasAnyConnection = connectedProjects.length > 0;
+
+  const handleNewQuery = () => {
+    const ctx = resolveConnectionContext();
+    if (!ctx) {
+      showToast("No active connection. Connect to a project first.", "error");
+      return;
+    }
+    addQueryTab(ctx.connectionId, ctx.projectId);
+  };
+
+  const handleNewTable = () => {
+    const ctx = resolveConnectionContext();
+    if (!ctx) {
+      showToast("No active connection. Connect to a project first.", "error");
+      return;
+    }
+    addCreateTableTab(ctx.connectionId, ctx.projectId);
+  };
 
   return (
     <aside
@@ -798,15 +1004,43 @@ export function Sidebar({
       {!isCollapsed && (
         <>
           <div className="flex-1 overflow-y-auto overflow-x-hidden">
-            <ProjectTree />
+            {projects.length === 0 ? (
+              <div className="p-4 text-center text-[var(--text-muted)] text-sm">
+                No projects yet
+              </div>
+            ) : (
+              <>
+                {/* Connected projects */}
+                {connectedProjects.map(({ project, connectionId, schemas, schemasLoading, status }) => (
+                  <ConnectionSection
+                    key={project.id}
+                    project={project}
+                    connectionId={connectionId}
+                    schemas={schemas}
+                    schemasLoading={schemasLoading}
+                    status={status}
+                  />
+                ))}
+
+                {/* Divider between connected and disconnected */}
+                {connectedProjects.length > 0 && disconnectedProjects.length > 0 && (
+                  <div className="mx-3 my-1 border-t border-[var(--border-color)]" />
+                )}
+
+                {/* Disconnected projects */}
+                {disconnectedProjects.map((project) => (
+                  <DisconnectedProject key={project.id} project={project} />
+                ))}
+              </>
+            )}
           </div>
 
           {/* Footer buttons */}
           <div className="p-2 border-t border-[var(--border-color)] shrink-0 flex flex-col gap-2">
-            {(connectionStatus === "connected" || connectionStatus === "reconnecting") && (
+            {hasAnyConnection && (
               <>
                 <button
-                  onClick={() => addQueryTab()}
+                  onClick={handleNewQuery}
                   className={cn(
                     "w-full flex items-center gap-2 h-8 px-3",
                     "bg-green-600/20 hover:bg-green-600/30",
@@ -823,7 +1057,7 @@ export function Sidebar({
                   </div>
                 </button>
                 <button
-                  onClick={() => addCreateTableTab()}
+                  onClick={handleNewTable}
                   className={cn(
                     "w-full flex items-center gap-2 h-8 px-3",
                     "bg-purple-600/20 hover:bg-purple-600/30",
