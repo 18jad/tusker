@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Loader2, Eraser } from "lucide-react";
 import { Modal } from "../ui/Modal";
 import { useUIStore } from "../../stores/uiStore";
+import { useProjectStore } from "../../stores/projectStore";
 import { useExecuteSQL } from "../../hooks/useDatabase";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "../../lib/utils";
@@ -12,6 +13,13 @@ export function TruncateTableModal() {
   const [error, setError] = useState<string | null>(null);
   const queryClient = useQueryClient();
 
+  const activeConnectionId = useUIStore((s) => s.getActiveConnectionId());
+  const activeProjectId = useUIStore((s) => s.getActiveProjectId());
+  const connections = useProjectStore((s) => s.connections);
+
+  const connectionId = activeConnectionId ?? Object.values(connections)[0]?.connectionId;
+  const projectId = activeProjectId ?? Object.keys(connections)[0];
+
   const executeSQL = useExecuteSQL();
 
   useEffect(() => {
@@ -21,12 +29,14 @@ export function TruncateTableModal() {
   }, [isOpen]);
 
   const handleTruncate = async () => {
-    if (!schema || !table) return;
+    if (!schema || !table || !connectionId || !projectId) return;
 
     setError(null);
 
     try {
       await executeSQL.mutateAsync({
+        connectionId,
+        projectId,
         sql: `TRUNCATE TABLE "${schema}"."${table}"`,
       });
 

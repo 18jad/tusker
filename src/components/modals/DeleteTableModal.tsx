@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Loader2, Trash2 } from "lucide-react";
 import { Modal } from "../ui/Modal";
 import { useUIStore } from "../../stores/uiStore";
+import { useProjectStore } from "../../stores/projectStore";
 import { useExecuteSQL } from "../../hooks/useDatabase";
 import { cn } from "../../lib/utils";
 
@@ -10,6 +11,13 @@ export function DeleteTableModal() {
   const { isOpen, schema, table, rowCount } = deleteTableModal;
   const [confirmText, setConfirmText] = useState("");
   const [error, setError] = useState<string | null>(null);
+
+  const activeConnectionId = useUIStore((s) => s.getActiveConnectionId());
+  const activeProjectId = useUIStore((s) => s.getActiveProjectId());
+  const connections = useProjectStore((s) => s.connections);
+
+  const connectionId = activeConnectionId ?? Object.values(connections)[0]?.connectionId;
+  const projectId = activeProjectId ?? Object.keys(connections)[0];
 
   const executeSQL = useExecuteSQL();
 
@@ -23,12 +31,14 @@ export function DeleteTableModal() {
   }, [isOpen]);
 
   const handleDelete = async () => {
-    if (!schema || !table || !isConfirmed) return;
+    if (!schema || !table || !isConfirmed || !connectionId || !projectId) return;
 
     setError(null);
 
     try {
       await executeSQL.mutateAsync({
+        connectionId,
+        projectId,
         sql: `DROP TABLE "${schema}"."${table}"`,
       });
 

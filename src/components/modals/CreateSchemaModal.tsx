@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Loader2, FolderPlus } from "lucide-react";
 import { Modal } from "../ui/Modal";
 import { useUIStore } from "../../stores/uiStore";
+import { useProjectStore } from "../../stores/projectStore";
 import { useExecuteSQL } from "../../hooks/useDatabase";
 import { cn } from "../../lib/utils";
 
@@ -9,6 +10,13 @@ export function CreateSchemaModal() {
   const { createSchemaModalOpen, closeCreateSchemaModal, showToast } = useUIStore();
   const [name, setName] = useState("");
   const [error, setError] = useState<string | null>(null);
+
+  const activeConnectionId = useUIStore((s) => s.getActiveConnectionId());
+  const activeProjectId = useUIStore((s) => s.getActiveProjectId());
+  const connections = useProjectStore((s) => s.connections);
+
+  const connectionId = activeConnectionId ?? Object.values(connections)[0]?.connectionId;
+  const projectId = activeProjectId ?? Object.keys(connections)[0];
 
   const executeSQL = useExecuteSQL();
 
@@ -22,12 +30,14 @@ export function CreateSchemaModal() {
   }, [createSchemaModalOpen]);
 
   const handleCreate = async () => {
-    if (!isValid) return;
+    if (!isValid || !connectionId || !projectId) return;
 
     setError(null);
 
     try {
       await executeSQL.mutateAsync({
+        connectionId,
+        projectId,
         sql: `CREATE SCHEMA "${name.trim()}"`,
       });
 
