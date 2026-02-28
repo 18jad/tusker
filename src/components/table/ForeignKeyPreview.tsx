@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { ExternalLink, Loader2, AlertCircle, X, Key, Hash, Type, Calendar, ToggleLeft, Braces, ClipboardCopy, Copy } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
+import { cn } from "../../lib/utils";
 import { getCurrentConnectionId } from "../../hooks/useDatabase";
 import { ContextMenu } from "../ui/ContextMenu";
 import { useUIStore } from "../../stores/uiStore";
@@ -79,6 +80,82 @@ interface ForeignKeySubRowProps {
 }
 
 /**
+ * Read-only modal to view a full cell value. Shown on double-click.
+ */
+function CellValueViewer({
+  columnName,
+  dataType,
+  value,
+  onClose,
+}: {
+  columnName: string;
+  dataType: string;
+  value: string;
+  onClose: () => void;
+}) {
+  const handleCopy = () => {
+    navigator.clipboard.writeText(value);
+    useUIStore.getState().showToast("Value copied to clipboard", "info");
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
+      onClick={onClose}
+      onKeyDown={(e) => e.key === "Escape" && onClose()}
+    >
+      <div
+        className={cn(
+          "w-[500px] max-w-[90vw] max-h-[70vh] flex flex-col",
+          "bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-lg shadow-xl"
+        )}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-4 py-2.5 border-b border-[var(--border-color)] shrink-0">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="text-sm font-medium text-[var(--text-primary)] truncate">
+              {columnName}
+            </span>
+            <span className="text-xs text-[var(--text-muted)]">({dataType})</span>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-1 rounded text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)] transition-colors shrink-0"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* Value */}
+        <div className="flex-1 overflow-auto min-h-0 p-4">
+          <pre className="text-sm text-[var(--text-primary)] whitespace-pre-wrap break-all font-mono select-text">
+            {value}
+          </pre>
+        </div>
+
+        {/* Footer */}
+        <div className="flex items-center justify-between px-4 py-2.5 border-t border-[var(--border-color)] shrink-0">
+          <span className="text-[10px] text-[var(--text-muted)]">
+            {value.length} characters • Escape to close
+          </span>
+          <button
+            onClick={handleCopy}
+            className={cn(
+              "flex items-center gap-1.5 px-3 py-1 text-xs rounded",
+              "bg-[var(--accent)] text-white hover:opacity-90 transition-opacity"
+            )}
+          >
+            <ClipboardCopy className="w-3 h-3" />
+            Copy
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
  * Inline sub-row that renders the related FK record as a real scrollable table,
  * matching the same visual style as the parent DataTable.
  */
@@ -92,6 +169,7 @@ export function ForeignKeySubRow({
   const [row, setRow] = useState<Row | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [expandedCell, setExpandedCell] = useState<{ col: string; value: string; dataType: string } | null>(null);
 
   useEffect(() => {
     const connectionId = getCurrentConnectionId();
@@ -250,7 +328,12 @@ export function ForeignKeySubRow({
                               },
                             ]}
                           >
-                            <div className="px-3 py-2 text-sm h-full flex items-center gap-1 select-text overflow-hidden text-ellipsis whitespace-nowrap">
+                            <div
+                              className="px-3 py-2 text-sm h-full flex items-center gap-1 select-text overflow-hidden text-ellipsis whitespace-nowrap cursor-default"
+                              onDoubleClick={() => {
+                                setExpandedCell({ col: column.name, value: rawValue, dataType: column.dataType });
+                              }}
+                            >
                               {isNull ? (
                                 <span className="text-[var(--text-muted)] italic text-xs">NULL</span>
                               ) : (
@@ -269,6 +352,15 @@ export function ForeignKeySubRow({
             </div>
           )}
         </div>
+
+        {expandedCell && (
+          <CellValueViewer
+            columnName={expandedCell.col}
+            dataType={expandedCell.dataType}
+            value={expandedCell.value}
+            onClose={() => setExpandedCell(null)}
+          />
+        )}
       </td>
     </tr>
   );
