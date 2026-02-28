@@ -38,11 +38,16 @@ function generateSummary(changes: StagedChange[]): string {
   return `${parts.join(", ")} on ${Array.from(tables).join(", ")}`;
 }
 
-export function StagedChangesTab({ tab: _tab }: { tab: Tab }) {
+export function StagedChangesTab({ tab }: { tab: Tab }) {
   const { showToast } = useUIStore();
-  const { changes, removeChange, clearChanges } = useChangesStore();
-  const activeProjectId = useUIStore.getState().getActiveProjectId();
-  const activeProject = useProjectStore((s) => activeProjectId ? s.getProject(activeProjectId) : undefined);
+  const { changes: allChanges, removeChange, clearChangesForConnection } = useChangesStore();
+  const project = useProjectStore((s) => s.getProject(tab.projectId));
+
+  // Filter changes to only this tab's connection
+  const changes = useMemo(
+    () => allChanges.filter((c) => c.connectionId === tab.connectionId),
+    [allChanges, tab.connectionId]
+  );
   const [commitError, setCommitError] = useState<string | null>(null);
   const [showCommitInput, setShowCommitInput] = useState(false);
   const [commitMessage, setCommitMessage] = useState("");
@@ -101,14 +106,12 @@ export function StagedChangesTab({ tab: _tab }: { tab: Tab }) {
     const finalMessage = commitMessage.trim() || summary;
 
     try {
-      const connectionId = useUIStore.getState().getActiveConnectionId();
-      if (!connectionId) throw new Error("No active connection");
-      await commitChanges.mutateAsync({ connectionId, queries });
+      await commitChanges.mutateAsync({ connectionId: tab.connectionId, queries });
 
-      if (activeProject) {
+      if (project) {
         try {
           await saveCommit.mutateAsync({
-            projectId: activeProject.id,
+            projectId: tab.projectId,
             message: finalMessage,
             summary,
             changes: changes.map((c) => ({
@@ -126,7 +129,7 @@ export function StagedChangesTab({ tab: _tab }: { tab: Tab }) {
         }
       }
 
-      clearChanges();
+      clearChangesForConnection(tab.connectionId);
       setShowCommitInput(false);
       setCommitMessage("");
       setFilterType(null);
@@ -155,7 +158,7 @@ export function StagedChangesTab({ tab: _tab }: { tab: Tab }) {
   };
 
   const handleDiscardAll = () => {
-    clearChanges();
+    clearChangesForConnection(tab.connectionId);
     setCommitError(null);
     setShowCommitInput(false);
     setCommitMessage("");
@@ -242,9 +245,16 @@ export function StagedChangesTab({ tab: _tab }: { tab: Tab }) {
             </div>
           ) : (
             <div className="flex items-center justify-between">
-              <span className="text-sm text-[var(--text-primary)]">
-                {changes.length} staged change{changes.length !== 1 ? "s" : ""}
-              </span>
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-[var(--text-primary)]">
+                  {changes.length} staged change{changes.length !== 1 ? "s" : ""}
+                </span>
+                {project && (
+                  <span className="text-xs text-[var(--text-muted)] px-1.5 py-0.5 rounded bg-[var(--bg-tertiary)]">
+                    {project.name} · {project.connection.database}
+                  </span>
+                )}
+              </div>
               <div className="flex items-center gap-2">
                 <Button
                   variant="ghost"

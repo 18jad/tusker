@@ -11,9 +11,9 @@ import {
   Table2,
   X,
   ChevronDown,
+  Database,
 } from "lucide-react";
 import { useProjectStore } from "../../stores/projectStore";
-import { useUIStore } from "../../stores/uiStore";
 import { useCommitHistory, useCommitDetail } from "../../hooks/useDatabase";
 import { ChangeCard } from "../commits/ChangeCard";
 import { cn } from "../../lib/utils";
@@ -66,10 +66,14 @@ function CommitSidebar({
   commits,
   selectedCommitId,
   onSelect,
+  projectName,
+  database,
 }: {
   commits: CommitRecord[];
   selectedCommitId: string | null;
   onSelect: (id: string) => void;
+  projectName?: string;
+  database?: string;
 }) {
   const [searchQuery, setSearchQuery] = useState("");
   const [filterType, setFilterType] = useState<ChangeType | null>(null);
@@ -125,8 +129,15 @@ function CommitSidebar({
       "w-[340px] shrink-0 border-r border-[var(--border-color)]",
       "flex flex-col bg-[var(--bg-primary)]"
     )}>
-      {/* Search + filters */}
+      {/* Database label + Search + filters */}
       <div className="p-3 space-y-2 border-b border-[var(--border-color)]">
+        {projectName && (
+          <div className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]">
+            <Database className="w-3 h-3" />
+            <span>{projectName}</span>
+            {database && <span className="text-[var(--text-muted)]">· {database}</span>}
+          </div>
+        )}
         {/* Search */}
         <div className="relative">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[var(--text-muted)]" />
@@ -560,16 +571,14 @@ function CommitDetailPanel({
 
 // ─── Main component ─────────────────────────────────────────────────────────
 
-export function CommitHistoryTab({ tab: _tab }: { tab: Tab }) {
-  const activeProjectId = useUIStore((s) => s.getActiveProjectId)();
-  const activeProject = useProjectStore((s) => activeProjectId ? s.getProject(activeProjectId) : undefined);
-  const projectId = activeProject?.id ?? null;
-  const { data: commits, isLoading, error } = useCommitHistory(projectId);
+export function CommitHistoryTab({ tab }: { tab: Tab }) {
+  const project = useProjectStore((s) => s.getProject(tab.projectId));
+  const { data: commits, isLoading, error } = useCommitHistory(tab.projectId);
   const [selectedCommitId, setSelectedCommitId] = useState<string | null>(null);
 
-  const { data: commitDetail, isLoading: detailLoading } = useCommitDetail(projectId, selectedCommitId);
+  const { data: commitDetail, isLoading: detailLoading } = useCommitDetail(tab.projectId, selectedCommitId);
 
-  if (!activeProject) {
+  if (!project) {
     return (
       <div className="h-full flex items-center justify-center">
         <div className="text-center">
@@ -621,6 +630,8 @@ export function CommitHistoryTab({ tab: _tab }: { tab: Tab }) {
         commits={commits}
         selectedCommitId={selectedCommitId}
         onSelect={setSelectedCommitId}
+        projectName={project?.name}
+        database={project?.connection.database}
       />
       <div className="flex-1 bg-[var(--bg-primary)]">
         <CommitDetailPanel

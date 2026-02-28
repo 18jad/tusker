@@ -28,7 +28,11 @@ export function StatusBar() {
   // Connected projects list
   const connectedProjects = projects.filter((p) => connections[p.id]);
   const connectedCount = connectedProjects.length;
-  const changesCount = changes.length;
+
+  // Changes count scoped to active connection (or all if no active tab)
+  const changesCount = activeConnectionId
+    ? changes.filter((c) => c.connectionId === activeConnectionId).length
+    : changes.length;
 
   // Close popup on outside click
   useEffect(() => {
