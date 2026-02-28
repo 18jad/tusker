@@ -13,7 +13,7 @@ import {
   SelectItem,
 } from "../ui/Select";
 import type { Column, Row, CellValue, SortColumn } from "../../types";
-import { Key, Hash, Type, Calendar, ToggleLeft, Braces, ArrowUp, ArrowDown, Copy, Columns, RotateCcw, ChevronDown } from "lucide-react";
+import { Key, Hash, Type, Calendar, ToggleLeft, Braces, ArrowUp, ArrowDown, Copy, Columns, RotateCcw, ChevronDown, Pencil, Ban, ClipboardCopy } from "lucide-react";
 import "react-datepicker/dist/react-datepicker.css";
 
 interface DataTableProps {
@@ -954,6 +954,94 @@ function EditableCell({
 }
 
 /**
+ * Build context menu items for a data cell
+ */
+function buildCellContextMenu({
+  value,
+  row,
+  column,
+  readOnly,
+  isDeleted,
+  onStartEdit,
+  onCellEdit,
+  rowIndex,
+  tableKey,
+  hasSort,
+}: {
+  value: CellValue;
+  row: Row;
+  column: Column;
+  readOnly: boolean;
+  isDeleted: boolean;
+  onStartEdit: () => void;
+  onCellEdit?: (rowIndex: number, columnName: string, value: CellValue) => void;
+  rowIndex: number;
+  tableKey: string;
+  hasSort: boolean;
+}) {
+  const rawValue = value === null ? "NULL" : typeof value === "object" ? JSON.stringify(value, null, 2) : String(value);
+
+  const items: Parameters<typeof ContextMenu>[0]["items"] = [
+    {
+      label: "Copy Value",
+      icon: <ClipboardCopy className="w-3.5 h-3.5" />,
+      onClick: () => {
+        navigator.clipboard.writeText(rawValue);
+        useUIStore.getState().showToast("Value copied to clipboard", "info");
+      },
+    },
+    {
+      label: "Copy Row as JSON",
+      icon: <Braces className="w-3.5 h-3.5" />,
+      onClick: () => {
+        navigator.clipboard.writeText(JSON.stringify(row, null, 2));
+        useUIStore.getState().showToast("Row copied as JSON", "info");
+      },
+    },
+    {
+      label: "Copy Column Name",
+      icon: <Copy className="w-3.5 h-3.5" />,
+      onClick: () => {
+        navigator.clipboard.writeText(column.name);
+        useUIStore.getState().showToast("Column name copied", "info");
+      },
+    },
+  ];
+
+  if (!readOnly && !isDeleted) {
+    items.push({ type: "separator" });
+    items.push({
+      label: "Edit Cell",
+      icon: <Pencil className="w-3.5 h-3.5" />,
+      onClick: onStartEdit,
+    });
+    if (column.isNullable && value !== null) {
+      items.push({
+        label: "Set to NULL",
+        icon: <Ban className="w-3.5 h-3.5" />,
+        onClick: () => onCellEdit?.(rowIndex, column.name, null),
+      });
+    }
+  }
+
+  if (hasSort) {
+    items.push({ type: "separator" });
+    items.push({
+      label: "Sort Ascending",
+      icon: <ArrowUp className="w-3.5 h-3.5" />,
+      onClick: () => useUIStore.getState().setTableSort(tableKey, [{ column: column.name, direction: "ASC" }]),
+    });
+    items.push({
+      label: "Sort Descending",
+      icon: <ArrowDown className="w-3.5 h-3.5" />,
+      onClick: () => useUIStore.getState().setTableSort(tableKey, [{ column: column.name, direction: "DESC" }]),
+    });
+  }
+
+  return items;
+}
+
+/**
  * Clean, modern data table with inline editing
  */
 export function DataTable({
@@ -1292,16 +1380,32 @@ export function DataTable({
                         maxWidth: getColumnWidth(column.name)
                       }}
                     >
-                      <EditableCell
-                        value={value}
-                        column={column}
-                        isEditing={isEditing && !isDeleted}
-                        onStartEdit={() => !isDeleted && handleStartEdit(rowIndex, column.name)}
-                        onSave={(newValue) => handleSaveEdit(rowIndex, column.name, newValue)}
-                        onCancel={handleCancelEdit}
-                        readOnly={readOnly || isDeleted}
-                        isEdited={isEdited}
-                      />
+                      <ContextMenu
+                        disabled={isEditing}
+                        items={buildCellContextMenu({
+                          value,
+                          row,
+                          column,
+                          readOnly,
+                          isDeleted,
+                          onStartEdit: () => !isDeleted && handleStartEdit(rowIndex, column.name),
+                          onCellEdit,
+                          rowIndex,
+                          tableKey,
+                          hasSort: !!onSort,
+                        })}
+                      >
+                        <EditableCell
+                          value={value}
+                          column={column}
+                          isEditing={isEditing && !isDeleted}
+                          onStartEdit={() => !isDeleted && handleStartEdit(rowIndex, column.name)}
+                          onSave={(newValue) => handleSaveEdit(rowIndex, column.name, newValue)}
+                          onCancel={handleCancelEdit}
+                          readOnly={readOnly || isDeleted}
+                          isEdited={isEdited}
+                        />
+                      </ContextMenu>
                     </td>
                   );
                 })}
@@ -1315,7 +1419,7 @@ export function DataTable({
       {/* Edit hint - outside scroll container */}
       {!readOnly && (
         <div className="shrink-0 px-3 py-1.5 bg-[var(--bg-secondary)] border-t border-[var(--border-color)] text-[10px] text-[var(--text-muted)]">
-          Click row number to select • Shift+click for range • Cmd/Ctrl+click to toggle • Double-click cell to edit
+          Click row number to select • Shift+click for range • Cmd/Ctrl+click to toggle • Double-click cell to edit • Right-click for more
         </div>
       )}
     </div>
