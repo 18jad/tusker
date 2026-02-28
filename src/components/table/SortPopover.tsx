@@ -116,7 +116,7 @@ export function SortPopover({ columns, sorts, onSortsChange }: SortPopoverProps)
         ref={triggerRef}
         onClick={() => setIsOpen(!isOpen)}
         className={cn(
-          "flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs",
+          "flex items-center gap-1.5 px-2.5 py-1.5 rounded-[4px] text-xs",
           "transition-colors",
           hasSorts
             ? "text-[var(--accent)] hover:bg-[var(--accent)]/10"
@@ -139,7 +139,7 @@ export function SortPopover({ columns, sorts, onSortsChange }: SortPopoverProps)
           className={cn(
             "absolute z-[100] right-0 mt-1 w-80",
             "bg-[var(--bg-secondary)] border border-[var(--border-color)]",
-            "rounded-lg shadow-xl shadow-black/30",
+            "rounded-[4px] shadow-xl shadow-black/30",
             "animate-in fade-in zoom-in-95 duration-100"
           )}
         >

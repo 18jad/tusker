@@ -1,8 +1,9 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { Plug, Database, Check, X, Loader2, Eye, EyeOff } from "lucide-react";
 import { Modal } from "../ui/Modal";
 import { useProjectStore } from "../../stores/projectStore";
 import { useUIStore } from "../../stores/uiStore";
+import { useChangesStore } from "../../stores/changesStore";
 import { useTestConnection, savePassword, getPassword } from "../../hooks/useDatabase";
 import {
   cn,
@@ -113,21 +114,29 @@ function ThemedToggle({
   checked,
   onChange,
   label,
+  disabled,
+  tooltip,
 }: {
   checked: boolean;
   onChange: (checked: boolean) => void;
   label: string;
+  disabled?: boolean;
+  tooltip?: string;
 }) {
   return (
-    <div className="flex items-center gap-3">
+    <div className="flex items-center gap-3" title={tooltip}>
       <button
         type="button"
         role="switch"
         aria-checked={checked}
-        onClick={() => onChange(!checked)}
+        disabled={disabled}
+        onClick={() => !disabled && onChange(!checked)}
         className={cn(
-          "relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full items-center",
+          "relative inline-flex h-5 w-9 shrink-0 rounded-full items-center",
           "transition-colors duration-200",
+          disabled
+            ? "opacity-40 cursor-not-allowed"
+            : "cursor-pointer",
           checked
             ? "bg-[var(--success)]"
             : "bg-[var(--bg-tertiary)] border border-[var(--border-color)]"
@@ -142,7 +151,10 @@ function ThemedToggle({
           )}
         />
       </button>
-      <span className="text-xs font-mono text-[var(--text-secondary)]">
+      <span className={cn(
+        "text-xs font-mono text-[var(--text-secondary)]",
+        disabled && "opacity-40"
+      )}>
         {label}
       </span>
     </div>
@@ -154,7 +166,8 @@ function ThemedToggle({
 export function ProjectModal() {
   const { projectModalOpen, editingProjectId, closeProjectModal } =
     useUIStore();
-  const { projects, addProject, updateProject } = useProjectStore();
+  const { projects, addProject, updateProject, connections } = useProjectStore();
+  const changes = useChangesStore((state) => state.changes);
 
   const [form, setForm] = useState<FormState>(INITIAL_FORM_STATE);
   const [testing, setTesting] = useState(false);
@@ -183,6 +196,14 @@ export function ProjectModal() {
     ? projects.find((p) => p.id === editingProjectId)
     : null;
   const isEditing = !!editingProject;
+
+  // Check if this project has uncommitted staged changes
+  const hasStagedChanges = useMemo(() => {
+    if (!editingProjectId) return false;
+    const conn = connections[editingProjectId];
+    if (!conn) return false;
+    return changes.some((c) => c.connectionId === conn.connectionId);
+  }, [editingProjectId, connections, changes]);
 
   useEffect(() => {
     if (projectModalOpen) {
@@ -550,6 +571,8 @@ export function ProjectModal() {
               checked={form.instantCommit}
               onChange={(checked) => updateField("instantCommit", checked)}
               label="INSTANT_COMMIT"
+              disabled={!form.instantCommit && hasStagedChanges}
+              tooltip={!form.instantCommit && hasStagedChanges ? "Commit or discard staged changes before enabling instant commit" : undefined}
             />
             <ThemedToggle
               checked={form.readOnly}

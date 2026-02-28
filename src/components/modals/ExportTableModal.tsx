@@ -105,15 +105,15 @@ export function ExportTableModal() {
       <div className="space-y-6">
         {/* Header */}
         <div className="text-center">
-          <div className="w-12 h-12 rounded-full bg-blue-500/10 flex items-center justify-center mx-auto mb-4">
-            <Download className="w-6 h-6 text-blue-500" />
+          <div className="w-12 h-12 rounded-full bg-[var(--accent)]/10 flex items-center justify-center mx-auto mb-4">
+            <Download className="w-6 h-6 text-[var(--accent)]" />
           </div>
           <h3 className="text-lg font-semibold text-[var(--text-primary)]">
             Export table
           </h3>
           <p className="text-sm text-[var(--text-muted)] mt-2">
             Export{" "}
-            <span className="font-mono text-blue-400">{schema}.{table}</span>
+            <span className="font-mono text-[var(--accent)]">{schema}.{table}</span>
             {rowCount !== null && rowCount > 0 && (
               <span> ({rowCount.toLocaleString()} {rowCount === 1 ? "row" : "rows"})</span>
             )}
@@ -125,19 +125,19 @@ export function ExportTableModal() {
           <button
             onClick={() => setFormat("csv")}
             className={cn(
-              "flex flex-col items-center gap-2 p-4 rounded-lg border transition-all",
+              "flex flex-col items-center gap-2 p-4 rounded-[4px] border transition-all",
               format === "csv"
-                ? "border-blue-500 bg-blue-500/10"
+                ? "border-[var(--accent)] bg-[var(--accent)]/10"
                 : "border-[var(--border-color)] hover:border-[var(--text-muted)]"
             )}
           >
             <FileSpreadsheet className={cn(
               "w-8 h-8",
-              format === "csv" ? "text-blue-500" : "text-[var(--text-muted)]"
+              format === "csv" ? "text-[var(--accent)]" : "text-[var(--text-muted)]"
             )} />
             <span className={cn(
               "text-sm font-medium",
-              format === "csv" ? "text-blue-500" : "text-[var(--text-secondary)]"
+              format === "csv" ? "text-[var(--accent)]" : "text-[var(--text-secondary)]"
             )}>
               CSV
             </span>
@@ -145,19 +145,19 @@ export function ExportTableModal() {
           <button
             onClick={() => setFormat("json")}
             className={cn(
-              "flex flex-col items-center gap-2 p-4 rounded-lg border transition-all",
+              "flex flex-col items-center gap-2 p-4 rounded-[4px] border transition-all",
               format === "json"
-                ? "border-blue-500 bg-blue-500/10"
+                ? "border-[var(--accent)] bg-[var(--accent)]/10"
                 : "border-[var(--border-color)] hover:border-[var(--text-muted)]"
             )}
           >
             <FileJson className={cn(
               "w-8 h-8",
-              format === "json" ? "text-blue-500" : "text-[var(--text-muted)]"
+              format === "json" ? "text-[var(--accent)]" : "text-[var(--text-muted)]"
             )} />
             <span className={cn(
               "text-sm font-medium",
-              format === "json" ? "text-blue-500" : "text-[var(--text-secondary)]"
+              format === "json" ? "text-[var(--accent)]" : "text-[var(--text-secondary)]"
             )}>
               JSON
             </span>
@@ -166,7 +166,7 @@ export function ExportTableModal() {
 
         {/* Error message */}
         {error && (
-          <div className="px-3 py-2.5 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
+          <div className="px-3 py-2.5 rounded-[4px] bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
             {error}
           </div>
         )}
@@ -177,7 +177,7 @@ export function ExportTableModal() {
             onClick={closeExportTableModal}
             disabled={isExporting}
             className={cn(
-              "flex-1 h-9 px-4 rounded-lg text-sm font-medium",
+              "flex-1 h-9 px-4 rounded-[4px] text-sm font-medium",
               "bg-[var(--bg-tertiary)] text-[var(--text-secondary)]",
               "hover:bg-[var(--border-color)] hover:text-[var(--text-primary)]",
               "transition-colors",
@@ -190,9 +190,9 @@ export function ExportTableModal() {
             onClick={handleExport}
             disabled={isExporting}
             className={cn(
-              "flex-1 h-9 px-4 rounded-lg text-sm font-medium",
+              "flex-1 h-9 px-4 rounded-[4px] text-sm font-medium",
               "flex items-center justify-center gap-2",
-              "bg-blue-600 text-white hover:bg-blue-700",
+              "bg-[var(--accent)] text-white hover:bg-[var(--accent-hover)]",
               "transition-all duration-150",
               "disabled:opacity-50"
             )}

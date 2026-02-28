@@ -139,7 +139,7 @@ function TabItem({
         {dotColor && <span className={cn("w-2 h-2 rounded-full shrink-0", dotColor)} />}
         <Icon className="w-4 h-4 shrink-0 text-[var(--text-muted)]" />
         {isPinned ? (
-          <span className="truncate text-sm select-none">{tab.title}</span>
+          <span className="truncate text-sm font-mono select-none">{tab.title}</span>
         ) : isRenaming ? (
           <input
             ref={inputRef}
@@ -158,7 +158,7 @@ function TabItem({
             )}
           />
         ) : (
-          <span className="truncate text-sm select-none">{tab.title}</span>
+          <span className="truncate text-sm font-mono select-none">{tab.title}</span>
         )}
         {!isPinned && (
           <button
@@ -423,7 +423,7 @@ export function TabBar() {
           "text-[var(--text-muted)] text-sm"
         )}
       >
-        No open tabs
+        <span className="font-mono">No open tabs</span>
       </div>
     );
   }
@@ -513,7 +513,7 @@ export function TabBar() {
         <div
           className={cn(
             "z-50 pointer-events-none",
-            "rounded-md shadow-xl shadow-black/50 overflow-hidden",
+            "rounded-[4px] shadow-xl shadow-black/50 overflow-hidden",
             "opacity-85"
           )}
           style={ghostStyle}

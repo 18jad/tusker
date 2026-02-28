@@ -156,7 +156,7 @@ export function ImportConnectionsModal() {
             Import Connections
           </h3>
           <p className="text-sm text-[var(--text-muted)] mt-2">
-            Select a <span className="font-mono text-blue-400">.tusker</span> file
+            Select a <span className="font-mono text-[var(--accent)]">.tusker</span> file
             and enter the password used during export.
           </p>
         </div>
@@ -169,7 +169,7 @@ export function ImportConnectionsModal() {
           <button
             onClick={handleChooseFile}
             className={cn(
-              "w-full h-9 px-3 rounded-lg text-sm text-left",
+              "w-full h-9 px-3 rounded-[4px] text-sm text-left",
               "bg-[var(--bg-primary)] border border-[var(--border-color)]",
               "hover:border-[var(--text-muted)] transition-colors",
               "flex items-center gap-2"
@@ -201,7 +201,7 @@ export function ImportConnectionsModal() {
               onChange={(e) => setPassword(e.target.value)}
               placeholder="Enter export password"
               className={cn(
-                "w-full h-9 px-3 pr-9 rounded-lg text-sm",
+                "w-full h-9 px-3 pr-9 rounded-[4px] text-sm",
                 "bg-[var(--bg-primary)] border border-[var(--border-color)]",
                 "text-[var(--text-primary)] placeholder:text-[var(--text-muted)]",
                 "focus:outline-none focus:border-[var(--accent)]",
@@ -224,7 +224,7 @@ export function ImportConnectionsModal() {
 
         {/* Error */}
         {error && (
-          <div className="px-3 py-2.5 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
+          <div className="px-3 py-2.5 rounded-[4px] bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
             {error}
           </div>
         )}
@@ -235,7 +235,7 @@ export function ImportConnectionsModal() {
             onClick={closeImportModal}
             disabled={isImporting}
             className={cn(
-              "flex-1 h-9 px-4 rounded-lg text-sm font-medium",
+              "flex-1 h-9 px-4 rounded-[4px] text-sm font-medium",
               "bg-[var(--bg-tertiary)] text-[var(--text-secondary)]",
               "hover:bg-[var(--border-color)] hover:text-[var(--text-primary)]",
               "transition-colors disabled:opacity-50"
@@ -247,7 +247,7 @@ export function ImportConnectionsModal() {
             onClick={handleImport}
             disabled={isImporting || !isValid}
             className={cn(
-              "flex-1 h-9 px-4 rounded-lg text-sm font-medium",
+              "flex-1 h-9 px-4 rounded-[4px] text-sm font-medium",
               "flex items-center justify-center gap-2",
               "bg-green-600 text-white hover:bg-green-700",
               "transition-all duration-150 disabled:opacity-50"

@@ -250,7 +250,7 @@ function SchemaTree({ projectId, connectionId, schema, projectColor: _projectCol
               onClick={handleCreateTable}
               className={cn(
                 "p-0.5 rounded hover:bg-[var(--bg-tertiary)]",
-                "text-[var(--text-muted)] hover:text-purple-400",
+                "text-[var(--text-muted)] hover:text-[var(--accent)]",
                 "transition-colors duration-150"
               )}
               title={`Create table in ${schema.name}`}
@@ -616,7 +616,7 @@ function ConnectionSection({ project, connectionId, schemas, schemasLoading, sta
                 }}
                 className={cn(
                   "p-0.5 rounded hover:bg-[var(--bg-tertiary)]",
-                  "text-[var(--text-muted)] hover:text-green-400",
+                  "text-[var(--text-muted)] hover:text-[var(--accent)]",
                   "transition-colors duration-150"
                 )}
                 title="New Query"
@@ -630,7 +630,7 @@ function ConnectionSection({ project, connectionId, schemas, schemasLoading, sta
                 }}
                 className={cn(
                   "p-0.5 rounded hover:bg-[var(--bg-tertiary)]",
-                  "text-[var(--text-muted)] hover:text-purple-400",
+                  "text-[var(--text-muted)] hover:text-[var(--accent)]",
                   "transition-colors duration-150"
                 )}
                 title="New Table"
@@ -835,7 +835,7 @@ function DisconnectedProject({ project }: DisconnectedProjectProps) {
                 }}
                 className={cn(
                   "p-0.5 rounded hover:bg-[var(--bg-tertiary)]",
-                  "text-[var(--text-muted)] hover:text-green-400",
+                  "text-[var(--text-muted)] hover:text-[var(--accent)]",
                   "transition-colors duration-150"
                 )}
                 title="Connect"
@@ -992,7 +992,7 @@ export function Sidebar({
               className={cn(
                 "w-full flex items-center justify-center gap-2 h-8",
                 "bg-[var(--bg-tertiary)] hover:bg-[var(--border-color)]",
-                "rounded text-sm text-[var(--text-secondary)]",
+                "rounded-[4px] text-sm text-[var(--text-secondary)]",
                 "hover:text-[var(--text-primary)]",
                 "transition-colors duration-150"
               )}

@@ -93,7 +93,7 @@ export function FilterButton({ filters, isOpen, onToggle }: FilterButtonProps) {
       <button
         onClick={onToggle}
         className={cn(
-          "flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs",
+          "flex items-center gap-1.5 px-2.5 py-1.5 rounded-[4px] text-xs",
           "transition-colors",
           isOpen
             ? "text-[var(--accent)] bg-[var(--accent)]/10"

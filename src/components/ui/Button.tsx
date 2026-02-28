@@ -16,7 +16,7 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
 
 const variantStyles: Record<ButtonVariant, string> = {
   primary:
-    "bg-blue-600 text-white hover:bg-blue-700 active:bg-blue-800 focus-visible:ring-blue-500",
+    "bg-[var(--accent)] text-white hover:bg-[var(--accent-hover)] active:brightness-90 focus-visible:ring-[var(--accent)]",
   secondary:
     "bg-[var(--bg-tertiary)] text-[var(--text-primary)] border border-[var(--border-color)] hover:bg-[#2a2a2a] active:bg-[#333333]",
   ghost:
@@ -59,7 +59,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         ref={ref}
         disabled={isDisabled}
         className={cn(
-          "inline-flex items-center justify-center font-medium rounded-lg",
+          "inline-flex items-center justify-center font-medium font-mono rounded-[4px]",
           "transition-colors duration-150 ease-out",
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg-primary)]",
           variantStyles[variant],

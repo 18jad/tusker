@@ -79,7 +79,7 @@ export function TruncateTableModal() {
 
         {/* Error message */}
         {error && (
-          <div className="px-3 py-2.5 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
+          <div className="px-3 py-2.5 rounded-[4px] bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
             {error}
           </div>
         )}
@@ -90,7 +90,7 @@ export function TruncateTableModal() {
             onClick={closeTruncateTableModal}
             disabled={executeSQL.isPending}
             className={cn(
-              "flex-1 h-9 px-4 rounded-lg text-sm font-medium",
+              "flex-1 h-9 px-4 rounded-[4px] text-sm font-medium",
               "bg-[var(--bg-tertiary)] text-[var(--text-secondary)]",
               "hover:bg-[var(--border-color)] hover:text-[var(--text-primary)]",
               "transition-colors",
@@ -103,7 +103,7 @@ export function TruncateTableModal() {
             onClick={handleTruncate}
             disabled={executeSQL.isPending}
             className={cn(
-              "flex-1 h-9 px-4 rounded-lg text-sm font-medium",
+              "flex-1 h-9 px-4 rounded-[4px] text-sm font-medium",
               "flex items-center justify-center gap-2",
               "bg-amber-600 text-white hover:bg-amber-700",
               "transition-all duration-150",

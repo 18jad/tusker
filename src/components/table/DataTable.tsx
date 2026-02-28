@@ -325,7 +325,7 @@ function LargeValueEditor({
       <div
         className={cn(
           "w-[600px] max-w-[90vw] max-h-[80vh] flex flex-col",
-          "bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-lg shadow-xl"
+          "bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-[4px] shadow-xl"
         )}
         onClick={(e) => e.stopPropagation()}
       >
@@ -355,7 +355,7 @@ function LargeValueEditor({
               onChange={(e) => setEditValue(e.target.value)}
               onKeyDown={handleKeyDown}
               className={cn(
-                "w-full h-[300px] p-3 text-sm font-mono rounded-md resize-none",
+                "w-full h-[300px] p-3 text-sm font-mono rounded-[4px] resize-none",
                 "bg-[var(--bg-secondary)] text-[var(--text-primary)]",
                 "border border-[var(--border-color)] outline-none",
                 "focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)]"
@@ -375,7 +375,7 @@ function LargeValueEditor({
             <button
               onClick={onCancel}
               className={cn(
-                "px-3 py-1.5 text-sm rounded-md",
+                "px-3 py-1.5 text-sm rounded-[4px]",
                 "text-[var(--text-secondary)] hover:text-[var(--text-primary)]",
                 "hover:bg-[var(--bg-tertiary)] transition-colors"
               )}
@@ -386,7 +386,7 @@ function LargeValueEditor({
               onClick={handleSave}
               disabled={!isLoaded}
               className={cn(
-                "px-3 py-1.5 text-sm rounded-md",
+                "px-3 py-1.5 text-sm rounded-[4px]",
                 "bg-[var(--accent)] text-white",
                 "hover:opacity-90 transition-opacity",
                 "disabled:opacity-50"
@@ -463,7 +463,7 @@ function ArrayEditor({
       <div
         className={cn(
           "w-[500px] max-w-[90vw] max-h-[80vh] flex flex-col",
-          "bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-lg shadow-xl"
+          "bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-[4px] shadow-xl"
         )}
         onClick={(e) => e.stopPropagation()}
       >
@@ -492,7 +492,7 @@ function ArrayEditor({
                 <div
                   key={index}
                   className={cn(
-                    "flex items-center gap-1.5 px-2.5 py-1 rounded-md",
+                    "flex items-center gap-1.5 px-2.5 py-1 rounded-[4px]",
                     "bg-[var(--bg-tertiary)] text-[var(--text-primary)]",
                     "border border-[var(--border-color)]",
                     "text-sm group"
@@ -530,7 +530,7 @@ function ArrayEditor({
               onKeyDown={handleKeyDown}
               placeholder={`Add ${baseType} value...`}
               className={cn(
-                "flex-1 h-9 px-3 text-sm rounded-md",
+                "flex-1 h-9 px-3 text-sm rounded-[4px]",
                 "bg-[var(--bg-secondary)] text-[var(--text-primary)]",
                 "border border-[var(--border-color)]",
                 "focus:border-[var(--accent)] focus:outline-none focus:ring-1 focus:ring-[var(--accent)]",
@@ -541,7 +541,7 @@ function ArrayEditor({
               onClick={handleAddItem}
               disabled={!newItem.trim()}
               className={cn(
-                "h-9 px-3 rounded-md text-sm font-medium",
+                "h-9 px-3 rounded-[4px] text-sm font-medium",
                 "bg-[var(--accent)] text-white",
                 "hover:opacity-90 transition-opacity",
                 "disabled:opacity-50 disabled:cursor-not-allowed"
@@ -561,7 +561,7 @@ function ArrayEditor({
             <button
               onClick={onCancel}
               className={cn(
-                "px-3 py-1.5 text-sm rounded-md",
+                "px-3 py-1.5 text-sm rounded-[4px]",
                 "text-[var(--text-secondary)] hover:text-[var(--text-primary)]",
                 "hover:bg-[var(--bg-tertiary)] transition-colors"
               )}
@@ -571,7 +571,7 @@ function ArrayEditor({
             <button
               onClick={handleSave}
               className={cn(
-                "px-3 py-1.5 text-sm rounded-md",
+                "px-3 py-1.5 text-sm rounded-[4px]",
                 "bg-[var(--accent)] text-white",
                 "hover:opacity-90 transition-opacity"
               )}

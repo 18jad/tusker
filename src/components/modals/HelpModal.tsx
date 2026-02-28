@@ -83,7 +83,7 @@ export function HelpModal() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-[var(--accent)]/10 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-[4px] bg-[var(--accent)]/10 flex items-center justify-center">
               <Keyboard className="w-5 h-5 text-[var(--accent)]" />
             </div>
             <div>
@@ -98,7 +98,7 @@ export function HelpModal() {
           <button
             onClick={closeHelpModal}
             className={cn(
-              "p-1.5 rounded-lg",
+              "p-1.5 rounded-[4px]",
               "text-[var(--text-muted)] hover:text-[var(--text-primary)]",
               "hover:bg-[var(--bg-tertiary)]",
               "transition-colors"
@@ -120,7 +120,7 @@ export function HelpModal() {
                   <div
                     key={idx}
                     className={cn(
-                      "flex items-center justify-between py-2 px-3 rounded-lg",
+                      "flex items-center justify-between py-2 px-3 rounded-[4px]",
                       "hover:bg-[var(--bg-tertiary)]",
                       "transition-colors"
                     )}

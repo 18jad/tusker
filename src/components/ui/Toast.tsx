@@ -20,9 +20,9 @@ const styles = {
     text: "text-red-400",
   },
   info: {
-    bg: "bg-blue-500/10 border-blue-500/20",
-    icon: "text-blue-500",
-    text: "text-blue-400",
+    bg: "bg-[var(--accent)]/10 border-[var(--accent)]/20",
+    icon: "text-[var(--accent)]",
+    text: "text-[var(--accent)]",
   },
 };
 
@@ -42,7 +42,7 @@ export function Toast() {
           <div
             key={toast.id}
             className={cn(
-              "flex items-center gap-3 px-4 py-3 rounded-lg border",
+              "flex items-center gap-3 px-4 py-3 rounded-[4px] border",
               "shadow-lg backdrop-blur-sm",
               "animate-in slide-in-from-right-5 fade-in duration-200",
               style.bg

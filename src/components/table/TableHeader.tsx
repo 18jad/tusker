@@ -44,7 +44,7 @@ function getTypeBadge(dataType: string): { label: string; color: string } {
     type === "smallserial" ||
     type === "bigserial"
   ) {
-    return { label: "int", color: "bg-blue-500/20 text-blue-400" };
+    return { label: "int", color: "bg-[var(--accent)]/20 text-[var(--accent)]" };
   }
 
   // Floating point types
@@ -55,7 +55,7 @@ function getTypeBadge(dataType: string): { label: string; color: string } {
     type.includes("numeric") ||
     type.includes("decimal")
   ) {
-    return { label: "num", color: "bg-purple-500/20 text-purple-400" };
+    return { label: "num", color: "bg-[var(--accent)]/20 text-[var(--accent)]" };
   }
 
   // Boolean

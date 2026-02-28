@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState, useRef } from "react";
 import {
   Database,
   X,
@@ -7,6 +7,8 @@ import {
   Loader2,
   Workflow,
   LayoutGrid,
+  Home,
+  History,
 } from "lucide-react";
 import { Sidebar } from "./Sidebar";
 import { TabBar } from "./TabBar";
@@ -18,18 +20,23 @@ import { useUIStore } from "../../stores/uiStore";
 import { useGlobalKeyboardShortcuts } from "../../hooks/useKeyboard";
 import { useConnectionHealthCheck } from "../../hooks/useConnectionHealthCheck";
 import { useUpdateCheck } from "../../hooks/useUpdateCheck";
-import { cn } from "../../lib/utils";
+import { cn, PROJECT_COLORS } from "../../lib/utils";
 
 function TitleBar() {
   const projects = useProjectStore((state) => state.projects);
+  const connections = useProjectStore((state) => state.connections);
   const toggleProjectSpotlight = useUIStore(
     (state) => state.toggleProjectSpotlight
   );
   const addDiagramTab = useUIStore((state) => state.addDiagramTab);
-  const getActiveConnectionId = useUIStore(
-    (state) => state.getActiveConnectionId
-  );
-  const getActiveProjectId = useUIStore((state) => state.getActiveProjectId);
+  const addHistoryTab = useUIStore((state) => state.addHistoryTab);
+
+  const [historyPopoverOpen, setHistoryPopoverOpen] = useState(false);
+  const historyButtonRef = useRef<HTMLButtonElement>(null);
+  const historyPopoverRef = useRef<HTMLDivElement>(null);
+  const [diagramPopoverOpen, setDiagramPopoverOpen] = useState(false);
+  const diagramButtonRef = useRef<HTMLButtonElement>(null);
+  const diagramPopoverRef = useRef<HTMLDivElement>(null);
 
   // Keyboard shortcut for project spotlight (Ctrl/Cmd + P)
   useEffect(() => {
@@ -44,15 +51,75 @@ function TitleBar() {
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [toggleProjectSpotlight]);
 
-  const handleOpenDiagram = () => {
-    const connectionId = getActiveConnectionId();
-    const projectId = getActiveProjectId();
-    if (connectionId && projectId) {
-      addDiagramTab(connectionId, projectId);
+  // Close popovers on outside click
+  useEffect(() => {
+    if (!historyPopoverOpen && !diagramPopoverOpen) return;
+    const handleClick = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (historyPopoverOpen &&
+        historyPopoverRef.current && !historyPopoverRef.current.contains(target) &&
+        historyButtonRef.current && !historyButtonRef.current.contains(target)
+      ) {
+        setHistoryPopoverOpen(false);
+      }
+      if (diagramPopoverOpen &&
+        diagramPopoverRef.current && !diagramPopoverRef.current.contains(target) &&
+        diagramButtonRef.current && !diagramButtonRef.current.contains(target)
+      ) {
+        setDiagramPopoverOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [historyPopoverOpen, diagramPopoverOpen]);
+
+  const connectedProjects = projects.filter((p) => connections[p.id]);
+
+  const handleDiagramClick = () => {
+    if (connectedProjects.length === 1) {
+      const project = connectedProjects[0];
+      const conn = connections[project.id];
+      if (conn) {
+        addDiagramTab(conn.connectionId, project.id);
+      }
+    } else {
+      setDiagramPopoverOpen((prev) => !prev);
+      setHistoryPopoverOpen(false);
     }
   };
 
-  const hasActiveConnection = !!getActiveConnectionId();
+  const handleDiagramSelect = (projectId: string) => {
+    const conn = connections[projectId];
+    if (conn) {
+      addDiagramTab(conn.connectionId, projectId);
+      setDiagramPopoverOpen(false);
+    }
+  };
+
+  const handleHistoryClick = () => {
+    if (connectedProjects.length === 1) {
+      const project = connectedProjects[0];
+      const conn = connections[project.id];
+      if (conn) {
+        addHistoryTab(conn.connectionId, project.id);
+      }
+    } else {
+      setHistoryPopoverOpen((prev) => !prev);
+      setDiagramPopoverOpen(false);
+    }
+  };
+
+  const handleHistorySelect = (projectId: string) => {
+    const conn = connections[projectId];
+    if (conn) {
+      addHistoryTab(conn.connectionId, projectId);
+      setHistoryPopoverOpen(false);
+    }
+  };
+
+  const hasActiveConnection = connectedProjects.length > 0;
+  const showDashboard = useUIStore((state) => state.showDashboard);
+  const setShowDashboard = useUIStore((state) => state.setShowDashboard);
 
   return (
     <header
@@ -66,6 +133,20 @@ function TitleBar() {
     >
       {/* Space for macOS traffic lights (overlay titlebar) */}
       <div className="w-[78px] shrink-0" data-tauri-drag-region />
+
+      {/* Home button - only show when there are active connections to return to */}
+      {hasActiveConnection && <button
+        onClick={() => setShowDashboard(!showDashboard)}
+        className={cn(
+          "flex items-center gap-1.5 px-2 h-8 rounded",
+          "hover:bg-[var(--bg-tertiary)] transition-colors duration-150",
+          "text-xs",
+          showDashboard ? "text-[var(--accent)]" : "text-[var(--text-muted)]"
+        )}
+        title="Dashboard"
+      >
+        <Home className="w-3.5 h-3.5" />
+      </button>}
 
       {/* Projects button */}
       {projects.length > 0 && (
@@ -99,18 +180,116 @@ function TitleBar() {
 
       {/* Right-side actions */}
       {hasActiveConnection && (
-        <button
-          onClick={handleOpenDiagram}
-          className={cn(
-            "flex items-center gap-1.5 px-2 h-8 rounded",
-            "hover:bg-[var(--bg-tertiary)] transition-colors duration-150",
-            "text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)]"
-          )}
-          title="Schema Diagram"
-        >
-          <Workflow className="w-3.5 h-3.5" />
-          <span>Diagram</span>
-        </button>
+        <>
+          <div className="relative">
+            <button
+              ref={historyButtonRef}
+              onClick={handleHistoryClick}
+              className={cn(
+                "flex items-center gap-1.5 px-2 h-8 rounded",
+                "hover:bg-[var(--bg-tertiary)] transition-colors duration-150",
+                "text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+              )}
+              title="Commit History"
+            >
+              <History className="w-3.5 h-3.5" />
+              <span>History</span>
+            </button>
+
+            {/* History database picker popover */}
+            {historyPopoverOpen && (
+              <div
+                ref={historyPopoverRef}
+                className={cn(
+                  "absolute top-full right-0 mt-1",
+                  "w-56 bg-[var(--bg-primary)] border border-[var(--border-color)]",
+                  "rounded-[4px] shadow-lg overflow-hidden z-50"
+                )}
+              >
+                <div className="px-3 py-2 border-b border-[var(--border-color)]">
+                  <span className="text-[10px] font-medium text-[var(--text-muted)] uppercase tracking-wider">
+                    View history for
+                  </span>
+                </div>
+                <div className="py-1 max-h-48 overflow-y-auto">
+                  {connectedProjects.map((project) => {
+                    const colorConfig = PROJECT_COLORS[project.color];
+                    return (
+                      <button
+                        key={project.id}
+                        onClick={() => handleHistorySelect(project.id)}
+                        className={cn(
+                          "flex items-center gap-2 w-full px-3 py-1.5 text-left",
+                          "hover:bg-[var(--bg-tertiary)] transition-colors duration-150"
+                        )}
+                      >
+                        <span className={cn("w-2 h-2 rounded-full shrink-0", colorConfig.dot)} />
+                        <div className="flex-1 min-w-0">
+                          <div className="text-xs text-[var(--text-primary)] truncate">{project.name}</div>
+                          <div className="text-[10px] text-[var(--text-muted)] truncate">{project.connection.database}</div>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+          <div className="relative">
+            <button
+              ref={diagramButtonRef}
+              onClick={handleDiagramClick}
+              className={cn(
+                "flex items-center gap-1.5 px-2 h-8 rounded",
+                "hover:bg-[var(--bg-tertiary)] transition-colors duration-150",
+                "text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+              )}
+              title="Schema Diagram"
+            >
+              <Workflow className="w-3.5 h-3.5" />
+              <span>Diagram</span>
+            </button>
+
+            {/* Diagram database picker popover */}
+            {diagramPopoverOpen && (
+              <div
+                ref={diagramPopoverRef}
+                className={cn(
+                  "absolute top-full right-0 mt-1",
+                  "w-56 bg-[var(--bg-primary)] border border-[var(--border-color)]",
+                  "rounded-[4px] shadow-lg overflow-hidden z-50"
+                )}
+              >
+                <div className="px-3 py-2 border-b border-[var(--border-color)]">
+                  <span className="text-[10px] font-medium text-[var(--text-muted)] uppercase tracking-wider">
+                    View diagram for
+                  </span>
+                </div>
+                <div className="py-1 max-h-48 overflow-y-auto">
+                  {connectedProjects.map((project) => {
+                    const colorConfig = PROJECT_COLORS[project.color];
+                    return (
+                      <button
+                        key={project.id}
+                        onClick={() => handleDiagramSelect(project.id)}
+                        className={cn(
+                          "flex items-center gap-2 w-full px-3 py-1.5 text-left",
+                          "hover:bg-[var(--bg-tertiary)] transition-colors duration-150"
+                        )}
+                      >
+                        <span className={cn("w-2 h-2 rounded-full shrink-0", colorConfig.dot)} />
+                        <div className="flex-1 min-w-0">
+                          <div className="text-xs text-[var(--text-primary)] truncate">{project.name}</div>
+                          <div className="text-[10px] text-[var(--text-muted)] truncate">{project.connection.database}</div>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        </>
       )}
 
       {/* Right spacer to balance macOS traffic lights */}
@@ -196,6 +375,7 @@ export function AppLayout({ children }: AppLayoutProps) {
   const toggleSidebar = useUIStore((state) => state.toggleSidebar);
   const setSidebarWidth = useUIStore((state) => state.setSidebarWidth);
   const activeTabId = useUIStore((state) => state.activeTabId);
+  const showDashboard = useUIStore((state) => state.showDashboard);
   const connections = useProjectStore((state) => state.connections);
 
   // Global keyboard shortcuts (Cmd+W to close tab, Cmd+K for command palette, etc.)
@@ -208,8 +388,8 @@ export function AppLayout({ children }: AppLayoutProps) {
   const showTabContent = activeTabId !== null;
 
   // Layout modes:
-  // 1. No active connections → Dashboard (Pencil design: stats, grid, quick connect, activity)
-  // 2. Connected → Sidebar + workspace (tabs or empty state)
+  // 1. No active connections OR showDashboard → Dashboard
+  // 2. Connected + not on dashboard → Sidebar + workspace (tabs or empty state)
 
   return (
     <div className="h-screen w-screen flex flex-col overflow-hidden bg-[var(--bg-primary)]">
@@ -221,7 +401,7 @@ export function AppLayout({ children }: AppLayoutProps) {
 
       {/* Main Content Area */}
       <div className="flex-1 flex overflow-hidden">
-        {!hasAnyConnection ? (
+        {!hasAnyConnection || showDashboard ? (
           <Dashboard />
         ) : (
           <>

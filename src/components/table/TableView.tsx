@@ -261,13 +261,13 @@ export function TableView({
 
     return (
       <div className="h-full flex items-center justify-center p-6">
-        <div className="w-full max-w-sm rounded-xl bg-[var(--bg-secondary)] border border-[var(--border-color)] overflow-hidden">
+        <div className="w-full max-w-sm rounded-[4px] bg-[var(--bg-secondary)] border border-[var(--border-color)] overflow-hidden">
           {/* Red accent bar */}
           <div className="h-1 bg-gradient-to-r from-red-500 to-red-600" />
 
           <div className="p-5 space-y-4">
             <div className="flex items-start gap-3">
-              <div className="w-8 h-8 rounded-lg bg-red-500/10 flex items-center justify-center shrink-0 mt-0.5">
+              <div className="w-8 h-8 rounded-[4px] bg-red-500/10 flex items-center justify-center shrink-0 mt-0.5">
                 <AlertCircle className="w-4 h-4 text-red-400" />
               </div>
               <div className="min-w-0">
@@ -285,7 +285,7 @@ export function TableView({
                 <button
                   onClick={onRefresh}
                   className={cn(
-                    "w-full h-8 rounded-lg text-xs font-medium",
+                    "w-full h-8 rounded-[4px] text-xs font-medium",
                     "flex items-center justify-center gap-1.5",
                     "bg-[var(--bg-tertiary)] text-[var(--text-secondary)]",
                     "hover:bg-[#2a2a2a] hover:text-[var(--text-primary)]",
@@ -301,7 +301,7 @@ export function TableView({
                 <button
                   onClick={onReset}
                   className={cn(
-                    "w-full h-8 rounded-lg text-xs font-medium",
+                    "w-full h-8 rounded-[4px] text-xs font-medium",
                     "flex items-center justify-center gap-1.5",
                     "text-red-400 hover:bg-red-500/10",
                     "transition-colors"
@@ -323,7 +323,7 @@ export function TableView({
     return (
       <div className="h-full flex items-center justify-center p-6">
         <div className="flex flex-col items-center gap-4 max-w-xs text-center">
-          <div className="w-16 h-16 rounded-2xl bg-[var(--bg-tertiary)] border border-[var(--border-color)] flex items-center justify-center">
+          <div className="w-16 h-16 rounded-[4px] bg-[var(--bg-tertiary)] border border-[var(--border-color)] flex items-center justify-center">
             <DatabaseZap className="w-7 h-7 text-[var(--text-muted)]" />
           </div>
           <div>
@@ -338,7 +338,7 @@ export function TableView({
             <button
               onClick={onRefresh}
               className={cn(
-                "h-8 px-4 rounded-lg text-xs font-medium",
+                "h-8 px-4 rounded-[4px] text-xs font-medium",
                 "flex items-center gap-1.5",
                 "bg-[var(--bg-tertiary)] text-[var(--text-secondary)]",
                 "hover:bg-[#2a2a2a] hover:text-[var(--text-primary)]",
@@ -373,9 +373,9 @@ export function TableView({
                     <button
                       onClick={() => handleRowView(selectedIndex)}
                       className={cn(
-                        "flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs",
-                        "text-blue-400 hover:text-blue-300",
-                        "hover:bg-blue-500/10 transition-colors"
+                        "flex items-center gap-1.5 px-2.5 py-1.5 rounded-[4px] text-xs",
+                        "text-[var(--accent)] hover:text-[var(--accent)]",
+                        "hover:bg-[var(--accent)]/10 transition-colors"
                       )}
                       title="View/Edit row"
                     >
@@ -387,7 +387,7 @@ export function TableView({
                       <button
                         onClick={() => handleRowDelete(selectedIndex)}
                         className={cn(
-                          "flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs",
+                          "flex items-center gap-1.5 px-2.5 py-1.5 rounded-[4px] text-xs",
                           "text-red-400 hover:text-red-300",
                           "hover:bg-red-500/10 transition-colors"
                         )}
@@ -416,7 +416,7 @@ export function TableView({
                       <button
                         onClick={handleMultiRowDelete}
                         className={cn(
-                          "flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs",
+                          "flex items-center gap-1.5 px-2.5 py-1.5 rounded-[4px] text-xs",
                           "text-red-400 hover:text-red-300",
                           "hover:bg-red-500/10 transition-colors"
                         )}
@@ -469,9 +469,9 @@ export function TableView({
             <button
               onClick={onAddRow}
               className={cn(
-                "flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs",
-                "text-purple-400 hover:text-purple-300",
-                "hover:bg-purple-500/10 transition-colors"
+                "flex items-center gap-1.5 px-2.5 py-1.5 rounded-[4px] text-xs",
+                "text-[var(--accent)] hover:text-[var(--accent)]",
+                "hover:bg-[var(--accent)]/10 transition-colors"
               )}
               title="Add new row"
             >
@@ -485,7 +485,7 @@ export function TableView({
               onClick={onRefresh}
               disabled={isFetching}
               className={cn(
-                "flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs",
+                "flex items-center gap-1.5 px-2.5 py-1.5 rounded-[4px] text-xs",
                 "text-[var(--text-secondary)] hover:text-[var(--text-primary)]",
                 "hover:bg-[var(--bg-tertiary)] transition-colors",
                 "disabled:opacity-50"
@@ -502,7 +502,7 @@ export function TableView({
             trigger={
               <div
                 className={cn(
-                  "flex items-center px-1.5 py-1.5 rounded-md",
+                  "flex items-center px-1.5 py-1.5 rounded-[4px]",
                   "text-[var(--text-secondary)] hover:text-[var(--text-primary)]",
                   "hover:bg-[var(--bg-tertiary)] transition-colors"
                 )}

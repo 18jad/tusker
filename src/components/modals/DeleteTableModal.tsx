@@ -101,7 +101,7 @@ export function DeleteTableModal() {
             autoComplete="off"
             spellCheck={false}
             className={cn(
-              "w-full px-3 py-2.5 rounded-lg text-sm font-mono",
+              "w-full px-3 py-2.5 rounded-[4px] text-sm font-mono",
               "bg-[var(--bg-primary)] border",
               "text-[var(--text-primary)]",
               "focus:outline-none focus:ring-2",
@@ -114,7 +114,7 @@ export function DeleteTableModal() {
 
         {/* Error message */}
         {error && (
-          <div className="px-3 py-2.5 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
+          <div className="px-3 py-2.5 rounded-[4px] bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
             {error}
           </div>
         )}
@@ -125,7 +125,7 @@ export function DeleteTableModal() {
             onClick={closeDeleteTableModal}
             disabled={executeSQL.isPending}
             className={cn(
-              "flex-1 h-9 px-4 rounded-lg text-sm font-medium",
+              "flex-1 h-9 px-4 rounded-[4px] text-sm font-medium",
               "bg-[var(--bg-tertiary)] text-[var(--text-secondary)]",
               "hover:bg-[var(--border-color)] hover:text-[var(--text-primary)]",
               "transition-colors",
@@ -138,7 +138,7 @@ export function DeleteTableModal() {
             onClick={handleDelete}
             disabled={!isConfirmed || executeSQL.isPending}
             className={cn(
-              "flex-1 h-9 px-4 rounded-lg text-sm font-medium",
+              "flex-1 h-9 px-4 rounded-[4px] text-sm font-medium",
               "flex items-center justify-center gap-2",
               "transition-all duration-150",
               isConfirmed

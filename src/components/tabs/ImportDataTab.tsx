@@ -649,13 +649,13 @@ export function ImportDataTab({ tab }: ImportDataTabProps) {
       <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--border-color)] shrink-0">
         <div className="flex items-center gap-3">
           <div className={cn(
-            "p-2 rounded-lg",
-            format === "csv" ? "bg-green-500/10" : "bg-blue-500/10"
+            "p-2 rounded-[4px]",
+            format === "csv" ? "bg-green-500/10" : "bg-[var(--accent)]/10"
           )}>
             {format === "csv" ? (
               <FileSpreadsheet className="w-5 h-5 text-green-400" />
             ) : (
-              <FileJson className="w-5 h-5 text-blue-400" />
+              <FileJson className="w-5 h-5 text-[var(--accent)]" />
             )}
           </div>
           <div>
@@ -672,7 +672,7 @@ export function ImportDataTab({ tab }: ImportDataTabProps) {
           onClick={handleImport}
           disabled={!validation.isValid || rawData.length === 0 || isImporting || importSuccess}
           className={cn(
-            "flex items-center gap-2 px-4 py-2 text-sm rounded-lg",
+            "flex items-center gap-2 px-4 py-2 text-sm rounded-[4px]",
             importSuccess
               ? "bg-green-500 text-white"
               : "bg-[var(--accent)] text-white hover:opacity-90",
@@ -704,7 +704,7 @@ export function ImportDataTab({ tab }: ImportDataTabProps) {
         <div className="max-w-5xl mx-auto p-6 space-y-6">
           {/* Loading columns */}
           {isLoadingColumns && (
-            <div className="flex items-center gap-3 p-4 rounded-lg bg-[var(--bg-secondary)]">
+            <div className="flex items-center gap-3 p-4 rounded-[4px] bg-[var(--bg-secondary)]">
               <Loader2 className="w-5 h-5 animate-spin text-[var(--text-muted)]" />
               <span className="text-sm text-[var(--text-muted)]">Loading table structure...</span>
             </div>
@@ -712,7 +712,7 @@ export function ImportDataTab({ tab }: ImportDataTabProps) {
 
           {/* Columns error */}
           {columnsError && (
-            <div className="flex items-start gap-3 p-4 rounded-lg bg-red-500/10 border border-red-500/20">
+            <div className="flex items-start gap-3 p-4 rounded-[4px] bg-red-500/10 border border-red-500/20">
               <AlertCircle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
               <div>
                 <p className="text-sm font-medium text-red-400">Failed to load table structure</p>
@@ -723,7 +723,7 @@ export function ImportDataTab({ tab }: ImportDataTabProps) {
 
           {/* Import success */}
           {importSuccess && (
-            <div className="flex items-start gap-3 p-4 rounded-lg bg-green-500/10 border border-green-500/20">
+            <div className="flex items-start gap-3 p-4 rounded-[4px] bg-green-500/10 border border-green-500/20">
               <CheckCircle className="w-5 h-5 text-green-400 shrink-0 mt-0.5" />
               <div>
                 <p className="text-sm font-medium text-green-400">
@@ -736,7 +736,7 @@ export function ImportDataTab({ tab }: ImportDataTabProps) {
 
           {/* Import error */}
           {importError && (
-            <div className="flex items-start gap-3 p-4 rounded-lg bg-red-500/10 border border-red-500/20">
+            <div className="flex items-start gap-3 p-4 rounded-[4px] bg-red-500/10 border border-red-500/20">
               <XCircle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
               <div className="flex-1">
                 <p className="text-sm font-medium text-red-400">Import failed</p>
@@ -753,7 +753,7 @@ export function ImportDataTab({ tab }: ImportDataTabProps) {
 
           {/* Table Structure */}
           {!isLoadingColumns && !columnsError && (
-            <div className="p-4 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border-color)]">
+            <div className="p-4 rounded-[4px] bg-[var(--bg-secondary)] border border-[var(--border-color)]">
               <div className="flex items-center gap-2 mb-3">
                 <Table className="w-4 h-4 text-[var(--text-muted)]" />
                 <h3 className="text-sm font-medium text-[var(--text-secondary)]">
@@ -794,7 +794,7 @@ export function ImportDataTab({ tab }: ImportDataTabProps) {
                   onClick={handleSelectFile}
                   disabled={isLoadingFile}
                   className={cn(
-                    "w-full p-8 rounded-lg",
+                    "w-full p-8 rounded-[4px]",
                     "border-2 border-dashed border-[var(--border-color)]",
                     "hover:border-[var(--accent)] hover:bg-[var(--accent)]/5",
                     "transition-colors cursor-pointer",
@@ -816,13 +816,13 @@ export function ImportDataTab({ tab }: ImportDataTabProps) {
                   </div>
                 </button>
               ) : (
-                <div className="p-4 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border-color)]">
+                <div className="p-4 rounded-[4px] bg-[var(--bg-secondary)] border border-[var(--border-color)]">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       {format === "csv" ? (
                         <FileSpreadsheet className="w-5 h-5 text-green-400" />
                       ) : (
-                        <FileJson className="w-5 h-5 text-blue-400" />
+                        <FileJson className="w-5 h-5 text-[var(--accent)]" />
                       )}
                       <div>
                         <p className="text-sm font-medium text-[var(--text-primary)]">{fileName}</p>
@@ -834,14 +834,14 @@ export function ImportDataTab({ tab }: ImportDataTabProps) {
                     <div className="flex items-center gap-2">
                       <button
                         onClick={handleSelectFile}
-                        className="p-2 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)] transition-colors"
+                        className="p-2 rounded-[4px] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)] transition-colors"
                         title="Select different file"
                       >
                         <RefreshCw className="w-4 h-4" />
                       </button>
                       <button
                         onClick={handleClearFile}
-                        className="p-2 rounded-lg text-[var(--text-muted)] hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                        className="p-2 rounded-[4px] text-[var(--text-muted)] hover:text-red-400 hover:bg-red-500/10 transition-colors"
                         title="Clear file"
                       >
                         <Trash2 className="w-4 h-4" />
@@ -853,7 +853,7 @@ export function ImportDataTab({ tab }: ImportDataTabProps) {
 
               {/* File error */}
               {fileError && (
-                <div className="flex items-start gap-3 p-4 rounded-lg bg-red-500/10 border border-red-500/20">
+                <div className="flex items-start gap-3 p-4 rounded-[4px] bg-red-500/10 border border-red-500/20">
                   <AlertCircle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
                   <p className="text-sm text-red-400">{fileError}</p>
                 </div>
@@ -863,7 +863,7 @@ export function ImportDataTab({ tab }: ImportDataTabProps) {
 
           {/* Column Mapping */}
           {rawData.length > 0 && (
-            <div className="p-4 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border-color)]">
+            <div className="p-4 rounded-[4px] bg-[var(--bg-secondary)] border border-[var(--border-color)]">
               <h3 className="text-sm font-medium text-[var(--text-secondary)] mb-3">
                 Column Mapping
               </h3>
@@ -872,7 +872,7 @@ export function ImportDataTab({ tab }: ImportDataTabProps) {
                   <div
                     key={match.importColumn}
                     className={cn(
-                      "flex items-center gap-3 px-3 py-2 rounded-lg",
+                      "flex items-center gap-3 px-3 py-2 rounded-[4px]",
                       match.status === "matched" && "bg-green-500/5 border border-green-500/20",
                       match.status === "extra" && "bg-amber-500/5 border border-amber-500/20",
                       match.status === "missing" && "bg-red-500/5 border border-red-500/20"
@@ -918,7 +918,7 @@ export function ImportDataTab({ tab }: ImportDataTabProps) {
 
           {/* Validation Errors */}
           {validation.errors.length > 0 && (
-            <div className="p-4 rounded-lg bg-red-500/10 border border-red-500/20">
+            <div className="p-4 rounded-[4px] bg-red-500/10 border border-red-500/20">
               <div className="flex items-center gap-2 mb-3">
                 <XCircle className="w-4 h-4 text-red-400" />
                 <h3 className="text-sm font-medium text-red-400">
@@ -937,7 +937,7 @@ export function ImportDataTab({ tab }: ImportDataTabProps) {
 
           {/* Validation Warnings */}
           {validation.warnings.length > 0 && (
-            <div className="p-4 rounded-lg bg-amber-500/10 border border-amber-500/20">
+            <div className="p-4 rounded-[4px] bg-amber-500/10 border border-amber-500/20">
               <div className="flex items-center gap-2 mb-3">
                 <AlertTriangle className="w-4 h-4 text-amber-400" />
                 <h3 className="text-sm font-medium text-amber-400">
@@ -956,7 +956,7 @@ export function ImportDataTab({ tab }: ImportDataTabProps) {
 
           {/* Data Preview */}
           {rawData.length > 0 && (
-            <div className="rounded-lg border border-[var(--border-color)] overflow-hidden">
+            <div className="rounded-[4px] border border-[var(--border-color)] overflow-hidden">
               <div className="px-4 py-3 bg-[var(--bg-secondary)] border-b border-[var(--border-color)] flex items-center justify-between">
                 <div>
                   <h3 className="text-sm font-medium text-[var(--text-secondary)]">

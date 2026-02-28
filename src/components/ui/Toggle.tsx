@@ -41,7 +41,7 @@ export function Toggle({
           "relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full items-center",
           "transition-colors duration-200 ease-out",
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg-primary)]",
-          checked ? "bg-blue-600" : "bg-[var(--bg-tertiary)] border border-[var(--border-color)]",
+          checked ? "bg-[var(--accent)]" : "bg-[var(--bg-tertiary)] border border-[var(--border-color)]",
           disabled && "opacity-50 cursor-not-allowed"
         )}
       >

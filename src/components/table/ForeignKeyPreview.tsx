@@ -107,7 +107,7 @@ function CellValueViewer({
       <div
         className={cn(
           "w-[500px] max-w-[90vw] max-h-[70vh] flex flex-col",
-          "bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-lg shadow-xl"
+          "bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-[4px] shadow-xl"
         )}
         onClick={(e) => e.stopPropagation()}
       >

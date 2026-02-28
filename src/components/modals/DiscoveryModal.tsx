@@ -373,8 +373,8 @@ export function DiscoveryModal() {
       <div className="space-y-5">
         {/* Header */}
         <div className="text-center">
-          <div className="w-12 h-12 rounded-full bg-blue-500/10 flex items-center justify-center mx-auto mb-4">
-            <Search className="w-6 h-6 text-blue-500" />
+          <div className="w-12 h-12 rounded-full bg-[var(--accent)]/10 flex items-center justify-center mx-auto mb-4">
+            <Search className="w-6 h-6 text-[var(--accent)]" />
           </div>
           <h3 className="text-lg font-semibold text-[var(--text-primary)]">
             Discover Local Databases
@@ -387,7 +387,7 @@ export function DiscoveryModal() {
         {/* Scanning state */}
         {phase === "scanning" && (
           <div className="flex flex-col items-center gap-3 py-8">
-            <Loader2 className="w-6 h-6 animate-spin text-blue-500" />
+            <Loader2 className="w-6 h-6 animate-spin text-[var(--accent)]" />
             <p className="text-sm text-[var(--text-muted)]">
               Scanning for local PostgreSQL databases...
             </p>
@@ -397,7 +397,7 @@ export function DiscoveryModal() {
         {/* Importing state */}
         {phase === "importing" && (
           <div className="flex flex-col items-center gap-3 py-8">
-            <Loader2 className="w-6 h-6 animate-spin text-blue-500" />
+            <Loader2 className="w-6 h-6 animate-spin text-[var(--accent)]" />
             <p className="text-sm text-[var(--text-muted)]">Importing...</p>
           </div>
         )}
@@ -407,7 +407,7 @@ export function DiscoveryModal() {
           <>
             {/* Scan error */}
             {scanError && (
-              <div className="px-3 py-2.5 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
+              <div className="px-3 py-2.5 rounded-[4px] bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
                 {scanError}
               </div>
             )}
@@ -422,7 +422,7 @@ export function DiscoveryModal() {
                 <button
                   onClick={runScan}
                   className={cn(
-                    "mt-3 inline-flex items-center gap-1.5 px-3 h-8 rounded-lg text-sm",
+                    "mt-3 inline-flex items-center gap-1.5 px-3 h-8 rounded-[4px] text-sm",
                     "text-[var(--text-secondary)] hover:text-[var(--text-primary)]",
                     "bg-[var(--bg-tertiary)] hover:bg-[var(--border-color)]",
                     "transition-colors"
@@ -478,11 +478,11 @@ export function DiscoveryModal() {
                               onClick={() => toggleSelection(db)}
                               disabled={isImported}
                               className={cn(
-                                "w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors",
+                                "w-full flex items-center gap-3 px-3 py-2 rounded-[4px] text-left transition-colors",
                                 isImported
                                   ? "opacity-50 cursor-not-allowed"
                                   : isSelected
-                                    ? "bg-blue-500/10 border border-blue-500/20"
+                                    ? "bg-[var(--accent)]/10 border border-[var(--accent)]/20"
                                     : "bg-[var(--bg-primary)] border border-[var(--border-color)] hover:border-[var(--text-muted)]"
                               )}
                             >
@@ -493,7 +493,7 @@ export function DiscoveryModal() {
                                   isImported
                                     ? "bg-[var(--bg-tertiary)] border-[var(--border-color)]"
                                     : isSelected
-                                      ? "bg-blue-600 border-blue-600"
+                                      ? "bg-[var(--accent)] border-[var(--accent)]"
                                       : "border-[var(--border-color)]"
                                 )}
                               >
@@ -555,7 +555,7 @@ export function DiscoveryModal() {
                               }
                               placeholder="Enter password"
                               className={cn(
-                                "w-full h-8 px-3 pr-9 rounded-lg text-sm",
+                                "w-full h-8 px-3 pr-9 rounded-[4px] text-sm",
                                 "bg-[var(--bg-primary)] border",
                                 passwordErrors[sKey]
                                   ? "border-red-500/50"
@@ -598,7 +598,7 @@ export function DiscoveryModal() {
 
             {/* General error */}
             {error && (
-              <div className="px-3 py-2.5 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
+              <div className="px-3 py-2.5 rounded-[4px] bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
                 {error}
               </div>
             )}
@@ -608,7 +608,7 @@ export function DiscoveryModal() {
               <button
                 onClick={closeDiscoveryModal}
                 className={cn(
-                  "flex-1 h-9 px-4 rounded-lg text-sm font-medium",
+                  "flex-1 h-9 px-4 rounded-[4px] text-sm font-medium",
                   "bg-[var(--bg-tertiary)] text-[var(--text-secondary)]",
                   "hover:bg-[var(--border-color)] hover:text-[var(--text-primary)]",
                   "transition-colors"
@@ -621,9 +621,9 @@ export function DiscoveryModal() {
                   onClick={handleImport}
                   disabled={!canImport}
                   className={cn(
-                    "flex-1 h-9 px-4 rounded-lg text-sm font-medium",
+                    "flex-1 h-9 px-4 rounded-[4px] text-sm font-medium",
                     "flex items-center justify-center gap-2",
-                    "bg-blue-600 text-white hover:bg-blue-700",
+                    "bg-[var(--accent)] text-white hover:bg-[var(--accent-hover)]",
                     "transition-all duration-150 disabled:opacity-50"
                   )}
                 >

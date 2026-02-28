@@ -9,6 +9,9 @@ interface Toast {
 }
 
 interface UIState {
+  // Dashboard
+  showDashboard: boolean;
+
   // Sidebar
   sidebarCollapsed: boolean;
   sidebarWidth: number;
@@ -98,6 +101,7 @@ interface UIState {
   theme: "dark" | "light";
 
   // Actions
+  setShowDashboard: (show: boolean) => void;
   toggleSidebar: () => void;
   setSidebarWidth: (width: number) => void;
   addTab: (tab: Tab) => void;
@@ -163,6 +167,7 @@ interface UIState {
 }
 
 export const useUIStore = create<UIState>((set, get) => ({
+  showDashboard: false,
   sidebarCollapsed: false,
   sidebarWidth: 260,
   tabs: [],
@@ -216,6 +221,7 @@ export const useUIStore = create<UIState>((set, get) => ({
   toasts: [],
   theme: "dark",
 
+  setShowDashboard: (show) => set({ showDashboard: show }),
   toggleSidebar: () =>
     set((state) => ({ sidebarCollapsed: !state.sidebarCollapsed })),
 

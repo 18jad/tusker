@@ -107,8 +107,11 @@ function ConnectionCard({
       onClick={() => onConnect(project)}
       className={cn(
         "group/card flex-1 flex flex-col rounded-[4px] py-4 px-5 text-left",
-        "bg-[var(--bg-secondary)] border border-[var(--border-color)]",
-        "hover:border-[var(--text-muted)]/30 hover:bg-[var(--bg-tertiary)]",
+        "bg-[var(--bg-secondary)] border",
+        isConnected
+          ? "border-[var(--success)]/40 hover:border-[var(--success)]/60"
+          : "border-[var(--border-color)] hover:border-[var(--text-muted)]/30",
+        "hover:bg-[var(--bg-tertiary)]",
         "transition-all duration-150"
       )}
     >
@@ -120,12 +123,13 @@ function ConnectionCard({
             {project.name}
           </span>
         </div>
-        <div
-          className={cn(
-            "w-2 h-2 rounded-full shrink-0",
-            isConnected ? "bg-[var(--success)]" : "bg-[var(--border-color)]"
-          )}
-        />
+        {isConnected ? (
+          <span className="text-[9px] font-bold font-mono uppercase px-2 py-[2px] rounded-[2px] bg-[var(--success)]/15 text-[var(--success)]">
+            CONNECTED
+          </span>
+        ) : (
+          <div className="w-2 h-2 rounded-full shrink-0 bg-[var(--border-color)]" />
+        )}
       </div>
 
       {/* Host — max 2 lines */}
@@ -177,9 +181,11 @@ function ConnectionCard({
 
 function QuickConnectItem({
   project,
+  isConnected,
   onConnect,
 }: {
   project: Project;
+  isConnected: boolean;
   onConnect: (project: Project) => void;
 }) {
   const isLocal =
@@ -191,8 +197,11 @@ function QuickConnectItem({
       onClick={() => onConnect(project)}
       className={cn(
         "group/qc flex items-center gap-3 w-full rounded-[4px] py-3 px-4 text-left",
-        "bg-[var(--bg-secondary)] border border-[var(--border-color)]",
-        "hover:border-[var(--text-muted)]/30 hover:bg-[var(--bg-tertiary)]",
+        "bg-[var(--bg-secondary)] border",
+        isConnected
+          ? "border-[var(--success)]/40 hover:border-[var(--success)]/60"
+          : "border-[var(--border-color)] hover:border-[var(--text-muted)]/30",
+        "hover:bg-[var(--bg-tertiary)]",
         "transition-all duration-150"
       )}
     >
@@ -205,9 +214,15 @@ function QuickConnectItem({
           {getConnectionHost(project)}
         </span>
       </div>
-      <span className="text-[9px] font-semibold font-mono uppercase px-2 py-[3px] rounded-[2px] bg-[var(--bg-tertiary)] text-[var(--text-muted)] shrink-0 group-hover/qc:hidden">
-        {isLocal ? "LOCAL" : "REMOTE"}
-      </span>
+      {isConnected ? (
+        <span className="text-[9px] font-bold font-mono uppercase px-2 py-[2px] rounded-[2px] bg-[var(--success)]/15 text-[var(--success)] shrink-0 group-hover/qc:hidden">
+          LIVE
+        </span>
+      ) : (
+        <span className="text-[9px] font-semibold font-mono uppercase px-2 py-[3px] rounded-[2px] bg-[var(--bg-tertiary)] text-[var(--text-muted)] shrink-0 group-hover/qc:hidden">
+          {isLocal ? "LOCAL" : "REMOTE"}
+        </span>
+      )}
       <ArrowRight className="w-3.5 h-3.5 text-[var(--text-muted)] shrink-0 hidden group-hover/qc:block" />
     </button>
   );
@@ -219,11 +234,13 @@ function QuickConnectSection({
   projects,
   quickConnectProjects,
   favoritesCount,
+  connections,
   onConnect,
 }: {
   projects: Project[];
   quickConnectProjects: Project[];
   favoritesCount: number;
+  connections: Record<string, unknown>;
   onConnect: (project: Project) => void;
 }) {
   const [showManage, setShowManage] = useState(false);
@@ -356,6 +373,7 @@ function QuickConnectSection({
           <QuickConnectItem
             key={project.id}
             project={project}
+            isConnected={!!connections[project.id]}
             onConnect={onConnect}
           />
         ))
@@ -417,6 +435,7 @@ export function Dashboard() {
   const connections = useProjectStore((s) => s.connections);
   const openProjectModal = useUIStore((s) => s.openProjectModal);
   const openDiscoveryModal = useUIStore((s) => s.openDiscoveryModal);
+  const setShowDashboard = useUIStore((s) => s.setShowDashboard);
   const queryHistory = useQueryStore((s) => s.queryHistory);
   const clearHistory = useQueryStore((s) => s.clearHistory);
 
@@ -516,8 +535,15 @@ export function Dashboard() {
 
   // Connection handler — uses the new multi-connection API
   const handleConnect = (project: Project) => {
+    // If already connected, just go back to the editor
+    if (connections[project.id]) {
+      setShowDashboard(false);
+      return;
+    }
     if (connect.isPending) return;
-    connect.mutate({ project });
+    connect.mutate({ project }, {
+      onSuccess: () => setShowDashboard(false),
+    });
   };
 
   // Pair projects into rows of 2 for the grid
@@ -679,6 +705,7 @@ export function Dashboard() {
             projects={projects}
             quickConnectProjects={quickConnectProjects}
             favoritesCount={favoritesCount}
+            connections={connections}
             onConnect={handleConnect}
           />
 

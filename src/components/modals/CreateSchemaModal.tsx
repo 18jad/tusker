@@ -90,7 +90,7 @@ export function CreateSchemaModal() {
             spellCheck={false}
             placeholder="e.g. analytics"
             className={cn(
-              "w-full h-9 px-3 rounded-lg text-sm font-mono",
+              "w-full h-9 px-3 rounded-[4px] text-sm font-mono",
               "bg-[var(--bg-primary)] border border-[var(--border-color)]",
               "text-[var(--text-primary)] placeholder:text-[var(--text-muted)]",
               "focus:outline-none focus:border-[var(--accent)]",
@@ -101,7 +101,7 @@ export function CreateSchemaModal() {
 
         {/* Error */}
         {error && (
-          <div className="px-3 py-2.5 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
+          <div className="px-3 py-2.5 rounded-[4px] bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
             {error}
           </div>
         )}
@@ -112,7 +112,7 @@ export function CreateSchemaModal() {
             onClick={closeCreateSchemaModal}
             disabled={executeSQL.isPending}
             className={cn(
-              "flex-1 h-9 px-4 rounded-lg text-sm font-medium",
+              "flex-1 h-9 px-4 rounded-[4px] text-sm font-medium",
               "bg-[var(--bg-tertiary)] text-[var(--text-secondary)]",
               "hover:bg-[var(--border-color)] hover:text-[var(--text-primary)]",
               "transition-colors disabled:opacity-50"
@@ -124,7 +124,7 @@ export function CreateSchemaModal() {
             onClick={handleCreate}
             disabled={!isValid || executeSQL.isPending}
             className={cn(
-              "flex-1 h-9 px-4 rounded-lg text-sm font-medium",
+              "flex-1 h-9 px-4 rounded-[4px] text-sm font-medium",
               "flex items-center justify-center gap-2",
               "bg-[var(--accent)] text-white hover:bg-[var(--accent-hover)]",
               "transition-all duration-150 disabled:opacity-50"

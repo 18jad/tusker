@@ -93,15 +93,15 @@ export function ExportConnectionsModal() {
       <div className="space-y-5">
         {/* Header */}
         <div className="text-center">
-          <div className="w-12 h-12 rounded-full bg-blue-500/10 flex items-center justify-center mx-auto mb-4">
-            <Download className="w-6 h-6 text-blue-500" />
+          <div className="w-12 h-12 rounded-full bg-[var(--accent)]/10 flex items-center justify-center mx-auto mb-4">
+            <Download className="w-6 h-6 text-[var(--accent)]" />
           </div>
           <h3 className="text-lg font-semibold text-[var(--text-primary)]">
             Export Connections
           </h3>
           <p className="text-sm text-[var(--text-muted)] mt-2">
             {projects.length} connection{projects.length === 1 ? "" : "s"} will
-            be encrypted and saved to a <span className="font-mono text-blue-400">.tusker</span> file.
+            be encrypted and saved to a <span className="font-mono text-[var(--accent)]">.tusker</span> file.
           </p>
         </div>
 
@@ -118,7 +118,7 @@ export function ExportConnectionsModal() {
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="Minimum 8 characters"
                 className={cn(
-                  "w-full h-9 px-3 pr-9 rounded-lg text-sm",
+                  "w-full h-9 px-3 pr-9 rounded-[4px] text-sm",
                   "bg-[var(--bg-primary)] border border-[var(--border-color)]",
                   "text-[var(--text-primary)] placeholder:text-[var(--text-muted)]",
                   "focus:outline-none focus:border-[var(--accent)]",
@@ -149,7 +149,7 @@ export function ExportConnectionsModal() {
               onChange={(e) => setConfirmPassword(e.target.value)}
               placeholder="Re-enter password"
               className={cn(
-                "w-full h-9 px-3 rounded-lg text-sm",
+                "w-full h-9 px-3 rounded-[4px] text-sm",
                 "bg-[var(--bg-primary)] border",
                 confirmPassword && !passwordsMatch
                   ? "border-red-500/50"
@@ -167,7 +167,7 @@ export function ExportConnectionsModal() {
 
         {/* Error */}
         {error && (
-          <div className="px-3 py-2.5 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
+          <div className="px-3 py-2.5 rounded-[4px] bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
             {error}
           </div>
         )}
@@ -178,7 +178,7 @@ export function ExportConnectionsModal() {
             onClick={closeExportModal}
             disabled={isExporting}
             className={cn(
-              "flex-1 h-9 px-4 rounded-lg text-sm font-medium",
+              "flex-1 h-9 px-4 rounded-[4px] text-sm font-medium",
               "bg-[var(--bg-tertiary)] text-[var(--text-secondary)]",
               "hover:bg-[var(--border-color)] hover:text-[var(--text-primary)]",
               "transition-colors disabled:opacity-50"
@@ -190,9 +190,9 @@ export function ExportConnectionsModal() {
             onClick={handleExport}
             disabled={isExporting || !isValid}
             className={cn(
-              "flex-1 h-9 px-4 rounded-lg text-sm font-medium",
+              "flex-1 h-9 px-4 rounded-[4px] text-sm font-medium",
               "flex items-center justify-center gap-2",
-              "bg-blue-600 text-white hover:bg-blue-700",
+              "bg-[var(--accent)] text-white hover:bg-[var(--accent-hover)]",
               "transition-all duration-150 disabled:opacity-50"
             )}
           >

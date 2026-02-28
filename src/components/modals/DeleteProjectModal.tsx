@@ -71,7 +71,7 @@ export function DeleteProjectModal() {
             onClick={closeDeleteProjectModal}
             disabled={isDeleting}
             className={cn(
-              "flex-1 h-9 px-4 rounded-lg text-sm font-medium",
+              "flex-1 h-9 px-4 rounded-[4px] text-sm font-medium",
               "bg-[var(--bg-tertiary)] text-[var(--text-secondary)]",
               "hover:bg-[var(--border-color)] hover:text-[var(--text-primary)]",
               "transition-colors",
@@ -84,7 +84,7 @@ export function DeleteProjectModal() {
             onClick={handleDelete}
             disabled={isDeleting}
             className={cn(
-              "flex-1 h-9 px-4 rounded-lg text-sm font-medium",
+              "flex-1 h-9 px-4 rounded-[4px] text-sm font-medium",
               "flex items-center justify-center gap-2",
               "bg-red-600 text-white hover:bg-red-700",
               "transition-all duration-150",

@@ -122,6 +122,7 @@ function TableTabContent({ connectionId, projectId, schema, table, filterKey }: 
   const openDeleteTableModal = useUIStore((state) => state.openDeleteTableModal);
   const openTruncateTableModal = useUIStore((state) => state.openTruncateTableModal);
   const addImportDataTab = useUIStore((state) => state.addImportDataTab);
+  const showToast = useUIStore((state) => state.showToast);
   const sorts = useUIStore((state) => state.tableSortState[tableKey] ?? EMPTY_SORTS);
   const setTableSort = useUIStore((state) => state.setTableSort);
   const filters = useUIStore((state) => state.tableFilterState[tableKey] ?? EMPTY_FILTERS);
@@ -315,74 +316,74 @@ function TableTabContent({ connectionId, projectId, schema, table, filterKey }: 
       return;
     }
 
-    // Value is different from original - stage the change
-    setLocalEdits((prev) => {
-      const next = new Map(prev);
-      next.set(editKey, newValue);
-      return next;
-    });
-
-    // Create the updated row data
+    // Value is different from original
     const updatedData: Row = { [columnName]: newValue };
-
-    // Generate SQL for this change
     const sql = generateUpdateSQL(schema, table, updatedData, originalRow, columns);
 
-    // Stage the change
-    addChange({
-      type: "update",
-      connectionId,
-      schema,
-      table,
-      data: updatedData,
-      originalData: originalRow,
-      sql,
-    });
-
-    // TODO: If instantCommit is enabled, execute immediately
     if (instantCommit) {
-      console.log("Instant commit enabled - would execute:", sql);
+      // Execute immediately without staging
+      setLocalEdits((prev) => {
+        const next = new Map(prev);
+        next.set(editKey, newValue);
+        return next;
+      });
+      commitChanges.mutateAsync({ connectionId, queries: [sql] })
+        .then(() => {
+          setLocalEdits((prev) => {
+            const next = new Map(prev);
+            next.delete(editKey);
+            return next;
+          });
+          refetch();
+        })
+        .catch((err) => {
+          // Revert local edit on failure
+          setLocalEdits((prev) => {
+            const next = new Map(prev);
+            next.delete(editKey);
+            return next;
+          });
+          showToast(`Failed to commit: ${err instanceof Error ? err.message : "Unknown error"}`, "error");
+        });
+    } else {
+      // Stage the change
+      setLocalEdits((prev) => {
+        const next = new Map(prev);
+        next.set(editKey, newValue);
+        return next;
+      });
+      addChange({
+        type: "update",
+        connectionId,
+        schema,
+        table,
+        data: updatedData,
+        originalData: originalRow,
+        sql,
+      });
     }
-  }, [data, connectionId, schema, table, allChanges, addChange, removeChange, instantCommit]);
+  }, [data, connectionId, schema, table, allChanges, addChange, removeChange, instantCommit, commitChanges, refetch, showToast]);
 
   // Handle row view/edit
   const handleRowView = (rowIndex: number) => {
     setViewingRowIndex(rowIndex);
   };
 
-  // Handle row delete (stage)
+  // Handle row delete
   const handleRowDelete = (rowIndex: number) => {
     if (!data) return;
 
     const originalRow = data.rows[rowIndex];
     const columns = data.columns;
-
-    // Generate DELETE SQL
     const sql = generateDeleteSQL(schema, table, originalRow, columns);
 
-    // Stage the delete change
-    addChange({
-      type: "delete",
-      connectionId,
-      schema,
-      table,
-      data: originalRow,
-      originalData: originalRow,
-      sql,
-    });
-  };
-
-  // Handle multiple rows delete (stage)
-  const handleRowsDelete = (rowIndices: number[]) => {
-    if (!data) return;
-
-    const columns = data.columns;
-
-    // Stage delete changes for each row
-    rowIndices.forEach((rowIndex) => {
-      const originalRow = data.rows[rowIndex];
-      const sql = generateDeleteSQL(schema, table, originalRow, columns);
-
+    if (instantCommit) {
+      commitChanges.mutateAsync({ connectionId, queries: [sql] })
+        .then(() => refetch())
+        .catch((err) => {
+          showToast(`Failed to delete: ${err instanceof Error ? err.message : "Unknown error"}`, "error");
+        });
+    } else {
       addChange({
         type: "delete",
         connectionId,
@@ -392,7 +393,39 @@ function TableTabContent({ connectionId, projectId, schema, table, filterKey }: 
         originalData: originalRow,
         sql,
       });
+    }
+  };
+
+  // Handle multiple rows delete
+  const handleRowsDelete = (rowIndices: number[]) => {
+    if (!data) return;
+
+    const columns = data.columns;
+    const queries = rowIndices.map((rowIndex) => {
+      const originalRow = data.rows[rowIndex];
+      return generateDeleteSQL(schema, table, originalRow, columns);
     });
+
+    if (instantCommit) {
+      commitChanges.mutateAsync({ connectionId, queries })
+        .then(() => refetch())
+        .catch((err) => {
+          showToast(`Failed to delete: ${err instanceof Error ? err.message : "Unknown error"}`, "error");
+        });
+    } else {
+      rowIndices.forEach((rowIndex, i) => {
+        const originalRow = data.rows[rowIndex];
+        addChange({
+          type: "delete",
+          connectionId,
+          schema,
+          table,
+          data: originalRow,
+          originalData: originalRow,
+          sql: queries[i],
+        });
+      });
+    }
   };
 
   // Handle direct save from row detail modal
@@ -441,27 +474,35 @@ function TableTabContent({ connectionId, projectId, schema, table, filterKey }: 
 
     if (Object.keys(changedData).length === 0) return;
 
-    // Update local edits for visual feedback
-    Object.entries(changedData).forEach(([colName, value]) => {
-      const editKey = `${viewingRowIndex}:${colName}`;
-      setLocalEdits((prev) => {
-        const next = new Map(prev);
-        next.set(editKey, value);
-        return next;
-      });
-    });
-
-    // Generate SQL and stage
     const sql = generateUpdateSQL(schema, table, changedData, originalRow, columns);
-    addChange({
-      type: "update",
-      connectionId,
-      schema,
-      table,
-      data: changedData,
-      originalData: originalRow,
-      sql,
-    });
+
+    if (instantCommit) {
+      commitChanges.mutateAsync({ connectionId, queries: [sql] })
+        .then(() => refetch())
+        .catch((err) => {
+          showToast(`Failed to commit: ${err instanceof Error ? err.message : "Unknown error"}`, "error");
+        });
+    } else {
+      // Update local edits for visual feedback
+      Object.entries(changedData).forEach(([colName, value]) => {
+        const editKey = `${viewingRowIndex}:${colName}`;
+        setLocalEdits((prev) => {
+          const next = new Map(prev);
+          next.set(editKey, value);
+          return next;
+        });
+      });
+
+      addChange({
+        type: "update",
+        connectionId,
+        schema,
+        table,
+        data: changedData,
+        originalData: originalRow,
+        sql,
+      });
+    }
   };
 
   // Handle delete from row detail modal
@@ -656,6 +697,7 @@ function TableTabContent({ connectionId, projectId, schema, table, filterKey }: 
           onDelete={handleRowDeleteFromModal}
           readOnly={readOnly}
           isDeleted={isViewingRowDeleted}
+          instantCommit={instantCommit}
         />
       )}
 
@@ -671,6 +713,7 @@ function TableTabContent({ connectionId, projectId, schema, table, filterKey }: 
           onSave={handleNewRowSave}
           onStage={handleNewRowStage}
           mode="create"
+          instantCommit={instantCommit}
           error={addRowError}
           onClearError={() => setAddRowError(null)}
         />
@@ -969,7 +1012,7 @@ function IndexColumnRow({
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
           {/* Mode toggle */}
-          <div className="flex rounded-lg overflow-hidden border border-[var(--border-color)] shrink-0">
+          <div className="flex rounded-[4px] overflow-hidden border border-[var(--border-color)] shrink-0">
             <button
               type="button"
               onClick={() => onUpdate({ mode: "column" })}
@@ -1171,7 +1214,7 @@ function IndexEditorCard({
 
   return (
     <div className={cn(
-      "border border-[var(--border-color)] rounded-lg overflow-hidden",
+      "border border-[var(--border-color)] rounded-[4px] overflow-hidden",
       "bg-[var(--bg-secondary)]"
     )}>
       {/* Index Header (collapsed view) */}
@@ -1354,7 +1397,7 @@ function IndexEditorCard({
                 </span>
               </div>
               <pre className={cn(
-                "text-xs font-mono p-2.5 rounded-lg overflow-x-auto",
+                "text-xs font-mono p-2.5 rounded-[4px] overflow-x-auto",
                 "bg-[var(--bg-primary)] text-emerald-300",
                 "border border-[var(--border-color)]"
               )}>
@@ -1437,7 +1480,7 @@ function IndexesSection({
         <button
           onClick={onAdd}
           className={cn(
-            "w-full mt-3 flex items-center justify-center gap-2 px-4 py-3 rounded-lg",
+            "w-full mt-3 flex items-center justify-center gap-2 px-4 py-3 rounded-[4px]",
             "border border-dashed border-[var(--border-color)]",
             "text-sm text-[var(--text-muted)]",
             colorMap[accentColor],
@@ -1555,7 +1598,7 @@ function TypeDropdown({
       className={cn(
         "type-dropdown fixed z-[100] w-72 max-h-80 flex flex-col",
         "bg-[var(--bg-secondary)] border border-[var(--border-color)]",
-        "rounded-lg shadow-xl"
+        "rounded-[4px] shadow-xl"
       )}
       style={{ top: position.top, left: position.left }}
     >
@@ -1697,7 +1740,7 @@ function ColumnEditorRow({
       ref={setNodeRef}
       style={style}
       className={cn(
-        "border border-[var(--border-color)] rounded-lg overflow-hidden select-none",
+        "border border-[var(--border-color)] rounded-[4px] overflow-hidden select-none",
         "bg-[var(--bg-secondary)]",
         isDragging && "opacity-50 shadow-lg"
       )}
@@ -1938,7 +1981,7 @@ function ColumnEditorRow({
           <div className="pt-3 border-t border-[var(--border-color)]">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Link className="w-4 h-4 text-blue-400" />
+                <Link className="w-4 h-4 text-[var(--accent)]" />
                 <span className="text-xs font-medium text-[var(--text-secondary)]">
                   Foreign Key Reference
                 </span>
@@ -2076,7 +2119,7 @@ function ColumnEditorRow({
                                 {col.isPrimaryKey ? (
                                   <Key className="w-3 h-3 text-amber-400" />
                                 ) : (
-                                  <span className="w-3 h-3 text-xs text-blue-400 font-bold">U</span>
+                                  <span className="w-3 h-3 text-xs text-[var(--accent)] font-bold">U</span>
                                 )}
                                 {col.name}
                                 <span className="text-[var(--text-muted)]">({col.dataType})</span>
@@ -2193,7 +2236,7 @@ function ColumnDragOverlay({
   return (
     <div
       className={cn(
-        "border border-[var(--border-color)] rounded-lg overflow-hidden",
+        "border border-[var(--border-color)] rounded-[4px] overflow-hidden",
         "bg-[var(--bg-secondary)] shadow-xl",
         "cursor-grabbing"
       )}
@@ -2652,7 +2695,7 @@ function CreateTableTabContent({ tab }: { tab: Tab }) {
       {/* Header */}
       <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--border-color)] shrink-0">
         <div className="flex items-center gap-3">
-          <div className="p-2 rounded-lg bg-purple-500/10">
+          <div className="p-2 rounded-[4px] bg-purple-500/10">
             <Table className="w-5 h-5 text-purple-400" />
           </div>
           <div>
@@ -2670,7 +2713,7 @@ function CreateTableTabContent({ tab }: { tab: Tab }) {
             onClick={handleDryRun}
             disabled={isDryRunning || isApplying || !tableName.trim() || success}
             className={cn(
-              "flex items-center gap-2 px-4 py-2 text-sm rounded-lg",
+              "flex items-center gap-2 px-4 py-2 text-sm rounded-[4px]",
               "bg-[var(--bg-tertiary)] text-[var(--text-primary)]",
               "border border-[var(--border-color)]",
               "hover:bg-[var(--bg-secondary)] transition-colors",
@@ -2693,7 +2736,7 @@ function CreateTableTabContent({ tab }: { tab: Tab }) {
             onClick={handleApply}
             disabled={isDryRunning || isApplying || !tableName.trim() || success}
             className={cn(
-              "flex items-center gap-2 px-4 py-2 text-sm rounded-lg",
+              "flex items-center gap-2 px-4 py-2 text-sm rounded-[4px]",
               success
                 ? "bg-green-500 text-white"
                 : "bg-purple-500 text-white hover:bg-purple-600",
@@ -2726,7 +2769,7 @@ function CreateTableTabContent({ tab }: { tab: Tab }) {
         <div className="max-w-3xl mx-auto p-6 space-y-6">
           {/* Success Message */}
           {success && (
-            <div className="flex items-start gap-3 p-4 rounded-lg bg-green-500/10 border border-green-500/20">
+            <div className="flex items-start gap-3 p-4 rounded-[4px] bg-green-500/10 border border-green-500/20">
               <CheckCircle className="w-5 h-5 text-green-400 shrink-0 mt-0.5" />
               <div>
                 <p className="text-sm font-medium text-green-400">
@@ -2741,7 +2784,7 @@ function CreateTableTabContent({ tab }: { tab: Tab }) {
 
           {/* Error Display */}
           {error && (
-            <div className="flex items-start gap-3 p-4 rounded-lg bg-red-500/10 border border-red-500/20">
+            <div className="flex items-start gap-3 p-4 rounded-[4px] bg-red-500/10 border border-red-500/20">
               <AlertCircle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
               <p className="text-sm text-red-400">{error}</p>
             </div>
@@ -2763,7 +2806,7 @@ function CreateTableTabContent({ tab }: { tab: Tab }) {
                 onValueChange={(v) => { setSelectedSchema(v); clearResult(); }}
                 disabled={success}
               >
-                <SelectTrigger className="h-10 rounded-lg bg-[var(--bg-secondary)]">
+                <SelectTrigger className="h-10 rounded-[4px] bg-[var(--bg-secondary)]">
                   <SelectValue placeholder="Select schema..." />
                 </SelectTrigger>
                 <SelectContent>
@@ -2793,7 +2836,7 @@ function CreateTableTabContent({ tab }: { tab: Tab }) {
                 autoComplete="off"
                 spellCheck={false}
                 className={cn(
-                  "w-full h-10 px-3 rounded-lg text-sm",
+                  "w-full h-10 px-3 rounded-[4px] text-sm",
                   "bg-[var(--bg-secondary)] text-[var(--text-primary)]",
                   "border border-[var(--border-color)]",
                   "focus:border-[var(--accent)] focus:outline-none",
@@ -2865,7 +2908,7 @@ function CreateTableTabContent({ tab }: { tab: Tab }) {
               <button
                 onClick={addColumn}
                 className={cn(
-                  "w-full mt-3 flex items-center justify-center gap-2 px-4 py-3 rounded-lg",
+                  "w-full mt-3 flex items-center justify-center gap-2 px-4 py-3 rounded-[4px]",
                   "border border-dashed border-[var(--border-color)]",
                   "text-sm text-[var(--text-muted)]",
                   "hover:border-purple-500/50 hover:text-purple-400",
@@ -3437,8 +3480,8 @@ function EditTableTabContent({ tab }: { tab: Tab }) {
       {/* Header */}
       <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--border-color)] shrink-0">
         <div className="flex items-center gap-3">
-          <div className="p-2 rounded-lg bg-blue-500/10">
-            <Settings className="w-5 h-5 text-blue-400" />
+          <div className="p-2 rounded-[4px] bg-[var(--accent)]/10">
+            <Settings className="w-5 h-5 text-[var(--accent)]" />
           </div>
           <div>
             <h2 className="text-base font-semibold text-[var(--text-primary)]">
@@ -3457,7 +3500,7 @@ function EditTableTabContent({ tab }: { tab: Tab }) {
               disabled={undoCount === 0}
               title="Undo (Cmd+Z)"
               className={cn(
-                "p-2 rounded-lg text-[var(--text-muted)]",
+                "p-2 rounded-[4px] text-[var(--text-muted)]",
                 "hover:bg-[var(--bg-tertiary)] hover:text-[var(--text-primary)]",
                 "transition-colors",
                 "disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-[var(--text-muted)]"
@@ -3470,7 +3513,7 @@ function EditTableTabContent({ tab }: { tab: Tab }) {
               disabled={redoCount === 0}
               title="Redo (Cmd+Shift+Z)"
               className={cn(
-                "p-2 rounded-lg text-[var(--text-muted)]",
+                "p-2 rounded-[4px] text-[var(--text-muted)]",
                 "hover:bg-[var(--bg-tertiary)] hover:text-[var(--text-primary)]",
                 "transition-colors",
                 "disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-[var(--text-muted)]"
@@ -3483,7 +3526,7 @@ function EditTableTabContent({ tab }: { tab: Tab }) {
             onClick={handleDryRun}
             disabled={isDryRunning || isApplying || !hasChanges}
             className={cn(
-              "flex items-center gap-2 px-4 py-2 text-sm rounded-lg",
+              "flex items-center gap-2 px-4 py-2 text-sm rounded-[4px]",
               "bg-[var(--bg-tertiary)] text-[var(--text-primary)]",
               "border border-[var(--border-color)]",
               "hover:bg-[var(--bg-secondary)] transition-colors",
@@ -3506,8 +3549,8 @@ function EditTableTabContent({ tab }: { tab: Tab }) {
             onClick={handleApply}
             disabled={isDryRunning || isApplying || !hasChanges}
             className={cn(
-              "flex items-center gap-2 px-4 py-2 text-sm rounded-lg",
-              "bg-blue-500 text-white hover:bg-blue-600",
+              "flex items-center gap-2 px-4 py-2 text-sm rounded-[4px]",
+              "bg-[var(--accent)] text-white hover:bg-[var(--accent-hover)]",
               "transition-colors",
               "disabled:opacity-50 disabled:cursor-not-allowed"
             )}
@@ -3532,7 +3575,7 @@ function EditTableTabContent({ tab }: { tab: Tab }) {
         <div className="max-w-3xl mx-auto p-6 space-y-6">
           {/* Error Display */}
           {error && (
-            <div className="flex items-start gap-3 p-4 rounded-lg bg-red-500/10 border border-red-500/20">
+            <div className="flex items-start gap-3 p-4 rounded-[4px] bg-red-500/10 border border-red-500/20">
               <AlertCircle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
               <p className="text-sm text-red-400">{error}</p>
             </div>
@@ -3563,14 +3606,14 @@ function EditTableTabContent({ tab }: { tab: Tab }) {
               autoComplete="off"
               spellCheck={false}
               className={cn(
-                "w-full h-10 px-3 rounded-lg text-sm",
+                "w-full h-10 px-3 rounded-[4px] text-sm",
                 "bg-[var(--bg-secondary)] text-[var(--text-primary)]",
                 "border border-[var(--border-color)]",
                 "focus:border-[var(--accent)] focus:outline-none"
               )}
             />
             {tableName !== originalTableName && tableName.trim() && (
-              <p className="text-xs text-blue-400 mt-1">
+              <p className="text-xs text-[var(--accent)] mt-1">
                 Will rename table from "{originalTableName}" to "{tableName.trim()}"
               </p>
             )}
@@ -3680,10 +3723,10 @@ function EditTableTabContent({ tab }: { tab: Tab }) {
             <button
               onClick={addColumn}
               className={cn(
-                "w-full mt-3 flex items-center justify-center gap-2 px-4 py-3 rounded-lg",
+                "w-full mt-3 flex items-center justify-center gap-2 px-4 py-3 rounded-[4px]",
                 "border border-dashed border-[var(--border-color)]",
                 "text-sm text-[var(--text-muted)]",
-                "hover:border-blue-500/50 hover:text-blue-400",
+                "hover:border-[var(--accent)]/50 hover:text-[var(--accent)]",
                 "transition-colors"
               )}
             >
@@ -3758,7 +3801,7 @@ function EditTableTabContent({ tab }: { tab: Tab }) {
             {hasChanges ? (
               <CodeBlock code={alterStatements.join(";\n") + ";"} language="sql" />
             ) : (
-              <div className="p-4 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border-color)] text-center">
+              <div className="p-4 rounded-[4px] bg-[var(--bg-secondary)] border border-[var(--border-color)] text-center">
                 <p className="text-sm text-[var(--text-muted)]">
                   No changes detected. Modify columns above to generate ALTER statements.
                 </p>
@@ -3778,7 +3821,7 @@ function MigrationResultPanel({ result }: { result: MigrationResult }) {
   return (
     <div
       className={cn(
-        "rounded-lg border overflow-hidden",
+        "rounded-[4px] border overflow-hidden",
         result.ok
           ? "border-green-500/30 bg-green-500/5"
           : "border-red-500/30 bg-red-500/5"
@@ -3809,7 +3852,7 @@ function MigrationResultPanel({ result }: { result: MigrationResult }) {
             <span className="text-green-400 font-medium">Committed</span>
           )}
           {result.dry_run && (
-            <span className="text-blue-400 font-medium">Not persisted</span>
+            <span className="text-[var(--accent)] font-medium">Not persisted</span>
           )}
         </div>
       </div>

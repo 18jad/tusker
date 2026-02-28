@@ -81,7 +81,7 @@ export function Modal({
           "relative w-full max-w-lg max-h-[calc(100vh-2rem)]",
           "flex flex-col",
           "bg-[var(--bg-secondary)] border border-[var(--border-color)]",
-          "rounded-xl shadow-2xl shadow-black/40",
+          "rounded-[4px] shadow-2xl shadow-black/40",
           "animate-in zoom-in-95 duration-200",
           "focus:outline-none",
           className
@@ -92,7 +92,7 @@ export function Modal({
             {title && (
               <h2
                 id="modal-title"
-                className="text-lg font-semibold text-[var(--text-primary)]"
+                className="text-lg font-semibold text-[var(--text-primary)] font-heading"
               >
                 {title}
               </h2>
@@ -101,7 +101,7 @@ export function Modal({
               <button
                 onClick={onClose}
                 className={cn(
-                  "p-1.5 rounded-lg",
+                  "p-1.5 rounded-[4px]",
                   "text-[var(--text-muted)] hover:text-[var(--text-primary)]",
                   "hover:bg-[var(--bg-tertiary)]",
                   "transition-colors duration-150",

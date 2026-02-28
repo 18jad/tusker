@@ -35,7 +35,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
           type={isPassword && showPassword ? "text" : type}
           disabled={disabled}
           className={cn(
-            "w-full h-9 px-3 rounded-lg text-sm",
+            "w-full h-9 px-3 rounded-[4px] text-sm font-mono",
             "bg-[var(--bg-tertiary)] text-[var(--text-primary)]",
             "border border-[var(--border-color)]",
             "placeholder:text-[var(--text-muted)]",

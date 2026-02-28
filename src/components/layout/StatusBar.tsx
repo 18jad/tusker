@@ -71,11 +71,11 @@ export function StatusBar() {
       className={cn(
         "h-6 flex items-center justify-between px-3",
         "bg-[var(--bg-secondary)] border-t border-[var(--border-color)]",
-        "text-xs select-none shrink-0"
+        "text-xs font-mono select-none shrink-0"
       )}
     >
       {/* Left section - Connection count badge + popup */}
-      <div className="relative flex items-center gap-4">
+      <div className="relative flex items-center gap-3">
         <button
           ref={connButtonRef}
           onClick={() => togglePopup("connections")}
@@ -102,7 +102,7 @@ export function StatusBar() {
             className={cn(
               "absolute bottom-full left-0 mb-1",
               "w-64 bg-[var(--bg-primary)] border border-[var(--border-color)]",
-              "rounded-lg shadow-lg overflow-hidden z-50"
+              "rounded-[4px] shadow-lg overflow-hidden z-50"
             )}
           >
             <div className="px-3 py-2 border-b border-[var(--border-color)]">
@@ -169,7 +169,7 @@ export function StatusBar() {
             className={cn(
               "absolute bottom-full right-0 mb-1",
               "w-72 bg-[var(--bg-primary)] border border-[var(--border-color)]",
-              "rounded-lg shadow-lg overflow-hidden z-50"
+              "rounded-[4px] shadow-lg overflow-hidden z-50"
             )}
           >
             <div className="px-3 py-2 border-b border-[var(--border-color)]">
@@ -326,7 +326,7 @@ function ChangesPopupItem({
         <button
           onClick={onOpenChanges}
           className={cn(
-            "flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-medium",
+            "flex items-center gap-1.5 px-2.5 py-1 rounded-[4px] text-[11px] font-mono font-medium",
             "bg-amber-500/15 text-[var(--warning)] border border-amber-500/25",
             "hover:bg-amber-500/25 active:bg-amber-500/30",
             "transition-colors duration-150"
@@ -338,7 +338,7 @@ function ChangesPopupItem({
         <button
           onClick={onOpenHistory}
           className={cn(
-            "flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-medium",
+            "flex items-center gap-1.5 px-2.5 py-1 rounded-[4px] text-[11px] font-mono font-medium",
             "bg-[var(--bg-tertiary)] text-[var(--text-secondary)] border border-[var(--border-color)]",
             "hover:bg-[var(--bg-secondary)] hover:text-[var(--text-primary)]",
             "active:bg-[var(--bg-tertiary)]",

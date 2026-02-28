@@ -63,7 +63,7 @@ export function Pagination({
     <div
       className={cn(
         "flex items-center justify-between px-4 h-11",
-        "select-none"
+        "select-none font-mono"
       )}
     >
       {/* Left: Row info */}
@@ -85,7 +85,7 @@ export function Pagination({
             onClick={handleFirst}
             disabled={currentPage === 1}
             className={cn(
-              "p-1.5 rounded-md transition-colors",
+              "p-1.5 rounded-[4px] transition-colors",
               currentPage === 1
                 ? "text-[var(--text-muted)]/40 cursor-not-allowed"
                 : "text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)] cursor-pointer"
@@ -100,7 +100,7 @@ export function Pagination({
             onClick={handlePrevious}
             disabled={currentPage === 1}
             className={cn(
-              "p-1.5 rounded-md transition-colors",
+              "p-1.5 rounded-[4px] transition-colors",
               currentPage === 1
                 ? "text-[var(--text-muted)]/40 cursor-not-allowed"
                 : "text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)] cursor-pointer"
@@ -125,7 +125,7 @@ export function Pagination({
                   key={page}
                   onClick={() => onPageChange(page)}
                   className={cn(
-                    "min-w-[28px] h-7 px-1.5 rounded-md text-xs font-medium transition-all cursor-pointer",
+                    "min-w-[28px] h-7 px-1.5 rounded-[4px] text-xs font-medium transition-all cursor-pointer",
                     page === currentPage
                       ? "bg-[var(--accent)] text-white shadow-sm"
                       : "text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] hover:text-[var(--text-primary)]"
@@ -142,7 +142,7 @@ export function Pagination({
             onClick={handleNext}
             disabled={currentPage === totalPages}
             className={cn(
-              "p-1.5 rounded-md transition-colors",
+              "p-1.5 rounded-[4px] transition-colors",
               currentPage === totalPages
                 ? "text-[var(--text-muted)]/40 cursor-not-allowed"
                 : "text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)] cursor-pointer"
@@ -157,7 +157,7 @@ export function Pagination({
             onClick={handleLast}
             disabled={currentPage === totalPages}
             className={cn(
-              "p-1.5 rounded-md transition-colors",
+              "p-1.5 rounded-[4px] transition-colors",
               currentPage === totalPages
                 ? "text-[var(--text-muted)]/40 cursor-not-allowed"
                 : "text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)] cursor-pointer"

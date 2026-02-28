@@ -16,6 +16,7 @@ interface RowDetailModalProps {
   readOnly?: boolean;
   isDeleted?: boolean;
   mode?: "edit" | "create";
+  instantCommit?: boolean;          // Hide stage button when instant commit is on
   error?: string | null;            // Error message to display
   onClearError?: () => void;        // Clear error when user makes changes
 }
@@ -82,6 +83,7 @@ export function RowDetailModal({
   readOnly = false,
   isDeleted = false,
   mode = "edit",
+  instantCommit = false,
   error = null,
   onClearError,
 }: RowDetailModalProps) {
@@ -233,7 +235,7 @@ export function RowDetailModal({
       <div
         className={cn(
           "w-[700px] max-w-[90vw] max-h-[85vh] flex flex-col",
-          "bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-lg shadow-xl"
+          "bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-[4px] shadow-xl"
         )}
         onClick={(e) => e.stopPropagation()}
       >
@@ -242,7 +244,7 @@ export function RowDetailModal({
           <div className="flex items-center gap-3">
             {isCreateMode ? (
               <div className="flex items-center gap-2">
-                <Plus className="w-4 h-4 text-purple-400" />
+                <Plus className="w-4 h-4 text-[var(--accent)]" />
                 <span className="text-sm font-medium text-[var(--text-primary)]">
                   Add New Row
                 </span>
@@ -265,7 +267,7 @@ export function RowDetailModal({
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-md text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)] transition-colors"
+            className="p-1.5 rounded-[4px] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)] transition-colors"
           >
             <X className="w-4 h-4" />
           </button>
@@ -312,7 +314,7 @@ export function RowDetailModal({
                       </span>
                     )}
                     {column.isForeignKey && (
-                      <span className="px-1.5 py-0.5 text-[10px] rounded bg-purple-500/20 text-purple-400">
+                      <span className="px-1.5 py-0.5 text-[10px] rounded bg-[var(--accent)]/20 text-[var(--accent)]">
                         FK
                       </span>
                     )}
@@ -376,7 +378,7 @@ export function RowDetailModal({
               <button
                 onClick={handleDelete}
                 className={cn(
-                  "flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md transition-colors",
+                  "flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-[4px] transition-colors",
                   showDeleteConfirm
                     ? "bg-red-500 text-white"
                     : "text-red-400 hover:bg-red-500/10"
@@ -392,7 +394,7 @@ export function RowDetailModal({
             <button
               onClick={onClose}
               className={cn(
-                "px-3 py-1.5 text-sm rounded-md",
+                "px-3 py-1.5 text-sm rounded-[4px]",
                 "text-[var(--text-secondary)] hover:text-[var(--text-primary)]",
                 "hover:bg-[var(--bg-tertiary)] transition-colors"
               )}
@@ -401,25 +403,27 @@ export function RowDetailModal({
             </button>
             {!readOnly && !isDeleted && (
               <>
-                <button
-                  onClick={handleStage}
-                  disabled={!hasChanges}
-                  className={cn(
-                    "flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md",
-                    "text-[var(--text-secondary)] border border-[var(--border-color)]",
-                    "hover:bg-[var(--bg-tertiary)] transition-colors",
-                    "disabled:opacity-50 disabled:cursor-not-allowed"
-                  )}
-                >
-                  <Clock className="w-3.5 h-3.5" />
-                  Stage
-                </button>
+                {!instantCommit && (
+                  <button
+                    onClick={handleStage}
+                    disabled={!hasChanges}
+                    className={cn(
+                      "flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-[4px]",
+                      "text-[var(--text-secondary)] border border-[var(--border-color)]",
+                      "hover:bg-[var(--bg-tertiary)] transition-colors",
+                      "disabled:opacity-50 disabled:cursor-not-allowed"
+                    )}
+                  >
+                    <Clock className="w-3.5 h-3.5" />
+                    Stage
+                  </button>
+                )}
                 <button
                   onClick={handleSave}
                   disabled={!hasChanges}
                   className={cn(
-                    "flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md",
-                    isCreateMode ? "bg-purple-500 text-white" : "bg-[var(--accent)] text-white",
+                    "flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-[4px]",
+                    isCreateMode ? "bg-[var(--accent)] text-white" : "bg-[var(--accent)] text-white",
                     "hover:opacity-90 transition-opacity",
                     "disabled:opacity-50 disabled:cursor-not-allowed"
                   )}

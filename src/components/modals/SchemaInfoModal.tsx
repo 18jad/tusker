@@ -76,7 +76,7 @@ export function SchemaInfoModal() {
                 Tables ({tableCount})
               </span>
             </div>
-            <div className="border border-[var(--border-color)] rounded-lg overflow-hidden">
+            <div className="border border-[var(--border-color)] rounded-[4px] overflow-hidden">
               <div className="max-h-64 overflow-y-auto">
                 <table className="w-full text-sm">
                   <thead className="sticky top-0 bg-[var(--bg-tertiary)]">
@@ -160,7 +160,7 @@ function StatCard({
   color: string;
 }) {
   return (
-    <div className="bg-[var(--bg-tertiary)] rounded-lg p-3 border border-[var(--border-color)]">
+    <div className="bg-[var(--bg-tertiary)] rounded-[4px] p-3 border border-[var(--border-color)]">
       <div className={cn("flex items-center gap-1.5 mb-1", color)}>
         {icon}
         <span className="text-xs font-medium">{label}</span>
