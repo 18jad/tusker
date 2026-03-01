@@ -178,8 +178,8 @@ function TitleBar() {
         Tusker
       </div>
 
-      {/* Right-side actions */}
-      {hasActiveConnection && (
+      {/* Right-side actions — hidden on dashboard */}
+      {hasActiveConnection && !showDashboard && (
         <>
           <div className="relative">
             <button

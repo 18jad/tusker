@@ -370,7 +370,7 @@ export function ProjectModal() {
       className="max-w-md !rounded-[4px]"
     >
       {/* Custom header */}
-      <div className="flex items-center justify-between mb-5">
+      <div className="flex items-center justify-between -mx-6 -mt-6 px-6 py-4 mb-5 border-b border-[var(--border-color)]">
         <h2 className="text-base font-bold font-heading tracking-[-0.3px] text-[var(--text-primary)]">
           {isEditing ? "Edit Connection" : "New Connection"}
         </h2>
@@ -386,7 +386,7 @@ export function ProjectModal() {
         {/* Project Name with Color Picker */}
         <div className="flex flex-col gap-1.5">
           <label className="text-[10px] font-medium font-mono uppercase tracking-wider text-[var(--text-muted)]">
-            PROJECT_NAME
+            Project Name
           </label>
           <div
             ref={colorPickerRef}
@@ -472,7 +472,7 @@ export function ProjectModal() {
               )}
             >
               <Database className="w-3.5 h-3.5" />
-              MANUAL
+              Manual
             </button>
             <button
               type="button"
@@ -485,7 +485,7 @@ export function ProjectModal() {
               )}
             >
               <Plug className="w-3.5 h-3.5" />
-              URI_STRING
+              URI String
             </button>
           </div>
         </div>
@@ -494,7 +494,7 @@ export function ProjectModal() {
         {form.connectionMethod === "string" ? (
           <div className="flex flex-col gap-1.5">
             <label className="text-[10px] font-medium font-mono uppercase tracking-wider text-[var(--text-muted)]">
-              CONNECTION_STRING
+              Connection String
             </label>
             <textarea
               value={form.connectionString}
@@ -564,20 +564,20 @@ export function ProjectModal() {
             <ThemedToggle
               checked={form.ssl}
               onChange={(checked) => updateField("ssl", checked)}
-              label="USE_SSL"
+              label="Use SSL"
             />
             <div className="h-px bg-[var(--border-color)]" />
             <ThemedToggle
               checked={form.instantCommit}
               onChange={(checked) => updateField("instantCommit", checked)}
-              label="INSTANT_COMMIT"
+              label="Instant Commit"
               disabled={!form.instantCommit && hasStagedChanges}
               tooltip={!form.instantCommit && hasStagedChanges ? "Commit or discard staged changes before enabling instant commit" : undefined}
             />
             <ThemedToggle
               checked={form.readOnly}
               onChange={(checked) => updateField("readOnly", checked)}
-              label="READ_ONLY"
+              label="Read Only"
             />
           </div>
         </div>
@@ -602,7 +602,7 @@ export function ProjectModal() {
         )}
 
         {/* Footer */}
-        <div className="flex items-center justify-between pt-3 mt-1 border-t border-[var(--border-color)]">
+        <div className="flex items-center justify-between -mx-6 -mb-6 px-6 py-4 mt-5 border-t border-[var(--border-color)]">
           <button
             onClick={handleTestConnection}
             disabled={!isValid || testing}
@@ -619,7 +619,7 @@ export function ProjectModal() {
             ) : (
               <Plug className="w-3.5 h-3.5" />
             )}
-            {testing ? "TESTING..." : "TEST"}
+            {testing ? "TESTING..." : "TEST CONNECTION"}
           </button>
 
           <div className="flex items-center gap-2">
