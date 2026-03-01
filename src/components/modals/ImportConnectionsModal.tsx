@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Loader2, Upload, FileUp, Eye, EyeOff } from "lucide-react";
+import { Loader2, Download, FileUp, Eye, EyeOff } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { Modal } from "../ui/Modal";
@@ -150,7 +150,7 @@ export function ImportConnectionsModal() {
         {/* Header */}
         <div className="text-center">
           <div className="w-12 h-12 rounded-full bg-green-500/10 flex items-center justify-center mx-auto mb-4">
-            <Upload className="w-6 h-6 text-green-500" />
+            <Download className="w-6 h-6 text-green-500" />
           </div>
           <h3 className="text-lg font-semibold text-[var(--text-primary)]">
             Import Connections

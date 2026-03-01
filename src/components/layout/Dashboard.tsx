@@ -1,16 +1,21 @@
 import { invoke } from "@tauri-apps/api/core";
+import { getVersion } from "@tauri-apps/api/app";
 import {
   Activity,
   ArrowRight,
   ChevronDown,
   Clock,
   Database,
+  Download,
   HardDrive,
   Pencil,
   Plus,
+  Radar,
+  RefreshCw,
   Search,
   Server,
   Star,
+  Upload,
   X,
   Zap
 } from "lucide-react";
@@ -26,42 +31,6 @@ import type { Project } from "../../types";
 function getConnectionHost(project: Project): string {
   const { host, port } = project.connection;
   return `${host}:${port}`;
-}
-
-// ── Stat Card ────────────────────────────────────────────────────────
-
-function StatCard({
-  label,
-  value,
-  subtitle,
-  icon
-}: {
-  label: string;
-  value: string | number;
-  subtitle: string;
-  icon?: React.ReactNode;
-}) {
-  return (
-    <div
-      className={cn(
-        "flex-1 flex flex-col gap-[10px] rounded-[4px] py-4 px-5",
-        "bg-[var(--bg-secondary)] border border-[var(--border-color)]"
-      )}
-    >
-      <span className="text-[10px] font-medium font-mono uppercase tracking-wider text-[var(--text-muted)]">
-        {label}
-      </span>
-      <div className="flex items-center gap-2">
-        <span className="text-[36px] font-bold font-mono leading-[0.9] text-[var(--text-primary)]">
-          {value}
-        </span>
-        {icon}
-      </div>
-      <span className="text-[11px] font-medium font-mono text-[var(--text-secondary)]">
-        {subtitle}
-      </span>
-    </div>
-  );
 }
 
 // ── Connection Card ──────────────────────────────────────────────────
@@ -429,16 +398,19 @@ function useConnectionHealth(
   connections: Record<string, { connectionId: string }>
 ) {
   const [health, setHealth] = useState<Record<string, HealthInfo>>({});
+  const [refreshing, setRefreshing] = useState(false);
 
-  useEffect(() => {
+  const fetchAll = useRef(() => {});
+  fetchAll.current = async () => {
     const connectedEntries = Object.entries(connections).filter(
       ([, conn]) => conn?.connectionId
     );
     if (connectedEntries.length === 0) return;
 
-    const fetchHealth = async (projectId: string, connectionId: string) => {
+    setRefreshing(true);
+
+    const fetchOne = async (projectId: string, connectionId: string) => {
       try {
-        // Measure latency with a simple query
         const start = performance.now();
         await invoke("execute_query", {
           connectionId,
@@ -446,7 +418,6 @@ function useConnectionHealth(
         });
         const latencyMs = Math.round(performance.now() - start);
 
-        // Fetch version, uptime, and size in one query
         const result = await invoke<{ rows: Record<string, unknown>[] }>(
           "execute_query",
           {
@@ -472,7 +443,6 @@ function useConnectionHealth(
           return;
         }
       } catch {
-        // Try without pg_database_size (restricted on some managed DBs)
         try {
           const start = performance.now();
           const result = await invoke<{ rows: Record<string, unknown>[] }>(
@@ -503,31 +473,56 @@ function useConnectionHealth(
       }
     };
 
-    for (const [projectId, conn] of connectedEntries) {
-      fetchHealth(projectId, conn.connectionId);
-    }
+    await Promise.allSettled(
+      connectedEntries.map(([pid, conn]) => fetchOne(pid, conn.connectionId))
+    );
+    setRefreshing(false);
+  };
+
+  useEffect(() => {
+    fetchAll.current();
   }, [connections]);
 
-  return health;
+  const refresh = () => fetchAll.current();
+
+  return { health, refresh, refreshing };
 }
 
 function ConnectionHealthSection({
   projects,
   connections,
-  health
+  health,
+  onRefresh,
+  refreshing,
 }: {
   projects: Project[];
   connections: Record<string, { connectionId: string }>;
   health: Record<string, HealthInfo>;
+  onRefresh: () => void;
+  refreshing: boolean;
 }) {
   const connectedProjects = projects.filter((p) => connections[p.id]);
 
   return (
     <div className="flex flex-col gap-3.5">
-      <div className="flex items-center gap-2">
+      <div className="flex items-center justify-between">
         <span className="text-[11px] font-semibold font-mono text-[var(--text-muted)]">
           // Connection Health
         </span>
+        {connectedProjects.length > 0 && (
+          <button
+            onClick={onRefresh}
+            disabled={refreshing}
+            className={cn(
+              "flex items-center gap-1 text-[10px] font-medium font-mono",
+              "text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors",
+              "disabled:opacity-50"
+            )}
+          >
+            <RefreshCw className={cn("w-3 h-3", refreshing && "animate-spin")} />
+            REFRESH
+          </button>
+        )}
       </div>
 
       {connectedProjects.length === 0 ? (
@@ -560,7 +555,7 @@ function ConnectionHealthSection({
                     {project.name}
                   </span>
                   <span className="text-[9px] font-bold font-mono uppercase px-1.5 py-[1px] rounded-[2px] bg-[var(--success)]/15 text-[var(--success)]">
-                    LIVE
+                    CONNECTED
                   </span>
                 </div>
 
@@ -623,14 +618,22 @@ export function Dashboard() {
   const projects = useProjectStore((s) => s.projects);
   const connections = useProjectStore((s) => s.connections);
   const openProjectModal = useUIStore((s) => s.openProjectModal);
+  const openExportModal = useUIStore((s) => s.openExportModal);
+  const openImportModal = useUIStore((s) => s.openImportModal);
+  const openDiscoveryModal = useUIStore((s) => s.openDiscoveryModal);
   const setShowDashboard = useUIStore((s) => s.setShowDashboard);
 
   const connect = useConnect();
-  const health = useConnectionHealth(connections);
+  const { health, refresh: refreshHealth, refreshing } = useConnectionHealth(connections);
 
   const [searchQuery, setSearchQuery] = useState("");
   const [showFilter, setShowFilter] = useState(false);
+  const [appVersion, setAppVersion] = useState("");
   const filterInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    getVersion().then(setAppVersion);
+  }, []);
 
   // Focus filter input when shown
   useEffect(() => {
@@ -663,14 +666,7 @@ export function Dashboard() {
         p.connection.host === "localhost" || p.connection.host === "127.0.0.1"
     ).length;
     const remote = projects.length - local;
-
-    const recentlyUsed = projects.filter((p) => {
-      if (!p.lastConnected) return false;
-      const diff = Date.now() - new Date(p.lastConnected).getTime();
-      return diff < 7 * 24 * 60 * 60 * 1000;
-    }).length;
-
-    return { total: projects.length, local, remote, recentlyUsed };
+    return { total: projects.length, local, remote };
   }, [projects]);
 
   // Filter projects by search
@@ -719,29 +715,18 @@ export function Dashboard() {
       <div className="flex-1 flex gap-6 overflow-hidden">
         {/* Left Content */}
         <div className="flex-1 flex flex-col gap-6 p-6 px-8 overflow-y-auto">
-          {/* Metrics Row */}
-          <div className="flex gap-4">
-            <StatCard
-              label="Total Connections"
-              value={stats.total}
-              subtitle={`${stats.local} local / ${stats.remote} remote`}
-            />
-            <StatCard
-              label="FAVORITES"
-              value={favoritesCount}
-              subtitle="quick access"
-              icon={<Star className="w-3.5 h-3.5 text-[var(--warning)]" />}
-            />
-            <StatCard
-              label="Recently Used"
-              value={stats.recentlyUsed}
-              subtitle="last 7 days"
-            />
-            <StatCard
-              label="Total Projects"
-              value={projects.length}
-              subtitle="across all dbs"
-            />
+          {/* Top Bar: version + settings | stat */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              {appVersion && (
+                <span className="text-[11px] font-mono text-[var(--text-muted)]">
+                  Tusker v{appVersion}
+                </span>
+              )}
+            </div>
+            <span className="text-[11px] font-mono text-[var(--text-muted)]">
+              {stats.total} connections · {stats.local} local · {stats.remote} remote
+            </span>
           </div>
 
           {/* Connections Section */}
@@ -750,7 +735,7 @@ export function Dashboard() {
               <span className="text-[11px] font-semibold font-mono text-[var(--text-muted)]">
                 // Active Connections
               </span>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5">
                 <button
                   onClick={() => setShowFilter((v) => !v)}
                   className={cn(
@@ -764,14 +749,48 @@ export function Dashboard() {
                   <Search className="w-3.5 h-3.5" />
                 </button>
                 <button
+                  onClick={openDiscoveryModal}
+                  className={cn(
+                    "flex items-center gap-1 px-2 py-1 rounded transition-colors duration-150",
+                    "text-[10px] font-medium font-mono",
+                    "text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)]"
+                  )}
+                >
+                  <Radar className="w-3 h-3" />
+                  Detect
+                </button>
+                <button
+                  onClick={openImportModal}
+                  className={cn(
+                    "flex items-center gap-1 px-2 py-1 rounded transition-colors duration-150",
+                    "text-[10px] font-medium font-mono",
+                    "text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)]"
+                  )}
+                >
+                  <Download className="w-3 h-3" />
+                  Import
+                </button>
+                <button
+                  onClick={openExportModal}
+                  className={cn(
+                    "flex items-center gap-1 px-2 py-1 rounded transition-colors duration-150",
+                    "text-[10px] font-medium font-mono",
+                    "text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)]"
+                  )}
+                >
+                  <Upload className="w-3 h-3" />
+                  Export
+                </button>
+                <button
                   onClick={() => openProjectModal()}
                   className={cn(
-                    "p-1.5 rounded transition-colors duration-150",
+                    "flex items-center gap-1 px-2 py-1 rounded transition-colors duration-150",
+                    "text-[10px] font-medium font-mono",
                     "text-[var(--text-muted)] hover:text-[var(--accent)] hover:bg-[var(--accent)]/10"
                   )}
-                  title="New connection"
                 >
-                  <Plus className="w-3.5 h-3.5" />
+                  <Plus className="w-3 h-3" />
+                  New
                 </button>
               </div>
             </div>
@@ -867,6 +886,8 @@ export function Dashboard() {
             projects={projects}
             connections={connections}
             health={health}
+            onRefresh={refreshHealth}
+            refreshing={refreshing}
           />
         </div>
       </div>
