@@ -48,6 +48,24 @@ fn derive_key(password: &str, salt: &[u8]) -> Result<[u8; 32]> {
     Ok(key)
 }
 
+pub fn write_plaintext(
+    projects: Vec<ExportedProject>,
+    file_path: &str,
+) -> Result<()> {
+    let payload = ExportPayload {
+        version: 1,
+        exported_at: chrono::Utc::now().to_rfc3339(),
+        projects,
+    };
+
+    let json = serde_json::to_vec_pretty(&payload)?;
+
+    std::fs::write(file_path, &json)
+        .map_err(|e| DbViewerError::Export(format!("Failed to write file: {}", e)))?;
+
+    Ok(())
+}
+
 pub fn encrypt_and_write(
     projects: Vec<ExportedProject>,
     password: &str,
@@ -90,6 +108,28 @@ pub fn encrypt_and_write(
         .map_err(|e| DbViewerError::Export(format!("Failed to write file: {}", e)))?;
 
     Ok(())
+}
+
+/// Check if a file is encrypted (starts with TUSK magic bytes)
+pub fn is_file_encrypted(file_path: &str) -> Result<bool> {
+    let data = std::fs::read(file_path)
+        .map_err(|e| DbViewerError::Export(format!("Failed to read file: {}", e)))?;
+
+    if data.len() < 4 {
+        return Ok(false);
+    }
+
+    Ok(&data[0..4] == MAGIC)
+}
+
+pub fn read_plaintext(file_path: &str) -> Result<ExportPayload> {
+    let data = std::fs::read(file_path)
+        .map_err(|e| DbViewerError::Export(format!("Failed to read file: {}", e)))?;
+
+    let payload: ExportPayload = serde_json::from_slice(&data)
+        .map_err(|e| DbViewerError::Export(format!("Not a valid Tusker export file: {}", e)))?;
+
+    Ok(payload)
 }
 
 pub fn read_and_decrypt(file_path: &str, password: &str) -> Result<ExportPayload> {

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Loader2, Download, FileUp, Eye, EyeOff } from "lucide-react";
+import { Loader2, Download, FileUp, Eye, EyeOff, Lock, LockOpen } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { Modal } from "../ui/Modal";
@@ -31,18 +31,22 @@ export function ImportConnectionsModal() {
 
   const [filePath, setFilePath] = useState<string | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
+  const [isEncrypted, setIsEncrypted] = useState<boolean | null>(null);
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
+  const [isChecking, setIsChecking] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!importModalOpen) {
       setFilePath(null);
       setFileName(null);
+      setIsEncrypted(null);
       setPassword("");
       setShowPassword(false);
       setError(null);
+      setIsChecking(false);
     }
   }, [importModalOpen]);
 
@@ -54,14 +58,29 @@ export function ImportConnectionsModal() {
 
     if (selected) {
       setFilePath(selected);
-      // Extract filename from path
       const parts = selected.split(/[/\\]/);
       setFileName(parts[parts.length - 1]);
       setError(null);
+      setPassword("");
+      setIsEncrypted(null);
+
+      // Check if the file is encrypted
+      setIsChecking(true);
+      try {
+        const encrypted = await invoke<boolean>("check_export_file", {
+          filePath: selected,
+        });
+        setIsEncrypted(encrypted);
+      } catch {
+        setIsEncrypted(null);
+        setError("Could not read file.");
+      } finally {
+        setIsChecking(false);
+      }
     }
   };
 
-  const isValid = filePath && password.length > 0;
+  const isValid = filePath && isEncrypted !== null && (isEncrypted ? password.length > 0 : true);
 
   const handleImport = async () => {
     if (!isValid) return;
@@ -71,7 +90,7 @@ export function ImportConnectionsModal() {
 
     try {
       const imported = await invoke<ImportedProject[]>("import_connections", {
-        password,
+        password: isEncrypted ? password : null,
         filePath,
       });
 
@@ -126,7 +145,6 @@ export function ImportConnectionsModal() {
           : typeof err === "string"
             ? err
             : JSON.stringify(err);
-      // Show user-friendly message for common errors
       if (raw.includes("Incorrect password") || raw.includes("corrupted")) {
         setError("Incorrect password or corrupted file.");
       } else if (raw.includes("Not a valid Tusker")) {
@@ -156,8 +174,7 @@ export function ImportConnectionsModal() {
             Import Connections
           </h3>
           <p className="text-sm text-[var(--text-muted)] mt-2">
-            Select a <span className="font-mono text-[var(--accent)]">.tusker</span> file
-            and enter the password used during export.
+            Select a <span className="font-mono text-[var(--accent)]">.tusker</span> file to import connections.
           </p>
         </div>
 
@@ -178,7 +195,7 @@ export function ImportConnectionsModal() {
             <FileUp className="w-3.5 h-3.5 text-[var(--text-muted)] shrink-0" />
             <span
               className={cn(
-                "truncate",
+                "truncate flex-1",
                 fileName
                   ? "text-[var(--text-primary)]"
                   : "text-[var(--text-muted)]"
@@ -186,41 +203,76 @@ export function ImportConnectionsModal() {
             >
               {fileName || "Choose .tusker file..."}
             </span>
+            {isChecking && (
+              <Loader2 className="w-3 h-3 text-[var(--text-muted)] animate-spin shrink-0" />
+            )}
           </button>
         </div>
 
-        {/* Password field */}
-        <div>
-          <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1.5">
-            Password
-          </label>
-          <div className="relative">
-            <input
-              type={showPassword ? "text" : "password"}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="Enter export password"
-              className={cn(
-                "w-full h-9 px-3 pr-9 rounded-[4px] text-sm",
-                "bg-[var(--bg-primary)] border border-[var(--border-color)]",
-                "text-[var(--text-primary)] placeholder:text-[var(--text-muted)]",
-                "focus:outline-none focus:border-[var(--accent)]",
-                "transition-colors"
-              )}
-            />
-            <button
-              type="button"
-              onClick={() => setShowPassword(!showPassword)}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors"
-            >
-              {showPassword ? (
-                <EyeOff className="w-3.5 h-3.5" />
-              ) : (
-                <Eye className="w-3.5 h-3.5" />
-              )}
-            </button>
+        {/* Encryption status indicator */}
+        {filePath && isEncrypted !== null && (
+          <div
+            className={cn(
+              "flex items-center gap-3 px-3 py-2.5 rounded-[4px]",
+              isEncrypted
+                ? "bg-[var(--accent)]/10 border border-[var(--accent)]/20"
+                : "bg-[var(--success)]/10 border border-[var(--success)]/20"
+            )}
+          >
+            {isEncrypted ? (
+              <Lock className="w-4 h-4 text-[var(--accent)] shrink-0" />
+            ) : (
+              <LockOpen className="w-4 h-4 text-[var(--success)] shrink-0" />
+            )}
+            <span className={cn(
+              "text-sm",
+              isEncrypted ? "text-[var(--accent)]" : "text-[var(--success)]"
+            )}>
+              {isEncrypted
+                ? "This file is encrypted — enter the password below"
+                : "This file is not encrypted — ready to import"}
+            </span>
           </div>
-        </div>
+        )}
+
+        {/* Password field — only for encrypted files */}
+        {isEncrypted && (
+          <div>
+            <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1.5">
+              Password
+            </label>
+            <div className="relative">
+              <input
+                type={showPassword ? "text" : "password"}
+                value={password}
+                onChange={(e) => {
+                  setPassword(e.target.value);
+                  setError(null);
+                }}
+                placeholder="Enter export password"
+                className={cn(
+                  "w-full h-9 px-3 pr-9 rounded-[4px] text-sm",
+                  "bg-[var(--bg-primary)] border border-[var(--border-color)]",
+                  "text-[var(--text-primary)] placeholder:text-[var(--text-muted)]",
+                  "focus:outline-none focus:border-[var(--accent)]",
+                  "transition-colors"
+                )}
+                autoFocus
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors"
+              >
+                {showPassword ? (
+                  <EyeOff className="w-3.5 h-3.5" />
+                ) : (
+                  <Eye className="w-3.5 h-3.5" />
+                )}
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Error */}
         {error && (
@@ -256,7 +308,7 @@ export function ImportConnectionsModal() {
             {isImporting ? (
               <>
                 <Loader2 className="w-4 h-4 animate-spin" />
-                Decrypting...
+                {isEncrypted ? "Decrypting..." : "Importing..."}
               </>
             ) : (
               "Import"

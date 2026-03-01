@@ -574,7 +574,7 @@ pub struct ImportedProject {
 #[tauri::command]
 pub fn export_connections(
     projects: Vec<ProjectForExport>,
-    password: String,
+    password: Option<String>,
     file_path: String,
 ) -> Result<()> {
     let exported: Vec<ExportedProject> = projects
@@ -598,15 +598,30 @@ pub fn export_connections(
         })
         .collect();
 
-    export::encrypt_and_write(exported, &password, &file_path)
+    match password {
+        Some(pw) if !pw.is_empty() => export::encrypt_and_write(exported, &pw, &file_path),
+        _ => export::write_plaintext(exported, &file_path),
+    }
+}
+
+#[tauri::command]
+pub fn check_export_file(file_path: String) -> Result<bool> {
+    export::is_file_encrypted(&file_path)
 }
 
 #[tauri::command]
 pub fn import_connections(
-    password: String,
+    password: Option<String>,
     file_path: String,
 ) -> Result<Vec<ImportedProject>> {
-    let payload = export::read_and_decrypt(&file_path, &password)?;
+    let is_encrypted = export::is_file_encrypted(&file_path)?;
+
+    let payload = if is_encrypted {
+        let pw = password.unwrap_or_default();
+        export::read_and_decrypt(&file_path, &pw)?
+    } else {
+        export::read_plaintext(&file_path)?
+    };
 
     let mut imported = Vec::new();
 

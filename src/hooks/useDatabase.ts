@@ -118,7 +118,9 @@ export function useConnect() {
     onError: (error: Error, params) => {
       const projectId = params.project.id;
       projectStore.getState().setProjectConnectionStatus(projectId, "error");
-      projectStore.getState().setProjectError(projectId, error.message || "Failed to connect to database");
+      const msg = error.message || "Failed to connect to database";
+      projectStore.getState().setProjectError(projectId, msg);
+      useUIStore.getState().showToast(`Connection failed: ${msg}`, "error");
     },
   });
 }

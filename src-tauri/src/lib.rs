@@ -91,6 +91,7 @@ pub fn run() {
             // Export/Import commands
             commands::export_connections,
             commands::import_connections,
+            commands::check_export_file,
             // Discovery commands
             commands::discover_local_databases,
             commands::get_current_username,
