@@ -40,10 +40,11 @@
   <table align="center">
     <tr>
       <td align="center"><img
-  src="https://github.com/user-attachments/assets/663cac93-7554-42dc-894d-93e7ab90bc41"
-  width="400" alt="Main Screen"><br><sub>Main Screen</sub></td>
-      <td align="center"><img
-  src="https://github.com/user-attachments/assets/da2731af-bf81-435f-9540-da873378d4d7"
+  src="https://github.com/user-attachments/assets/f8acd29c-2cb4-4a80-9f6e-c7e1e78f7064"
+  width="400" alt="Main Screen"><br><sub>Dashboard</sub></td>
+      <td align="center">
+          <img
+  src="https://github.com/user-attachments/assets/d056009b-1c9a-467b-92c1-666a1c399b50"
   width="400" alt="Table Browse"><br><sub>Table Browse</sub></td>
     </tr>
     <tr>
