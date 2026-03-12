@@ -137,7 +137,7 @@ function SchemaTree({ projectId, connectionId, schema, projectColor: _projectCol
   const openDropSchemaModal = useUIStore((state) => state.openDropSchemaModal);
   const addDiagramTab = useUIStore((state) => state.addDiagramTab);
   const showToast = useUIStore((state) => state.showToast);
-  const isExpanded = useUIStore((state) => state.expandedSchemas.has(schema.name));
+  const isExpanded = useUIStore((state) => state.expandedSchemas.has(`${connectionId}::${schema.name}`));
   const toggleSchemaExpanded = useUIStore((state) => state.toggleSchemaExpanded);
   const [schemaMenuOpen, setSchemaMenuOpen] = useState(false);
   const [tableMenuOpen, setTableMenuOpen] = useState<string | null>(null);
@@ -242,7 +242,7 @@ function SchemaTree({ projectId, connectionId, schema, projectColor: _projectCol
         }
         level={level}
         isExpanded={isExpanded}
-        onToggle={() => toggleSchemaExpanded(schema.name)}
+        onToggle={() => toggleSchemaExpanded(connectionId, schema.name)}
         menuOpen={schemaMenuOpen}
         action={
           <span className="flex items-center gap-0.5">

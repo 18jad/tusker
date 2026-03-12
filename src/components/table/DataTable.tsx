@@ -300,7 +300,7 @@ function LargeValueEditor({
 
   useEffect(() => {
     if (isLoaded && textareaRef.current) {
-      textareaRef.current.focus();
+      textareaRef.current.focus({ preventScroll: true });
     }
   }, [isLoaded]);
 
@@ -420,7 +420,7 @@ function ArrayEditor({
   const [newItem, setNewItem] = useState("");
 
   useEffect(() => {
-    inputRef.current?.focus();
+    inputRef.current?.focus({ preventScroll: true });
   }, []);
 
   const handleAddItem = () => {
@@ -428,7 +428,7 @@ function ArrayEditor({
     if (trimmed) {
       setItems([...items, trimmed]);
       setNewItem("");
-      inputRef.current?.focus();
+      inputRef.current?.focus({ preventScroll: true });
     }
   };
 
@@ -620,7 +620,7 @@ function EditableCell({
 
   useEffect(() => {
     if (isEditing && !isLarge && inputRef.current) {
-      inputRef.current.focus();
+      inputRef.current.focus({ preventScroll: true });
       inputRef.current.select();
     }
   }, [isEditing, isLarge]);

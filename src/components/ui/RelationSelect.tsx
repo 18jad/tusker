@@ -84,7 +84,7 @@ export function RelationSelect({
   // Focus search input when opening
   useEffect(() => {
     if (isOpen && inputRef.current) {
-      inputRef.current.focus();
+      inputRef.current.focus({ preventScroll: true });
     }
   }, [isOpen]);
 

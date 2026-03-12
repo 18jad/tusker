@@ -162,8 +162,8 @@ interface UIState {
   getTableFilters: (tableKey: string) => FilterCondition[];
   getActiveConnectionId: () => string | undefined;
   getActiveProjectId: () => string | undefined;
-  toggleSchemaExpanded: (schemaName: string) => void;
-  isSchemaExpanded: (schemaName: string) => boolean;
+  toggleSchemaExpanded: (connectionId: string, schemaName: string) => void;
+  isSchemaExpanded: (connectionId: string, schemaName: string) => boolean;
 }
 
 export const useUIStore = create<UIState>((set, get) => ({
@@ -724,18 +724,19 @@ export const useUIStore = create<UIState>((set, get) => ({
       return { columnWidths: rest };
     }),
 
-  toggleSchemaExpanded: (schemaName) =>
+  toggleSchemaExpanded: (connectionId, schemaName) =>
     set((state) => {
+      const key = `${connectionId}::${schemaName}`;
       const newExpanded = new Set(state.expandedSchemas);
-      if (newExpanded.has(schemaName)) {
-        newExpanded.delete(schemaName);
+      if (newExpanded.has(key)) {
+        newExpanded.delete(key);
       } else {
-        newExpanded.add(schemaName);
+        newExpanded.add(key);
       }
       return { expandedSchemas: newExpanded };
     }),
 
-  isSchemaExpanded: (schemaName) => get().expandedSchemas.has(schemaName),
+  isSchemaExpanded: (connectionId, schemaName) => get().expandedSchemas.has(`${connectionId}::${schemaName}`),
 
   setTableSort: (tableKey, sorts) =>
     set((state) => {
